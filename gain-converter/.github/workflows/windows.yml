@@ -29,9 +29,9 @@ jobs:
       - name: Zip
         shell: pwsh
         run: |
-          # the licences of the Python build and the Tcl/Tk bundled in the exe
-          python -c "import shutil, sys, pathlib; b = pathlib.Path(sys.base_prefix); shutil.copy(b / 'LICENSE.txt', 'PYTHON-LICENSE.txt'); shutil.copy(next(b.glob('tcl/tcl[89]*/license.terms')), 'TCL-LICENSE.txt')"
-          Compress-Archive -Path dist/gain-converter.exe, LICENSE, THIRD-PARTY-NOTICES.txt, PYTHON-LICENSE.txt, TCL-LICENSE.txt -DestinationPath gain-converter-windows.zip
+          # the licence of the Python build bundled in the exe; Tcl's and Tk's are in licenses/
+          python -c "import shutil, sys, pathlib; shutil.copy(pathlib.Path(sys.base_prefix) / 'LICENSE.txt', 'PYTHON-LICENSE.txt')"
+          Compress-Archive -Path dist/gain-converter.exe, LICENSE, THIRD-PARTY-NOTICES.txt, PYTHON-LICENSE.txt, licenses/TCL-LICENSE.txt, licenses/TK-LICENSE.txt -DestinationPath gain-converter-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: gain-converter-windows
