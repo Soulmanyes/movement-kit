@@ -1,0 +1,45 @@
+# Builds gain-converter.exe on Windows (PyInstaller can't cross-build) and zips it with the licences.
+# Run by hand (Actions > windows > Run workflow) for a test build, kept as a workflow artifact;
+# a pushed v* tag also attaches the zip to that tag's GitHub release.
+name: windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyinstaller
+      - run: python -m PyInstaller --onefile --windowed --noconfirm --clean --name gain-converter gain_converter.py
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          # the exe must start and keep its window up; a crash on start ends it at once
+          $p = Start-Process dist/gain-converter.exe -PassThru
+          Start-Sleep 8
+          if ($p.HasExited) { Write-Error "gain-converter.exe exited with $($p.ExitCode)"; exit 1 }
+          Stop-Process $p
+      - name: Zip
+        shell: pwsh
+        run: |
+          # the licences of the Python build and the Tcl/Tk bundled in the exe
+          python -c "import shutil, sys, pathlib; b = pathlib.Path(sys.base_prefix); shutil.copy(b / 'LICENSE.txt', 'PYTHON-LICENSE.txt'); shutil.copy(next(b.glob('tcl/tcl[89]*/license.terms')), 'TCL-LICENSE.txt')"
+          Compress-Archive -Path dist/gain-converter.exe, LICENSE, THIRD-PARTY-NOTICES.txt, PYTHON-LICENSE.txt, TCL-LICENSE.txt -DestinationPath gain-converter-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gain-converter-windows
+          path: gain-converter-windows.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" gain-converter-windows.zip --title "$GITHUB_REF_NAME" --generate-notes || gh release upload "$GITHUB_REF_NAME" gain-converter-windows.zip --clobber
