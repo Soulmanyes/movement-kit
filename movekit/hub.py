@@ -236,6 +236,54 @@ def serve(sections, port=0):
     return server
 
 
+# GDK button -> MouseEvent.button for the mouse side buttons (back, forward)
+SIDE_BUTTONS = {8: 3, 9: 4}
+# a mousedown and mouseup with that button where the pointer is, as a page would have got them
+SIDE_BUTTON_JS = """(function (x, y, b) {
+    var t = document.elementFromPoint(x, y) || document.body;
+    var o = {button: b, clientX: x, clientY: y, bubbles: true, cancelable: true, composed: true};
+    t.dispatchEvent(new MouseEvent("mousedown", o));
+    t.dispatchEvent(new MouseEvent("mouseup", o));
+})(%d, %d, %d);"""
+
+
+def _side_buttons(window):
+    """WebKitGTK hands pages the mouse side buttons as button 0, the left button (Source Yaw's key
+    capture read them as mouse1). Catch them on the GTK widget before WebKit does and send the page
+    the mousedown with the right button instead; WebKit never sees them, so they don't go back or
+    forward either. Runs on pywebview's shown event; the hookup itself runs on GTK's thread."""
+    from gi.repository import Gdk, GLib, Gtk
+
+    def find(widget):
+        if type(widget).__name__ == "WebView":
+            return widget
+        if isinstance(widget, Gtk.Container):
+            for child in widget.get_children():
+                found = find(child)
+                if found:
+                    return found
+        return None
+
+    def press(view, event):
+        button = SIDE_BUTTONS.get(event.button)
+        if button is None:
+            return False
+        if event.type == Gdk.EventType.BUTTON_PRESS:  # not the extra double-click events
+            view.run_javascript(SIDE_BUTTON_JS % (int(event.x), int(event.y), button), None, None, None)
+        return True
+
+    def hook():
+        view = find(window.native) if window.native else None
+        if view is None:
+            print("hub: no WebKit view found; mouse side buttons reach pages as the left button", file=sys.stderr)
+            return False
+        view.connect("button-press-event", press)
+        view.connect("button-release-event", lambda _view, event: event.button in SIDE_BUTTONS)
+        return False
+
+    GLib.idle_add(hook)
+
+
 def run(root=KIT, app_class=None, debug=False, first=None):
     """Open the hub window, on section `first` if given; returns when it closes."""
     try:
@@ -252,9 +300,11 @@ def run(root=KIT, app_class=None, debug=False, first=None):
         from gi.repository import GLib
         GLib.set_prgname(app_class)
     start = next((s.info()["url"] for s in sections if s.key == first), "/")
-    webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
-                          js_api=Bridge(sections, problems), width=1000, height=720,
-                          min_size=(640, 480), background_color="#15171c")
+    window = webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
+                                   js_api=Bridge(sections, problems), width=1000, height=720,
+                                   min_size=(640, 480), background_color="#15171c")
+    if sys.platform.startswith("linux"):
+        window.events.shown += lambda: _side_buttons(window)
     webview.start(debug=debug)
     server.shutdown()
 
