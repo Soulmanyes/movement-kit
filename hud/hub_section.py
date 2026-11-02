@@ -1,19 +1,19 @@
 """The HUD section (movekit/hub.py): in-game display settings, whichever tool draws them.
 
 The store is hud/settings.py. Each setting is written into the game by the tool that draws it:
-the jump-1 line by Strafe Review's recorder (strafe-review/recorder_settings.py, loaded by path
-so its folder never goes on sys.path).
+the jump-1 line by Strafe Review's recorder (recorder_settings.py in the Strafe Review module, loaded
+by path so its folder never goes on sys.path). The HUD is part of the core; the module may be
+installed or not (movekit/modules.py), so the file is looked up on each call.
 """
 from hud import settings
-from movekit import games, steam
-from movekit.hub import KIT, local_import
-
-RECORDER = KIT / "strafe-review" / "recorder_settings.py"
+from movekit import games, modules, steam
+from movekit.hub import local_import
 
 
 def _recorder():
-    """Strafe Review's recorder_settings module, or None when this copy of the kit has no Strafe Review."""
-    return local_import(RECORDER, "recorder_settings") if RECORDER.is_file() else None
+    """Strafe Review's recorder_settings module, or None when Strafe Review isn't installed."""
+    file = modules.default_kit_root() / "strafe-review" / "recorder_settings.py"
+    return local_import(file, "recorder_settings") if file.is_file() else None
 
 
 def _game():

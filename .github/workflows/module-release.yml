@@ -1,0 +1,54 @@
+# A tool's module release files (3.7b in PLAN.md): on a pushed <tool>-v* tag of a tool with a
+# module.json, attach <tool>-module.zip and <tool>-module.json (.github/scripts/module_zip.py) to that
+# tag's GitHub release, creating it if the tool's other workflow hasn't yet. The kit's core installs
+# and updates modules from these. The tag must match the tool's VERSION. Run by hand with a tool name
+# for a test build, kept as a workflow artifact.
+name: module-release
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: The tool's folder, "strafe-review"
+        required: true
+  push:
+    tags: ["strafe-review-v*", "gain-converter-v*", "sourceyaw-v*"]
+permissions:
+  contents: write
+jobs:
+  module:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # every tag, for the release notes' start tag
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build
+        id: build
+        env:
+          INPUT_TOOL: ${{ inputs.tool }}
+        run: |
+          if [ -n "$INPUT_TOOL" ]; then tool=$INPUT_TOOL; else tool=${GITHUB_REF_NAME%-v*}; fi
+          test -f "$tool/module.json" || { echo "$tool has no module.json"; exit 1; }
+          python .github/scripts/module_zip.py "$tool" out
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.tool }}-module
+          path: out/
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOL: ${{ steps.build.outputs.tool }}
+        run: |
+          version=${GITHUB_REF_NAME#"$TOOL"-v}
+          have=$(python .github/scripts/version.py "$TOOL")
+          # a tag that isn't VERSION would make every copy see an update that never takes
+          if [ "$version" != "$have" ]; then echo "tag $GITHUB_REF_NAME but VERSION $have"; exit 1; fi
+          title=$(python -c "import json; print(json.load(open('$TOOL/module.json'))['title'])")
+          prev=$(git tag -l "$TOOL-v*" --sort=v:refname | grep -x -B1 "$GITHUB_REF_NAME" | grep -vx "$GITHUB_REF_NAME" || true)
+          gh release create "$GITHUB_REF_NAME" out/* --title "$title $version" \
+              --generate-notes ${prev:+--notes-start-tag "$prev"} \
+            || gh release upload "$GITHUB_REF_NAME" out/* --clobber

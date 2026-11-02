@@ -234,6 +234,9 @@ def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=Fa
             "tag_prefix": f"{key}-v", "version_from": "tool.py", "needs_core": needs_core,
             "needs": list(needs), "data": [f"data:{key}"]}))
         z.writestr(f"{key}/tool.py", f'VERSION = "{version}"\n')
+        hook = zipfile.ZipInfo(f"{key}/launch-hook.sh")
+        hook.external_attr = 0o100755 << 16
+        z.writestr(hook, "#!/bin/sh\n")
         z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken))
         z.writestr(f"{key}/hub_section.py", f"SECTION = {{'key': '{key}', 'title': '{key.title()}', "
                    f"'os': ['linux', 'win32'], 'page': 'page.html', 'api': {{'hello': lambda: '{version}'}}}}\n")
@@ -324,6 +327,8 @@ def check_manager():
     expect((kit / "beta").exists(), False, "beta's folder after the refused install")
     mgr.install("alpha")
     expect(calls(), ["alpha-install-1.0.0"], "hooks on install (no stop on a first install)")
+    if sys.platform != "win32":
+        expect(os.access(kit / "alpha" / "launch-hook.sh", os.X_OK), True, "executable bit kept from the zip")
     expect(mgr.version("alpha"), "1.0.0", "alpha's version")
     expect(sorted(mgr.installed()), ["alpha"], "installed after alpha")
     expect([p.name for p in mgr.roots()], ["alpha"], "section roots")

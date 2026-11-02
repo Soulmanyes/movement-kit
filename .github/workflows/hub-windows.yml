@@ -1,8 +1,9 @@
-# The hub's Windows build (windows-release.yml): movement-kit.exe, which is Strafe Review's program
-# with the hub window in front (hub/build.py), smoke-tested by strafe-review/smoke_test.py --hub and
-# then started with no arguments, which must keep the hub window up. Zipped with WINDOWS.txt, the
-# licences of the bundled packages (third-party-licenses, read from the build's own metadata) and the
-# other notices. Run by hand (Actions > hub-windows > Run workflow) for a test build, kept as a
+# The core exe's Windows build (windows-release.yml, 3.7b in PLAN.md): movement-kit.exe, the hub, movekit
+# and the HUD settings, with the tools as modules it downloads (hub/build.py). Smoke-tested by
+# hub/smoke_test.py, which installs the modules from a fake GitHub and runs them from the download
+# folder, then started with no arguments, which must keep the hub window up. Zipped with WINDOWS.txt,
+# the licences of the bundled packages (third-party-licenses, read from the build's own metadata) and
+# the other notices. Run by hand (Actions > hub-windows > Run workflow) for a test build, kept as a
 # workflow artifact; a pushed hub-v* tag also attaches the zip to that tag's GitHub release.
 name: hub-windows
 on:
@@ -23,10 +24,10 @@ jobs:
       build: python build.py
       # a one-file exe runs as a bootloader plus a child, so taskkill /T ends both
       smoke: >-
-        python ../strafe-review/smoke_test.py dist/movement-kit.exe --hub;
+        python smoke_test.py dist/movement-kit.exe;
         if ($LASTEXITCODE) { exit $LASTEXITCODE };
         $p = Start-Process dist/movement-kit.exe -PassThru; Start-Sleep 15;
         if ($p.HasExited) { Write-Error "movement-kit.exe exited with $($p.ExitCode)"; exit 1 };
         taskkill /F /T /PID $p.Id
-      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, ../strafe-review/licenses/OpenSSL-LICENSE.txt, licenses/WebView2-LICENSE.txt, licenses/WebView2-NOTICE.txt
-      version: python -c "import hub_release; print(hub_release.VERSION)"
+      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt, licenses/WebView2-LICENSE.txt, licenses/WebView2-NOTICE.txt
+      version: python ../.github/scripts/version.py hub

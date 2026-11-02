@@ -31,8 +31,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 if not getattr(sys, "frozen", False):
-    # from the repo (tests): the kit root holds movekit and hud; hub/ holds hub_release
+    # from the repo (tests): the kit root holds movekit and hud; hub/ holds hub_release. Module scripts
+    # this starts (installers, Strafe Review's server) find movekit the same way, also when the
+    # modules sit in another folder (MOVEKIT_KIT_ROOT)
+    import os
+
     sys.path[:0] = [str(HERE.parent), str(HERE)]
+    os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(HERE.parent), os.environ.get("PYTHONPATH")) if p)
 
 import hub_release
 
@@ -74,8 +79,7 @@ def manager():
     from movekit import modules, updater
 
     api = os.environ.get("MOVEKIT_MODULES_API", modules.API)  # tests point it at a fake GitHub
-    kit = os.environ.get("MOVEKIT_KIT_ROOT")  # and the kit at a temp folder (from the repo it's the checkout)
-    return modules.Manager(kit_root=kit or None, api=api, core_version=hub_release.VERSION,
+    return modules.Manager(api=api, core_version=hub_release.VERSION,
                            core_installer=core_installer if updater.frozen_exe() else None)
 
 

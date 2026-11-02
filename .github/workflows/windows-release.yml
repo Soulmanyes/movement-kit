@@ -2,7 +2,7 @@
 # can't cross-build, so it runs on windows-latest: build the exe, smoke-test it, zip it with the
 # tool's files and the licence of the Python build bundled in the exe, and keep the zip as a workflow
 # artifact. On a pushed <tool>-v* tag it also attaches the zip to that tag's GitHub release.
-# Every run step runs in the tool's folder, in PowerShell unless it says otherwise.
+# Every run step runs in the tool's folder (or `folder`), in PowerShell unless it says otherwise.
 name: windows-release
 on:
   workflow_call:
@@ -31,6 +31,12 @@ on:
         description: Command that prints the tool's VERSION; the tag must match it. Empty skips the check
         type: string
         default: ""
+      folder:
+        description: >-
+          The folder the build runs in when it isn't the tool's: "hub" for the bridge release, which
+          builds the core exe on Strafe Review's tag line (strafe-review-windows.yml)
+        type: string
+        default: ""
       exe:
         description: The exe's name without .exe when it isn't the tool's, "movement-kit" for the hub
         type: string
@@ -52,7 +58,7 @@ jobs:
       contents: write
     defaults:
       run:
-        working-directory: ${{ inputs.tool }}
+        working-directory: ${{ inputs.folder || inputs.tool }}
         shell: pwsh
     env:
       TOOL: ${{ inputs.tool }}
@@ -89,7 +95,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.tool }}-windows
-          path: ${{ inputs.tool }}/${{ inputs.tool }}-windows.zip  # upload paths start at the repo root
+          path: ${{ inputs.folder || inputs.tool }}/${{ inputs.tool }}-windows.zip  # upload paths start at the repo root
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash

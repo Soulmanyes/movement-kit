@@ -1,7 +1,10 @@
-# Strafe Review's Windows build (windows-release.yml): the exe, smoke-tested by smoke_test.py, zipped
-# with WINDOWS.txt (setup and a tester checklist; README.md links private notes) and the licences.
-# Run by hand (Actions > strafe-review-windows > Run workflow) for a test build, kept as a workflow
-# artifact; a pushed strafe-review-v* tag also attaches the zip to that tag's GitHub release.
+# The bridge release on Strafe Review's line (windows-release.yml, 3.7b in PLAN.md): the core exe
+# (hub/build.py), named strafe-review.exe and zipped as strafe-review-windows.zip, so installed
+# Strafe Review exes update themselves into the kit's core. Its first start installs the Strafe
+# Review module (hub/movement_kit.py migrate()). Smoke-tested like hub-windows.yml. The tag's
+# strafe-review-module.zip comes from module-release.yml. Run by hand (Actions >
+# strafe-review-windows > Run workflow) for a test build; a pushed strafe-review-v* tag attaches the
+# zip to that tag's GitHub release. The tag must match Strafe Review's VERSION.
 name: strafe-review-windows
 on:
   workflow_dispatch:
@@ -14,8 +17,17 @@ jobs:
     uses: ./.github/workflows/windows-release.yml
     with:
       tool: strafe-review
+      folder: hub
       title: Strafe Review
-      build: python build.py  # bundles movekit from the repo root
-      smoke: python smoke_test.py dist/strafe-review.exe
-      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt
-      version: python -c "import sys; sys.path.insert(0, 'collector'); import updater; print(updater.VERSION)"
+      exe: strafe-review
+      packages: pywebview
+      licenses_of: pywebview
+      build: python build.py --name strafe-review
+      smoke: >-
+        python smoke_test.py dist/strafe-review.exe;
+        if ($LASTEXITCODE) { exit $LASTEXITCODE };
+        $p = Start-Process dist/strafe-review.exe -PassThru; Start-Sleep 15;
+        if ($p.HasExited) { Write-Error "strafe-review.exe exited with $($p.ExitCode)"; exit 1 };
+        taskkill /F /T /PID $p.Id
+      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt, licenses/WebView2-LICENSE.txt, licenses/WebView2-NOTICE.txt
+      version: python ../.github/scripts/version.py strafe-review

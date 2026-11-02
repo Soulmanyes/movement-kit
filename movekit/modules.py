@@ -47,6 +47,7 @@ Standard library only.
 """
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -95,6 +96,9 @@ def frozen():
 
 
 def default_kit_root():
+    """Where modules live (see the top). MOVEKIT_KIT_ROOT points it elsewhere, for tests."""
+    if os.environ.get("MOVEKIT_KIT_ROOT"):
+        return Path(os.environ["MOVEKIT_KIT_ROOT"])
     return data_dir() / "kit" if frozen() else KIT
 
 
@@ -633,6 +637,11 @@ class Manager:
                     if not target.is_relative_to(unpacked.resolve()):
                         raise RuntimeError(f"Unexpected file in the module zip: {name}")
                 z.extractall(unpacked)
+                for info in z.infolist():  # extractall drops the executable bit (launch hooks need it)
+                    mode = info.external_attr >> 16
+                    if mode & 0o111 and not info.is_dir():
+                        target = unpacked / info.filename
+                        target.chmod(target.stat().st_mode | (mode & 0o111))
             top = unpacked / key
             if not (top / MANIFEST).is_file():
                 raise RuntimeError(f"The module zip has no {key}/{MANIFEST}")
