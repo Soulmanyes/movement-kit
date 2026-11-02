@@ -62,8 +62,9 @@ def set_block(path, tool, body, add, backup_suffixes, legacy=None):
 
     An existing block, or one found by legacy(lines) (a function returning [(start, stop)] slices of
     the tool's older lines), is replaced where the first one stands and the others are dropped;
-    with none, the block goes at the end after a blank line. Taking it out drops all of them and
-    blank lines left at the end of the file. Adding creates a missing file. The file is only written
+    with none, the block goes at the end after a blank line. Taking it out drops all of them, a
+    blank line before one that sits between two blank lines, and blank lines left at the end of the
+    file. Adding creates a missing file. The file is only written
     when it changes, and the first change keeps a copy of a non-empty file (see _backup;
     backup_suffixes is a str or a tuple, the first is the one written). Returns False if there was
     nothing to take out of (no file), else True."""
@@ -74,6 +75,12 @@ def set_block(path, tool, body, add, backup_suffixes, legacy=None):
     begin, end = markers(tool)
     found = sorted(set(spans(lines, begin, end) + (legacy(lines) if legacy else [])))
     drop = {i for a, b in found for i in range(a, b)}
+    # a block taken out from between two blank lines would leave both: drop the one before it too
+    # (usually the blank line added with the block)
+    for a, b in found[1 if add else 0:]:
+        if (a and not lines[a - 1].strip() and a - 1 not in drop
+                and b < len(lines) and not lines[b].strip()):
+            drop.add(a - 1)
     out = []
     for i, line in enumerate(lines):
         if add and found and i == found[0][0]:
