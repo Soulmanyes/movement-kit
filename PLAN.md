@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). Left: the marker decision, the GitHub repo and the bridge releases.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. Left: the marker decision and the bridge releases.
 
 ## Goal
 
@@ -141,7 +141,12 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - Callers: `strafe-review-windows.yml` (tags `strafe-review-v*`, VERSION check through `collector/updater.py`) and `gain-converter-windows.yml` (tags `gain-converter-v*`, no VERSION to check). Both can also be run by hand for a test zip.
 - The release refuses a tag without the tool's prefix and, for Strafe Review, a tag that isn't `strafe-review-v<VERSION>`. Release notes start at the tool's own previous tag (`--notes-start-tag`), not at whichever tool released last. Title: "Strafe Review 1.5.0".
 - Source Yaw has no Windows build and no workflow: its releases stay source archives, made by hand.
-- Verified locally only (no GitHub repo yet): YAML parses; the release step's bash run with a stub `gh` in a scratch clone (matching tag, wrong VERSION, another tool's tag, a tool's first tag, a later tag) does the right thing under `bash -e`. The Windows steps (PowerShell, `Compress-Archive`, the build) run on GitHub for the first time with the first push and a hand run.
+- First GitHub runs (2026-11-02, by hand on `main`): both workflows passed build, smoke test and zip (runs 41375437781 and 41375440502). The zips hold the same files as the old repos' zips.
+- Before that, locally: YAML parses; the release step's bash run with a stub `gh` in a scratch clone (matching tag, wrong VERSION, another tool's tag, a tool's first tag, a later tag) does the right thing under `bash -e`. The Windows steps (PowerShell, `Compress-Archive`, the build) run on GitHub for the first time with the first push and a hand run.
+
+### GitHub repo (2026-11-02)
+
+- `Soulmanyes/movement-kit` created private, `main` and all 21 `<tool>-v*` tags pushed. As expected, the tags started no runs and made no releases. The repo goes public through `/go-public`.
 
 ### Notes for later steps
 
