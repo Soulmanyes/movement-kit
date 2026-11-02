@@ -76,6 +76,11 @@ def main():
         expect([p for p in problems if p[0] == "sourceyaw"], [], "sourceyaw problems on Linux")
         if "sourceyaw" not in [s.key for s in sections]:
             fail("discovery didn't find the sourceyaw section")
+        # hub_section.py loads on every OS, so loading it must import nothing past the standard library
+        loaded = sorted(m for m in sys.modules if m.startswith("movekit_section_sourceyaw.")
+                        and m != "movekit_section_sourceyaw.hub_section")
+        expect(loaded, [], "modules loaded with hub_section.py")
+        expect("PIL" in sys.modules, False, "Pillow loaded with the sections")
         win, win_problems = hub.discover(KIT, platform="win32")
         expect([p for p in win_problems if p[0] == "sourceyaw"], [], "sourceyaw problems on Windows")
         expect("sourceyaw" in [s.key for s in win], False, "sourceyaw listed on Windows")

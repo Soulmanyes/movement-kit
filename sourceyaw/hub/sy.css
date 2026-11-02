@@ -172,7 +172,7 @@ input[type="color"] {
 	outline: none;
 }
 .sy-capture-area:focus { border-color: var(--accent); }
-.sy-dialog-buttons { display: flex; justify-content: flex-end; margin-top: 8px; }
+.sy-dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 #sy-toasts {
 	position: fixed;

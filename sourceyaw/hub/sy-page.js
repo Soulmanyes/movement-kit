@@ -203,6 +203,8 @@
 	}
 
 	function keyName(ev) {
+		// numpad keys by where they sit: with NumLock on, Numpad1 types "1" and would bind the main 1
+		if (ev.code.startsWith("Numpad") && keyInfo.codes[ev.code]) return keyInfo.codes[ev.code];
 		// the key as typed first (letters follow the layout, as in the GTK window), then where it sits
 		if (ev.key.length === 1 && keyInfo.valid.includes(ev.key.toLowerCase())) return ev.key.toLowerCase();
 		return keyInfo.codes[ev.code] || null;
@@ -470,9 +472,14 @@
 
 	// another section is another page: ask before unapplied changes go with this one
 	$("hub-side").addEventListener("click", (ev) => {
-		if (dirty && ev.target.closest("a") && !confirm("Leave Source Yaw without applying your changes?"))
-			ev.preventDefault();
+		const link = ev.target.closest("a");
+		if (!dirty || !link) return;
+		ev.preventDefault();
+		$("sy-leave-go").onclick = () => { location.href = link.href; };
+		$("sy-leave").hidden = false;
+		$("sy-leave-stay").focus();
 	}, true);
+	$("sy-leave-stay").onclick = () => { $("sy-leave").hidden = true; };
 
 	(async () => {
 		try {
