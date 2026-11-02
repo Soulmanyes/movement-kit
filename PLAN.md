@@ -145,6 +145,7 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 
 ### Notes for later steps
 
+- Before the first monorepo release: the `release-repo` skill and the per-tool memories still describe the old repos and `v*` tags. A `v1.5.0` tag would trigger no CI and the new updaters ignore it. Release with `<tool>-v<VERSION>` tags; updating the skill is the owner's call.
 - Pushing the renamed old tags triggers no CI: none of their commits has a workflow at the repo root (checked 2026-11-02, all 21 tags). They also make no releases, so the updaters don't see them.
 - `sourceyaw/install.sh`'s `curl | sh` branch has the same root-path problem (`sh "$tmp/install.sh"`), and on the monorepo `releases/latest` gives whichever tool released last. Fix in the bridge step: pick the newest `sourceyaw-v*` tag and run `sourceyaw/install.sh`.
 - `failed()` and Source Yaw's `installed()` compare tag strings. A `failed` or `installed` mark from an old unprefixed tag (`v1.5.0`) doesn't match the same version's new tag (`strafe-review-v1.5.0`), so auto mode would retry it once. No such release exists (both tools are on their newest old tag), so it stays as is.
