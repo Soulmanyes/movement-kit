@@ -16,7 +16,8 @@ Usage: install.py [--game DIR] [--uninstall]
   movekit-run and the old name strafe-review-run into ~/.local/bin for the Steam launch options.
 
 The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
---uninstall removes the recorder, the autoexec block and the link.
+--uninstall removes the recorder, the autoexec block and the link. With no game found it still removes
+the launch hook and the link.
 """
 import argparse
 import re
@@ -142,6 +143,12 @@ def main():
     ap.add_argument("--uninstall", action="store_true", help="take Strafe Review out again")
     args = ap.parse_args()
     if not args.game or not (Path(args.game) / "cfg").is_dir():
+        if args.uninstall:
+            # the game is gone or moved: still take out what lives outside it, so an uninstall
+            # (by hand or from the hub's module card) always finishes
+            link_launcher(add=False)
+            print("Momentum Mod not found, so nothing was removed from the game")
+            return
         sys.exit("Momentum Mod not found in any Steam library; pass --game with its momentum folder")
     (uninstall if args.uninstall else install)(args.game)
 

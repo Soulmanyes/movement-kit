@@ -31,8 +31,8 @@ in the same layout as the repo, so a tool finds movekit the way it does in the r
   - git checkout (the owner's copy): the checkout itself. Updates come from git pull, so the
     manager doesn't download; uninstall runs the uninstall hook and hides the module, and install
     runs the install hook and shows it again. The code stays.
-  - Windows exe: %LOCALAPPDATA%\\movement-kit\\kit (the core is the exe, which bundles movekit).
-  - Linux copy: the core's own folder, ~/.local/share/movement-kit/kit (3.7b.4).
+  - Windows exe: %LOCALAPPDATA%\\movekit\\kit (the core is the exe, which bundles movekit).
+  - Linux copy: the core's own folder, ~/.local/share/movekit/kit (3.7b.4).
 The previous version of each module is kept in <data>/previous/<key> for roll back.
 
 State, in <data>/modules.json: per key {"auto", "installed" (tag), "previous" (tag), "failed"
@@ -76,7 +76,8 @@ def asset_name(key):
 
 
 def data_dir():
-    return paths.data_dir("movement-kit")
+    """The kit's own folder, which movekit/launch.py's hooks/ already lives in."""
+    return paths.data_dir("movekit")
 
 
 def frozen():
@@ -120,6 +121,10 @@ def read_manifest(folder):
         raise ValueError("needs must list module keys")
     if not all(isinstance(d, str) and DATA_RE.match(d) and ".." not in d for d in m["data"]):
         raise ValueError("data entries look like data:<folder>/<path> or config:<folder>")
+    # "Also delete saved data" deletes these, so they stay inside the module's own folders: a typo
+    # such as data:Steam must not reach another program's files
+    if not all(d.split(":", 1)[1].split("/")[0] == m["key"] for d in m["data"]):
+        raise ValueError(f"data entries must be in the module's own folder ({m['key']})")
     if not all(isinstance(f, str) and (folder / f).is_file() for f in m["standalone"]):
         raise ValueError("standalone must list files in the module's folder")
     return m
@@ -460,7 +465,7 @@ class Manager:
                 try:
                     self.update(card["key"])
                     results[card["key"]] = None
-                except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as e:
+                except Exception as e:  # noqa: BLE001 - one module's failure mustn't stop the rest
                     results[card["key"]] = str(e)
         return results
 
@@ -477,7 +482,7 @@ class Manager:
                 try:
                     self.update(card["key"])
                     results[card["key"]] = None
-                except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as e:
+                except Exception as e:  # noqa: BLE001 - one module's failure mustn't stop the rest
                     results[card["key"]] = str(e)
         return results
 
@@ -486,22 +491,20 @@ class Manager:
         prev = self.data / "previous" / key
         if self.checkout or key == CORE or not prev.is_dir():
             raise RuntimeError(f"No earlier {key} version is kept")
+        staged = self.data / "staging" / (key + "-rollback")
+        shutil.rmtree(staged, ignore_errors=True)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        prev.rename(staged)
+        try:
+            self._swap(key, staged, first=False)
+        except Exception:
+            if staged.is_dir() and not prev.exists():
+                staged.rename(prev)  # _swap put the rest back; this is the kept version's slot
+            raise
         entry = self._entry(key)
-        running = self._stop(key)
-        cur = self.folder(key)
-        tmp = self.data / "previous" / (key + ".swap")
-        shutil.rmtree(tmp, ignore_errors=True)
-        cur.rename(tmp)
-        prev.rename(cur)
-        tmp.rename(prev)
         entry["installed"], entry["previous"] = entry.get("previous"), entry.get("installed")
         entry.pop("failed", None)
         self._save()
-        try:
-            self._call(key, "install")
-        finally:
-            if running:
-                self._start(key)
 
     def uninstall(self, key, delete_data=False):
         """Take a module out: its uninstall hook (game files, autoexec block, launch hooks), then
@@ -545,7 +548,7 @@ class Manager:
         entry = self._entry(key)
         try:
             action()
-        except (OSError, RuntimeError, ValueError, zipfile.BadZipFile):
+        except Exception:  # any failure, a hook's own bug too, marks the release
             entry["failed"] = tag
             self._save()
             raise
@@ -592,30 +595,52 @@ class Manager:
                                    "update the core first")
             entry.pop("waiting_for_core", None)
             self._check_needs(key, manifest)
-            running = False if first else self._stop(key)
-            cur, prev = self.folder(key), self.data / "previous" / key
-            self.kit.mkdir(parents=True, exist_ok=True)
-            if cur.exists():
-                shutil.rmtree(prev, ignore_errors=True)
-                prev.parent.mkdir(parents=True, exist_ok=True)
-                cur.rename(prev)
+            self._swap(key, new, first)
+            if not first:
                 entry["previous"] = entry.get("installed")
-            new.rename(cur)
-            try:
-                self._call(key, "install")
-            except Exception:
-                # the new version's install failed: put the old one back as it was
-                shutil.rmtree(cur, ignore_errors=True)
-                if prev.is_dir() and not first:
-                    prev.rename(cur)
-                    entry["previous"] = None
-                    try:
-                        self._call(key, "install")
-                    except Exception:  # noqa: BLE001, S110 - the first error is the one to report
-                        pass
-                raise
-            finally:
-                if running:
-                    self._start(key)
 
-        self._mark(key, latest["tag"], run)
+        try:
+            self._mark(key, latest["tag"], run)
+        finally:
+            shutil.rmtree(self.data / "staging" / key, ignore_errors=True)
+
+    def _swap(self, key, incoming, first):
+        """Put the folder incoming in as the module's current version, the current one becoming the
+        previous (the older previous is dropped), and run the install hook. What the module runs is
+        stopped first and started again after, whatever happens. On any failure every folder goes back
+        where it was, incoming included, and the old version's install hook runs again; the first
+        error is raised."""
+        cur, prevs = self.folder(key), self.data / "previous"
+        prev, hold = prevs / key, prevs / (key + ".hold")  # hold: the older previous, until it worked
+        running = False if first else self._stop(key)
+        done = []
+        try:
+            prevs.mkdir(parents=True, exist_ok=True)
+            self.kit.mkdir(parents=True, exist_ok=True)
+            shutil.rmtree(hold, ignore_errors=True)
+            if prev.exists():
+                prev.rename(hold)
+                done.append("hold")
+            if cur.exists():
+                cur.rename(prev)
+                done.append("prev")
+            incoming.rename(cur)
+            done.append("cur")
+            self._call(key, "install")
+        except Exception:
+            for step, src, dst in (("cur", cur, incoming), ("prev", prev, cur), ("hold", hold, prev)):
+                if step in done:
+                    try:
+                        src.rename(dst)
+                    except OSError:
+                        pass  # best effort: the error below is what the card shows
+            if "prev" in done:
+                try:
+                    self._call(key, "install")
+                except Exception:  # noqa: BLE001, S110 - the first error is the one to report
+                    pass
+            raise
+        finally:
+            if running:
+                self._start(key)
+        shutil.rmtree(hold, ignore_errors=True)

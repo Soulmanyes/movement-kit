@@ -18,8 +18,13 @@ switch is on, a broken release (install hook fails: marked failed, the old versi
 skipping it), a release that needs a newer core (waits, nothing changed), a zip with a ../ path
 refused, set_auto refusing a non-bool, uninstall refused while another module needs it, uninstall
 (hook run, folder and previous gone, saved data kept or deleted as asked, the auto switch kept),
-update_all, and the core's card using the installer it was given. In a git checkout: no downloads,
+a swap that fails halfway (everything back, the server started again, the release marked failed),
+update_all, and the core's card using the installer it was given; data entries outside the
+module's own folders refused. In a git checkout: no downloads,
 uninstall runs the hook and hides the module with its code left, install shows it again.
+Strafe Review's real hooks from this checkout, with HOME, the data folders and its server port in
+the temp folder: install puts the recorder, autoexec block and launch hook in, uninstall takes them
+out, and uninstall still finishes when the game is gone.
 """
 import ast
 import http.server
@@ -27,6 +32,7 @@ import io
 import json
 import os
 import shutil
+import socket
 import sys
 import tempfile
 import threading
@@ -40,6 +46,21 @@ TMP = Path(tempfile.mkdtemp(prefix="check-modules-"))
 for var, sub in (("XDG_DATA_HOME", "data"), ("XDG_CONFIG_HOME", "config"),
                  ("LOCALAPPDATA", "data"), ("APPDATA", "config")):
     os.environ[var] = str(TMP / sub)
+os.environ["HOME"] = str(TMP / "home")  # ~/.local/bin links (launch.bin_link) and Steam's folders
+(TMP / "home").mkdir()
+
+
+def closed_port():
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+# the Strafe Review hooks' stop asks its server: never the real one on 8765
+os.environ["STRAFE_REVIEW_PORT"] = str(closed_port())
+os.environ.pop("MOMENTUM_DIR", None)
 OUT = TMP / "hook-calls"
 OUT.mkdir()
 os.environ["MODCHECK_OUT"] = str(OUT)
@@ -65,7 +86,7 @@ def expect(got, want, what):
 def raises(fn, text, what):
     try:
         fn()
-    except (RuntimeError, ValueError) as e:
+    except (OSError, RuntimeError, ValueError) as e:
         if text not in str(e):
             fail(f"{what}: error {e!r} doesn't say {text!r}")
         return
@@ -157,6 +178,14 @@ def check_own_modules():
     expect(sorted(mgr.available()), sorted(found), "modules available on Linux")
     expect(sorted(modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="win32").available()),
            ["gain-converter", "strafe-review"], "modules available on Windows")
+    bad = TMP / "bad" / "alpha"
+    bad.mkdir(parents=True)
+    (bad / "tool.py").write_text('VERSION = "1.0.0"\n')
+    for data_entry in ("data:Steam", "config:alphabet", "data:alpha/../x"):
+        (bad / "module.json").write_text(json.dumps({
+            "key": "alpha", "title": "A", "os": ["linux"], "tag_prefix": "alpha-v",
+            "version_from": "tool.py", "needs_core": "1.0.0", "data": [data_entry]}))
+        raises(lambda: modules.read_manifest(bad), "data entries", f"data entry {data_entry}")
 
 
 # fixture modules and a fake GitHub
@@ -200,7 +229,7 @@ def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=Fa
         z.writestr(f"{key}/module.json", json.dumps({
             "key": key, "title": key.title(), "summary": f"{key} module", "os": ["linux", "win32"],
             "tag_prefix": f"{key}-v", "version_from": "tool.py", "needs_core": needs_core,
-            "needs": list(needs), "data": [f"data:{key}-data"]}))
+            "needs": list(needs), "data": [f"data:{key}"]}))
         z.writestr(f"{key}/tool.py", f'VERSION = "{version}"\n')
         z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken))
         if evil:
@@ -356,19 +385,42 @@ def check_manager():
     expect([c["tag"] for c in core_installs], ["hub-v1.1.0"], "core installer calls")
     calls()
 
+    # a swap that fails halfway (Windows: a file still in use) puts everything back
+    gh.release("alpha-v1.6.0", "alpha-module.zip", module_zip("alpha", "1.6.0"))
+    mgr.check(force=True)
+    real_rename = Path.rename
+
+    def busy(self, target):
+        if Path(target) == kit / "alpha" and "staging" in self.parts:
+            raise PermissionError("in use")
+        return real_rename(self, target)
+
+    Path.rename = busy
+    try:
+        raises(lambda: mgr.update("alpha"), "in use", "update whose swap fails")
+    finally:
+        Path.rename = real_rename
+    expect(mgr.version("alpha"), "1.5.0", "alpha after the failed swap")
+    expect(modules.module_version(data / "previous" / "alpha", {"version_from": "tool.py"}), "1.1.0",
+           "the kept previous version after the failed swap")
+    expect((data / "previous" / "alpha.hold").exists(), False, "hold folder after the failed swap")
+    expect(calls(), ["alpha-install-1.5.0", "alpha-start-1.5.0", "alpha-stop-1.5.0"],
+           "hooks around the failed swap (old version reinstalled, started again)")
+    expect(mgr.info("alpha")["failed"], "alpha-v1.6.0", "failed mark after the failed swap")
+
     # uninstall
     raises(lambda: mgr.uninstall("alpha"), "beta needs alpha", "uninstalling a needed module")
     raises(lambda: mgr.uninstall("core"), "can't be uninstalled", "uninstalling the core")
     for key in ("alpha", "beta"):
-        d = modules.paths.data_dir(f"{key}-data")
+        d = modules.paths.data_dir(key)
         d.mkdir(parents=True)
         (d / "saved").write_text("x")
     mgr.uninstall("beta")
     expect(calls(), ["beta-stop-1.1.0", "beta-uninstall-1.1.0"], "hooks on uninstall")
     expect((kit / "beta").exists(), False, "beta's folder after uninstall")
-    expect((modules.paths.data_dir("beta-data") / "saved").exists(), True, "data kept by default")
+    expect((modules.paths.data_dir("beta") / "saved").exists(), True, "data kept by default")
     mgr.uninstall("alpha", delete_data=True)
-    expect(modules.paths.data_dir("alpha-data").exists(), False, "data deleted when asked")
+    expect(modules.paths.data_dir("alpha").exists(), False, "data deleted when asked")
     expect((data / "previous" / "alpha").exists(), False, "previous version after uninstall")
     expect(mgr.installed(), {}, "installed after both uninstalls")
     expect(mgr.info("alpha")["auto"], True, "alpha's auto switch kept for a reinstall")
@@ -396,10 +448,54 @@ def check_checkout():
     expect(sorted(mgr.installed()), ["alpha"], "installed again")
 
 
+def fake_momentum(where):
+    game = where / "momentum"
+    (game / "cfg").mkdir(parents=True)
+    (game / "panorama" / "layout" / "hud").mkdir(parents=True)
+    (game / "panorama" / "layout" / "hud" / "timer.xml").write_text(
+        "<root>\n\t<scripts>\n\t\t<include type=\"module\" src=\"file://{scripts}/hud/timer.ts\" />"
+        "\n\t</scripts>\n</root>\n")
+    (game / "cfg" / "autoexec.cfg").write_text("exec something\n")
+    return game
+
+
+def check_strafe_review_hooks():
+    """Strafe Review's real hooks, from this checkout, against a fake Momentum: everything they
+    write lands in the temp HOME and data folders."""
+    game = fake_momentum(TMP / "sr")
+    os.environ["MOMENTUM_DIR"] = str(game)
+    mgr = modules.Manager(kit_root=KIT, data=TMP / "sr-data", api="http://127.0.0.1:9/none",
+                          platform="linux")
+    hook_link = modules.paths.data_dir("movekit") / "hooks" / "20-strafe-review"
+    bin_link = TMP / "home" / ".local" / "bin" / "movekit-run"
+    mgr.uninstall("strafe-review")  # nothing installed in this game yet: still fine
+    expect("strafe-review" in mgr.installed(), False, "strafe-review hidden after uninstall")
+    mgr.install("strafe-review")
+    expect((game / "custom" / "0-strafe-review" / "panorama").is_dir(), True, "recorder installed")
+    if "movekit:strafe-review begin" not in (game / "cfg" / "autoexec.cfg").read_text():
+        fail("no autoexec block after the module install")
+    if sys.platform.startswith("linux"):
+        expect((hook_link.is_symlink(), bin_link.is_symlink()), (True, True), "launch hook and link")
+    mgr.uninstall("strafe-review")
+    expect((game / "custom" / "0-strafe-review").exists(), False, "recorder after uninstall")
+    if "movekit:strafe-review" in (game / "cfg" / "autoexec.cfg").read_text():
+        fail("autoexec block left after the module uninstall")
+    expect(hook_link.is_symlink(), False, "launch hook after uninstall")
+    # the game is gone: uninstall still finishes and takes the launch hook out
+    mgr.install("strafe-review")
+    shutil.rmtree(game)
+    os.environ["MOMENTUM_DIR"] = str(TMP / "sr" / "gone")
+    mgr.uninstall("strafe-review")
+    expect(hook_link.is_symlink(), False, "launch hook after an uninstall with no game")
+    expect("strafe-review" in mgr.installed(), False, "strafe-review after an uninstall with no game")
+    os.environ.pop("MOMENTUM_DIR")
+
+
 def main():
     check_own_modules()
     check_manager()
     check_checkout()
+    check_strafe_review_hooks()
     shutil.rmtree(TMP, ignore_errors=True)
     print("check_modules: all passed")
 

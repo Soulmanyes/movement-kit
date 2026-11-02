@@ -362,7 +362,7 @@ The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates o
 - **Core:** the hub window, `movekit`, `hud/` and the launch dispatcher. Line `hub-v*`. On Windows it's `movement-kit.exe` (PyInstaller); on Linux it's the hub from a source archive. The core never imports tool code, so it runs with no modules installed.
 - **Module:** a tool folder with a `module.json`: `key`, `title`, `os`, `tag_prefix`, `version`, `needs_core` (the lowest core version it runs on), `needs` (other modules), `data` (the folders "Also delete saved data" removes), and its hooks file. The hooks file is `module_hooks.py`, with `install(ctx)`, `uninstall(ctx, delete_data)` and `launch(ctx, argv)` if the module has a launch step. Each module ships on its existing tag line as `<tool>-module.zip`, the tool folder only.
 - **`movekit/modules.py`, one manager for every module.** It does no per-tool work: everything tool-specific is in `module.json` and the hooks.
-  - Its state file is `modules.json` in the kit's data folder (`%LOCALAPPDATA%\MovementKit`, `~/.local/share/movement-kit`). Per module it keeps installed version, `auto` (default false), previous version and the `failed` mark.
+  - Its state file is `modules.json` in the kit's data folder (`%LOCALAPPDATA%\movekit`, `~/.local/share/movekit`, where `movekit/launch.py` already keeps `hooks/`). Per module it keeps installed version, `auto` (default false), previous version and the `failed` mark.
   - Modules sit in `modules/<key>/current`, with `modules/<key>/previous` kept for roll back.
   - Calls: `list`, `check` (one GitHub release list for every line, at most every 6 h), `notes(key)` (the release body), `install`, `update`, `update_all`, `rollback`, `uninstall(key, delete_data)` and `set_auto`.
   - It reuses `movekit/updater.py`: `parse_version`, the download code, the `failed` mark, and `in_git_checkout`.
@@ -388,7 +388,7 @@ The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates o
 - The Windows smoke test starts the core with an empty modules folder. It installs each `<tool>-module.zip` from a local fake GitHub, then runs the sections and the launch from the downloaded folder, not from the bundle.
 
 **Linux core.**
-- `movekit/install-hub.sh` gets a copy mode for other users: core files into `~/.local/share/movement-kit/core`, with `movekit-run` linked from there.
+- `movekit/install-hub.sh` gets a copy mode for other users: core files into `~/.local/share/movekit/kit` (the kit root, so modules sit next to them), with `movekit-run` linked from there.
 - From a git checkout it keeps running in place (the owner's case).
 - Source Yaw's module hooks wrap what exists: `install_source` and `sourceyaw/install.sh` (it still installs to `~/.local/share/sourceyaw`), plus a non-interactive `--uninstall` that takes a keep-or-delete-data flag. Its GTK window and the manager share one auto-update state.
 
@@ -406,6 +406,9 @@ The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates o
    - Module lines are found by their `<key>-module.zip` asset, so tool releases from before 3.7b aren't offered as modules.
    - Hooks run module scripts in a fresh process (`Context.script`): python from the repo, `movement-kit.exe --run-script FILE` in the exe (added to `hub/movement_kit.py`). In-process, `install.py` would leave bare `steam`/`install` modules behind, which `check_hub_section.py` forbids.
    - Strafe Review's `install` hook fails when Momentum Mod isn't found, so the module doesn't install without its game. Source Yaw's `uninstall` runs `yawcore.py --remove-from-game` first, since `install.sh --uninstall` only asks about that in a terminal. Its settings (`~/.config/sourceyaw`) go only with "Also delete saved data". Strafe Review's data entry leaves `settings.json` alone (the HUD's, part of the core).
+   - **Folders.** The kit keeps its state in `paths.data_dir("movekit")`, the folder `movekit/launch.py`'s `hooks/` already uses: one name for the kit. `data:`/`config:` entries must start with the module's own key, so a typo can't make "Also delete saved data" reach another program's folder.
+   - **Swaps put everything back.** Stop, the folder swap and the install hook run as one step. If any part fails (on Windows a file still in use), every folder returns to where it was, the old version's install hook runs again, the server is started again and the release is marked failed. Strafe Review's `stop` hook waits up to 10 s for its server to end, because `api/stop` only asks.
+   - `strafe-review/install.py --uninstall` now finishes when Momentum Mod is gone or moved: it still removes the launch hook and the link. Before, it stopped with "Momentum Mod not found", so the module could never be uninstalled. `check_modules.py` runs Strafe Review's real hooks against a fake Momentum, with `HOME`, the data folders and its server port in a temp folder.
    - The launch pass-through check moves to 3.7b.3, with the Windows dispatcher it checks. Linux already passes through (`movekit-run`, `check_launch.py`).
    - For 3.7b.3: `strafe-review/install.py` takes `ROOT` from `sys._MEIPASS` in the exe. A module loaded from disk needs it from `__file__` (which PyInstaller also sets inside the bundle, so the old exe keeps working). The same applies to every `_MEIPASS` use in module code.
    - For 3.7b.2: Strafe Review's own updater (`collector/updater.py`, including the hub line it follows in the exe) gives way to the module card. The core line moves to the manager's "core" entry.
