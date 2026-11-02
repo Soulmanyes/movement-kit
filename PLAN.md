@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. Left: the marker decision and the bridge releases.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02. Left: the marker decision and the bridge releases.
 
 ## Goal
 
@@ -17,6 +17,7 @@ One home for every standalone surf, bhop and movement tool: Source Yaw, Strafe R
 - **Monorepo**, not a core repo copied into each tool's repo by a sync script, and not a hub app straight away. A sync script would mean a sync plus one release per tool for every core fix.
 - One folder per tool and a tag prefix per tool: `sourceyaw-v1.6.0`, `strafe-review-v1.5.0`, `gain-converter-v1.1.0`. Each tool keeps its own version and release.
 - Phased: every phase ends with working, released tools.
+- **End goal: one hub app**, one window with a section per tool (decided 2026-11-02). It comes last, as Phase 3, but every phase builds toward it: tool logic lives in `movekit` or the tool's own modules, not in its window code; tools talk through the Phase 2 session daemon and a local API rather than to each other; new UI is written so it can become a hub section.
 
 ## Layout (target)
 
@@ -81,9 +82,12 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - **`movekit-run %command%`.** One Steam launch option that starts whichever tools are turned on (one settings file), instead of chained `strafe-review-run sourceyaw-run`. The old wrapper names stay as links for a while.
 - **Attempt format.** Version the srrec attempt format as a documented schema, so new tools (histograms, progress over time, JHUD) read attempts without touching the collector.
 
+## Phase 3: hub app
+
+- One window with a section per tool, on Linux and Windows. Open question: the UI toolkit. Source Yaw is GTK (Linux only), Strafe Review is a web page that already runs on Windows, Gain Converter is tkinter. A web UI served by the session daemon is the likely fit.
+
 ## Later / undecided
 
-- **Hub app.** One window with a tab per tool. Open question: the UI toolkit. Source Yaw is GTK (Linux only), while Strafe Review is a web page that already runs on Windows.
 - **Panorama module kit.** One installer for `custom/0-*` folders and `timer.xml` includes, shared by the recorder, `mmod-trainer-height` and a future JHUD.
 - **Gain math in one language.** Either Python serves it over the API, or one shared JS module serves both the viewer and Gain Converter.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
@@ -148,6 +152,7 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 
 - `Soulmanyes/movement-kit` created private, `main` and all 21 `<tool>-v*` tags pushed. As expected, the tags started no runs and made no releases. The repo goes public through `/go-public`.
 - Sandbox test (2026-11-02, owner): all three tools run from the monorepo with a fake HOME holding copies of the real cfg/ and custom/ folders, and symlinked VPKs and yaw.log. Strafe Review installed into the copy, served on 8799 and collected 1305 attempts from the live yaw.log. No real file changed. Owner: "looks good". Source Yaw was light mode only because the fake HOME has no dconf (`color-scheme` reads `default` there). Not tested yet: the game running the kit versions (needs the real install swap with the game closed).
+- Real install swap (2026-11-02, owner): with Momentum closed, the live installs were backed up to `~/archive/movement-kit-swap-2026-11-02/` (both share folders, `~/.config/sourceyaw`, the `~/.local/bin` links, desktop file and icon, Vulkan layer json, Momentum and CS:S cfgs, `custom/0-strafe-review`), then `sourceyaw/install.sh` and `strafe-review/install.py` ran from the monorepo. `strafe-review-run` now links into `movement-kit/strafe-review/collector/`, and the 8765 server unit runs from the monorepo. autoexec.cfg and both yaws.cfg came out identical; the root-owned input service already matched (only the `@USER@` template differs). The installed recorder `.ts` was behind both repos (it lacked the per-strafe loss causes in the in-game line) and is now current. Owner played with the unchanged launch options: "everything works". Rollback: copy the backup back, or run the installers from the old folders.
 
 ### Notes for later steps
 
