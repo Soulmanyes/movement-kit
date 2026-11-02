@@ -130,6 +130,12 @@ def main():
         check(json.loads((root / "report.json").read_text()) == report
               and report["sections"] == ["alpha", "gain", "winonly"] and len(report["problems"]) == len(expect),
               "check_sections writes the keys and problems as JSON")
+        report = hub.check_sections(root / "report.json", root, platform="linux",
+                                    calls=["gain.hello", 'gain.add:{"a": 2, "b": 3}', "gain.boom", "nope.x"])
+        check(report["calls"]["gain.hello"] == {"ok": True, "result": {"from": "gain"}}
+              and report["calls"]['gain.add:{"a": 2, "b": 3}'] == {"ok": True, "result": 5}
+              and not report["calls"]["gain.boom"]["ok"] and not report["calls"]["nope.x"]["ok"],
+              f"check_sections calls section functions through the bridge: {report['calls']}")
 
         bridge = hub.Bridge(sections, problems)
         info = bridge.sections()

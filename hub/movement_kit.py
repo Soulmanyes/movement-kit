@@ -7,8 +7,10 @@
                                          review page, run the game)
     movement-kit.exe --collect           install the recorder, then collect and serve with no page
                                          opened (the hub's "Open review" starts this)
-    movement-kit.exe --check-sections F  write the sections found to the file F as JSON and exit
-                                         (the smoke test; the exe has no console to print to)
+    movement-kit.exe --check-sections F [KEY.NAME[:JSON] ...]
+                                         write the sections found to the file F as JSON and exit,
+                                         with the replies of the section functions named (the smoke
+                                         test; the exe has no console to print to)
 
 --serve and --restarted are Strafe Review's internal modes, as in strafe_review.py. A copy that
 came from Strafe Review's own exe is still called strafe-review.exe (see hub_release.py) and works
@@ -25,15 +27,16 @@ if not getattr(sys, "frozen", False):
     sys.path[:0] = [str(KIT), str(KIT / "strafe-review")]
 
 import strafe_review  # puts collector/ and viewer/ on the path
-from movekit import hub
 
 CHECK_SECTIONS = "--check-sections"
 
 
 def main():
+    from movekit import hub  # here, not at the top: ruff sorts it differently by folder
+
     args = sys.argv[1:]
-    if args[:1] == [CHECK_SECTIONS] and len(args) == 2:
-        hub.check_sections(args[1])
+    if args[:1] == [CHECK_SECTIONS] and len(args) >= 2:
+        hub.check_sections(args[1], calls=args[2:])
         return 0
     if args:
         return strafe_review.main()

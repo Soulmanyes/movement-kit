@@ -286,6 +286,21 @@ def main():
             fail(f"browser calls: {opened(tmp)}")
         print("   ok: pages, recorder, CRLF autoexec block, browser, status, attempt collected from a live log"
               " and announced on the session")
+        if HUB:
+            # the sections' functions inside the exe, which loads what they import lazily: the HUD
+            # section must find the recorder installed above and write into it
+            calls = ["strafe-review.status", "hud.get", 'hud.set_line:{"on": false}']
+            r = subprocess.run([exe, "--check-sections", str(tmp / "calls.json"), *calls], env=env,
+                               timeout=60, capture_output=True, text=True, check=False)
+            got = json.loads((tmp / "calls.json").read_text()).get("calls", {}) if (tmp / "calls.json").is_file() else {}
+            status, hud, line = (got.get(c, {}) for c in calls)
+            if not (r.returncode == 0 and status.get("ok") and status["result"].get("serving")
+                    and hud.get("ok") and hud["result"].get("recorder") == "installed" and hud["result"].get("inGameLine") is True
+                    and line.get("ok") and line["result"].get("applied") is True
+                    and "const SHOW_LINE = false;" in (ours / "scripts" / "hud" / "strafe-review.ts").read_text()):
+                fail(f"section calls in the exe: exit {r.returncode}, {got}, stderr {r.stderr[-400:]!r}")
+            print("   ok: the Strafe Review section sees the server; the HUD section finds the recorder and writes"
+                  " the line setting into it")
 
         print("2. second copy while running")
         if not HUB:  # the hub's double-click opens a window, not the page
@@ -297,7 +312,8 @@ def main():
             fail(f"second server on the busy port: exit {r.returncode}, stderr {r.stderr!r}")
         if first.poll() is not None:
             fail("first copy died")
-        print("   ok: only opened the page; a second server refused the busy port")
+        print("   ok: a second server refused the busy port" if HUB else
+              "   ok: only opened the page; a second server refused the busy port")
         stop_all(exe)
         if get("/")[0] is not None:
             fail("server still answers after stopping it")

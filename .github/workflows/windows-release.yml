@@ -71,10 +71,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install pyinstaller $env:PACKAGES.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+      - run: python -m pip install pyinstaller "$env:PACKAGES".Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
       - name: Licences of the bundled packages
         if: inputs.licenses_of != ''
-        run: python ../.github/scripts/collect_licenses.py third-party-licenses $env:LICENSES_OF.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+        run: python ../.github/scripts/collect_licenses.py third-party-licenses "$env:LICENSES_OF".Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
       - name: Build
         run: Invoke-Expression $env:BUILD; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Smoke test

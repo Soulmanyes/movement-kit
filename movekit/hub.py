@@ -285,11 +285,20 @@ def _side_buttons(window):
     GLib.idle_add(hook)
 
 
-def check_sections(out, root=KIT, platform=sys.platform):
-    """Write {"sections": [keys], "problems": [[folder, text]]} to the file out, with no window.
-    For the hub exe's smoke test, which has no console to print to. Returns the dict."""
+def check_sections(out, root=KIT, platform=sys.platform, calls=()):
+    """Write {"sections": [keys], "problems": [[folder, text]], "calls": {...}} to the file out, with
+    no window. For the hub exe's smoke test, which has no console to print to. calls are
+    "key.name" or "key.name:{json args}", run through the Bridge as a page would; "calls" maps each
+    to its reply. Returns the dict."""
     sections, problems = discover(root, platform)
     report = {"sections": [s.key for s in sections], "problems": [list(p) for p in problems]}
+    if calls:
+        bridge = Bridge(sections, problems)
+        report["calls"] = {}
+        for call in calls:
+            target, _, args = call.partition(":")
+            key, _, name = target.partition(".")
+            report["calls"][call] = bridge.call(key, name, json.loads(args) if args else None)
     Path(out).write_text(json.dumps(report), encoding="utf-8")
     return report
 
@@ -327,9 +336,11 @@ def main():
     ap.add_argument("--section", help="open on this section's page (screenshot checks)")
     ap.add_argument("--check-sections", metavar="FILE", type=Path,
                     help="write the sections found to FILE as JSON and exit, with no window")
+    ap.add_argument("--call", action="append", default=[], metavar="KEY.NAME[:JSON]",
+                    help="with --check-sections: also call this section function and write its reply")
     args = ap.parse_args()
     if args.check_sections:
-        check_sections(args.check_sections, args.root)
+        check_sections(args.check_sections, args.root, calls=args.call)
         return
     run(args.root, args.app_class, args.debug, args.section)
 
