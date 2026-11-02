@@ -1,0 +1,21 @@
+# Strafe Review's Windows build (windows-release.yml): the exe, smoke-tested by smoke_test.py, zipped
+# with WINDOWS.txt (setup and a tester checklist; README.md links private notes) and the licences.
+# Run by hand (Actions > strafe-review-windows > Run workflow) for a test build, kept as a workflow
+# artifact; a pushed strafe-review-v* tag also attaches the zip to that tag's GitHub release.
+name: strafe-review-windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ["strafe-review-v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    uses: ./.github/workflows/windows-release.yml
+    with:
+      tool: strafe-review
+      title: Strafe Review
+      build: python build.py  # bundles movekit from the repo root
+      smoke: python smoke_test.py dist/strafe-review.exe
+      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt
+      version: python -c "import sys; sys.path.insert(0, 'collector'); import updater; print(updater.VERSION)"

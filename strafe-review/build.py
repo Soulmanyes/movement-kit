@@ -3,9 +3,9 @@
 
 Usage: python build.py   (needs: pip install pyinstaller)
 
-PyInstaller builds for the system it runs on, so the Windows exe is built on Windows
-(.github/workflows/windows.yml does it). The bundle keeps the repo layout (collector/, viewer/static/,
-recorder/), which collector.ROOT and install.ROOT find through sys._MEIPASS.
+PyInstaller builds for the system it runs on, so the Windows exe is built on Windows (the
+monorepo's .github/workflows/strafe-review-windows.yml does it). The bundle keeps the repo layout
+(collector/, viewer/static/, recorder/), which collector.ROOT and install.ROOT find through sys._MEIPASS.
 """
 import os
 import shutil

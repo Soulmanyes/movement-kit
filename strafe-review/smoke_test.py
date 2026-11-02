@@ -3,7 +3,8 @@
 
 Usage: python smoke_test.py dist/strafe-review(.exe)
 
-Run by .github/workflows/windows.yml on the Windows build; it runs on Linux too. Checks:
+Run by the monorepo's .github/workflows/strafe-review-windows.yml on the Windows build; it runs on
+Linux too. Checks:
 1. Double-click: installs the recorder and the autoexec.cfg block, serves every page, opens the page,
    timer.xml is based on another HUD mod's copy that would win otherwise, /api/status sees the setup, and an attempt written into yaw.log the way the game writes it (file
    kept open, CRLF, chunks in separate writes) is collected and listed.

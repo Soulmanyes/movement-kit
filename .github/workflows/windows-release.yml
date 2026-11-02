@@ -1,0 +1,90 @@
+# The shared Windows build for the kit's tools, called by one small workflow per tool. PyInstaller
+# can't cross-build, so it runs on windows-latest: build the exe, smoke-test it, zip it with the
+# tool's files and the licence of the Python build bundled in the exe, and keep the zip as a workflow
+# artifact. On a pushed <tool>-v* tag it also attaches the zip to that tag's GitHub release.
+# Every run step runs in the tool's folder, in PowerShell unless it says otherwise.
+name: windows-release
+on:
+  workflow_call:
+    inputs:
+      tool:
+        description: The tool's folder and tag prefix, "strafe-review" for strafe-review-v1.4.0
+        type: string
+        required: true
+      title:
+        description: The release title before the version, "Strafe Review"
+        type: string
+        required: true
+      build:
+        description: Command that builds dist/<tool>.exe
+        type: string
+        required: true
+      smoke:
+        description: Command that tests the built exe and fails on a problem
+        type: string
+        required: true
+      files:
+        description: Comma-separated paths zipped next to the exe, from the tool's folder
+        type: string
+        required: true
+      version:
+        description: Command that prints the tool's VERSION; the tag must match it. Empty skips the check
+        type: string
+        default: ""
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.tool }}
+        shell: pwsh
+    env:
+      TOOL: ${{ inputs.tool }}
+      TITLE: ${{ inputs.title }}
+      BUILD: ${{ inputs.build }}
+      SMOKE: ${{ inputs.smoke }}
+      FILES: ${{ inputs.files }}
+      VERSION_CMD: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # every tag, for the release notes' start tag
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyinstaller
+      - name: Build
+        run: Invoke-Expression $env:BUILD; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Smoke test
+        run: Invoke-Expression $env:SMOKE; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        timeout-minutes: 5
+      - name: Zip
+        run: |
+          python -c "import shutil, sys, pathlib; shutil.copy(pathlib.Path(sys.base_prefix) / 'LICENSE.txt', 'PYTHON-LICENSE.txt')"
+          $paths = @("dist/$env:TOOL.exe", "PYTHON-LICENSE.txt") + ($env:FILES -split ',' | ForEach-Object { $_.Trim() })
+          Compress-Archive -Path $paths -DestinationPath "$env:TOOL-windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.tool }}-windows
+          path: ${{ inputs.tool }}/${{ inputs.tool }}-windows.zip  # upload paths start at the repo root
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case $GITHUB_REF_NAME in "$TOOL"-v*) ;; *) echo "tag $GITHUB_REF_NAME isn't a $TOOL-v* tag"; exit 1 ;; esac
+          version=${GITHUB_REF_NAME#"$TOOL"-v}
+          # a tag that isn't VERSION would make every copy see an update that never takes
+          if [ -n "$VERSION_CMD" ]; then
+            have=$(eval "$VERSION_CMD" | tr -d '\r')
+            if [ "$version" != "$have" ]; then echo "tag $GITHUB_REF_NAME but VERSION $have"; exit 1; fi
+          fi
+          # notes from this tool's previous tag, not whichever tool released last
+          prev=$(git tag -l "$TOOL-v*" --sort=v:refname | grep -x -B1 "$GITHUB_REF_NAME" | grep -vx "$GITHUB_REF_NAME" || true)
+          zip=$TOOL-windows.zip
+          gh release create "$GITHUB_REF_NAME" "$zip" --title "$TITLE $version" \
+              --generate-notes ${prev:+--notes-start-tag "$prev"} \
+            || gh release upload "$GITHUB_REF_NAME" "$zip" --clobber

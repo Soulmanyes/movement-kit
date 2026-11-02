@@ -72,7 +72,7 @@ Attempts are kept in `~/.local/share/strafe-review/attempts`.
 
 ## Building the exe
 
-`python build.py` (with `pip install pyinstaller`) builds `dist/strafe-review.exe` on Windows. `.github/workflows/windows.yml` does it on GitHub, runs `smoke_test.py` against the built exe and attaches the zip to a `v*` tag's release.
+`python build.py` (with `pip install pyinstaller`) builds `dist/strafe-review.exe` on Windows. `.github/workflows/strafe-review-windows.yml` at the monorepo root does it on GitHub, runs `smoke_test.py` against the built exe and attaches the zip to a `strafe-review-v*` tag's release.
 
 More plans: [PLAN.md](PLAN.md).
 
