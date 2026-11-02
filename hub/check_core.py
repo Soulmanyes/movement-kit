@@ -10,7 +10,8 @@ still runs; a working launch hook runs before the game. --run-script runs a scri
 folder on the path. --modules: cards, install, auto-on and uninstall with the reply in a file. The
 bridge's migration: with Strafe Review's old data folder and no module, the first start installs
 the Strafe Review module and keeps the old auto switch, once; a start with no old folder only
-marks it done; offline, it's left for the next start and the game still runs.
+marks it done; offline, it's left for the next start and the game still runs. The old exe's
+--serve/--restarted go to the module's strafe_review.py, and fail plainly with no module.
 """
 import json
 import os
@@ -113,6 +114,14 @@ def check_modules_cli_and_migration():
     if "strafe-review-install-9.0.0" not in calls:
         cm.fail(f"the module's install hook didn't run: {calls}")
 
+    # the old exe's own flags, after it updated itself into the core, go to the module's script
+    legacy_out = cm.TMP / "legacy"
+    (kit / "strafe-review" / "strafe_review.py").write_text(
+        f"import sys, pathlib; pathlib.Path({str(legacy_out)!r}).write_text(' '.join(sys.argv[1:]))\n")
+    for flags, want in ((["--serve", "--restarted"], "--serve"), (["--restarted"], "--collect")):
+        r = run_core(*flags, kit=kit, api=api)
+        cm.expect((r.returncode, legacy_out.read_text()), (0, want), f"old flags {flags}")
+
     # --modules: cards, auto-off, uninstall (data kept), and the migration doesn't come back
     r = run_core("--modules", out, "cards", kit=kit, api=api)
     reply = json.loads(out.read_text())
@@ -124,6 +133,8 @@ def check_modules_cli_and_migration():
     cm.expect((r.returncode, json.loads(out.read_text())["ok"]), (0, True), "--modules uninstall")
     run_core(*game(marker), kit=kit, api=api)
     cm.expect((kit / "strafe-review").exists(), False, "no second migration after an uninstall")
+    r = run_core("--serve", kit=kit, api=api)
+    cm.expect(r.returncode, 1, "an old flag with Strafe Review uninstalled")
     r = run_core("--modules", out, "install", "nope", kit=kit, api=api)
     cm.expect((r.returncode, json.loads(out.read_text())["ok"]), (1, False), "--modules with a bad key")
     cm.calls()

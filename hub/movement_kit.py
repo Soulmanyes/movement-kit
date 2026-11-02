@@ -21,7 +21,8 @@ downloads (movekit/modules.py); the exe itself carries only the hub, movekit and
 
 Output goes to movement-kit.log in %LOCALAPPDATA%\\movekit too. A copy that came from Strafe
 Review's own exe line (the bridge release) is still called strafe-review.exe, so Steam's launch
-option keeps working; on its first start it installs the Strafe Review module (migrate()).
+option keeps working; on its first start it installs the Strafe Review module (migrate()), and the
+old exe's --serve/--restarted/--collect go to that module (legacy()).
 On Linux the hub runs from the repo or a copy (movekit/hub.py) and movekit-run is the launch option.
 """
 import json
@@ -38,6 +39,9 @@ import hub_release
 RUN_SCRIPT = "--run-script"
 MODULES = "--modules"
 CHECK_SECTIONS = "--check-sections"
+# Strafe Review's own modes from before the core: an old strafe-review.exe that updated itself into
+# the core (the bridge) starts the new exe with these to bring its server back
+LEGACY = {"--serve": ["--serve"], "--restarted": ["--collect"], "--collect": ["--collect"]}
 MIGRATED = "migrated-from-strafe-review"  # state flag: the bridge's one-time install happened or isn't needed
 
 
@@ -102,6 +106,14 @@ def migrate(mgr, log=print):
     mgr.note(MIGRATED, True)
 
 
+def legacy(mgr, flag):
+    """Run Strafe Review's mode for an old flag through the installed module (see LEGACY)."""
+    if mgr is None or "strafe-review" not in mgr.installed():
+        print(f"movement kit: {flag} is Strafe Review's, which isn't installed", file=sys.stderr)
+        return 1
+    return run_script(str(mgr.folder("strafe-review") / "strafe_review.py"), LEGACY[flag])
+
+
 def modules_cli(out, cmd, rest):
     mgr = manager()
     key = next((a for a in rest if not a.startswith("--")), None)
@@ -145,6 +157,8 @@ def main():
     except Exception as e:  # noqa: BLE001 - the game, or the hub, still starts
         print(f"movement kit: the module manager failed: {e}", file=sys.stderr)
         mgr = None
+    if args[:1] and args[0] in LEGACY:
+        return legacy(mgr, args[0])
     if args:
         return dispatch.run(mgr, args)
     hub.run(manager=mgr)

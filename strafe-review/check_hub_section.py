@@ -25,7 +25,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 KIT = Path(__file__).resolve().parent.parent
-BARE = ("steam", "collector", "install", "server", "updater")
+BARE = ("steam", "collector", "install", "server")
 
 
 def fail(msg):

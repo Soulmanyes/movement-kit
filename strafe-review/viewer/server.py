@@ -28,11 +28,6 @@ Routes:
                              last change), what the collector has seen, its last error, and
                              the movekit session's status if this process hosts it (else null)
   /api/events                server-sent events: "attempt" with {dir, id} when a new attempt is saved
-  GET /api/update            this version, a newer release if there is one, auto mode, whether this
-                             copy can install it (the Windows exe) or only reports it (the repo)
-  POST /api/update/check     ask GitHub now
-  POST /api/update/install   install the newer release and start again on it
-  POST /api/update/auto      {"auto": bool}: install updates by itself
   GET /api/settings          {"inGameLine": bool}
   POST /api/settings         {"inGameLine": bool}: saved, and written into the installed recorder
                              (answers {"applied": false} when it isn't installed)
@@ -57,7 +52,6 @@ from pathlib import Path
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
 import collector
 import install
-import updater  # found through the path above
 
 from hud import settings as hud_settings  # collector set the path to the repo root
 from movekit import attempts as attempt_files  # and so to movekit
@@ -94,11 +88,6 @@ collect_error = None  # {"time", "text"} of the collector thread's last error, f
 hosted = None  # (session, its HTTP server) when this process hosts the movekit session
 session_closing = threading.Event()  # set on the way out: stop trying to host
 SESSION_RETRY = 5  # seconds between tries to host the session while another process has its port
-UPDATES = None  # updater.Updater, made in main()
-UPDATE_LOOP = 3600  # seconds between looks at updates (GitHub itself is asked every updater.CHECK_EVERY)
-QUIET_FOR = 600  # auto mode installs only when the game log has been still this long (no game being played)
-RESTART = None  # set by strafe_review.py: starts a new copy after an update; None from the repo
-restart_after = False  # set when an update was installed: main() starts the new copy once the port is free
 PING = 15  # seconds between keep-alive comments
 
 
@@ -360,10 +349,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = self.path.split("?", 1)[0].strip("/").split("/")
-        if parts[:2] == ["api", "update"] and len(parts) == 3:
-            if not self.local_request():
-                return self.fail(403, "forbidden")
-            return self.update_action(parts[2])
         if parts == ["api", "settings"]:
             if not self.local_request():
                 return self.fail(403, "forbidden")
@@ -408,36 +393,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(500, f"could not save: {e}")
         self.send(200, json.dumps(entry).encode(), "application/json")
 
-    def update_action(self, action):
-        global restart_after
-        if action == "check":
-            try:
-                UPDATES.check(force=True)
-            except OSError:
-                pass  # kept in info()["error"]
-        elif action == "auto":
-            try:
-                size = int(self.headers.get("Content-Length") or 0)
-                UPDATES.auto = bool(json.loads(self.rfile.read(size) if 0 < size <= MAX_BODY else b"{}").get("auto"))
-            except (ValueError, AttributeError):
-                return self.fail(400, "bad body")
-        elif action == "install":
-            latest = UPDATES.info()["latest"]
-            if not latest:
-                return self.fail(409, "no newer release")
-            try:
-                UPDATES.install(latest)
-            except RuntimeError as e:
-                return self.fail(500, str(e))
-            print(f"Strafe Review: updated to {latest['tag']}, starting again", flush=True)
-            restart_after = True
-            self.send(200, json.dumps(UPDATES.info()).encode(), "application/json")
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
-            return None
-        else:
-            return self.fail(404, "not found")
-        return self.send(200, json.dumps(UPDATES.info()).encode(), "application/json")
-
     def do_GET(self):
         parts = self.path.split("?", 1)[0].strip("/").split("/")
         if parts == [""]:
@@ -457,8 +412,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.events()
         elif parts == ["api", "settings"]:
             return self.send(200, json.dumps({"inGameLine": hud_settings.get("inGameLine")}).encode(), "application/json")
-        elif parts == ["api", "update"]:
-            return self.send(200, json.dumps(UPDATES.info()).encode(), "application/json")
         elif parts == ["api", "status"]:
             return self.send(200, json.dumps(status(self)).encode(), "application/json")
         elif parts == ["api", "mouse"]:
@@ -511,37 +464,6 @@ def status(handler):
     }
 
 
-def playing():
-    """The game wrote its log lately: don't restart (a new console window, a reinstall) mid-session."""
-    try:
-        return Handler.log is not None and time.time() - os.stat(Handler.log).st_mtime < QUIET_FOR
-    except OSError:
-        return False
-
-
-def update_loop(server):
-    """Look for updates now and then; in auto mode install one and start again on it."""
-    global restart_after
-    time.sleep(20)  # let the game and the page start first
-    while True:
-        try:
-            latest = UPDATES.check()
-        except OSError:
-            latest = None
-        if latest and UPDATES.auto and UPDATES.can_install and RESTART and not UPDATES.failed(latest) \
-                and not playing():
-            try:
-                UPDATES.install(latest)
-            except RuntimeError as e:
-                print(f"Strafe Review: update to {latest['tag']} failed: {e}", file=sys.stderr, flush=True)
-            else:
-                print(f"Strafe Review: updated to {latest['tag']} by itself, starting again", flush=True)
-                restart_after = True
-                server.shutdown()
-                return
-        time.sleep(UPDATE_LOOP if not latest else 300)  # a waiting update is retried once the game is quiet
-
-
 def announce(path, attempt):
     """collector.run's on_saved: tell the session's listeners about a new attempt (dir as in
     /api/attempt), while this process hosts the session."""
@@ -572,7 +494,7 @@ def host_session(log):
 
 
 def stop_session():
-    """Free the session's port before a new copy (an update, a restart) wants it."""
+    """Free the session's port before a new copy (a module update, a restart) wants it."""
     global hosted
     session_closing.set()
     if hosted:
@@ -618,9 +540,8 @@ def main(argv=None):
     Handler.game_cfg = Path(args.game_cfg or os.path.join(args.game, "cfg", "config.cfg"))
     if args.log is None and args.game:
         args.log = os.path.join(args.game, "yaw.log")
-    global MOM_DIR, UPDATES
+    global MOM_DIR
     MOM_DIR = Handler.game_cfg.parent.parent
-    UPDATES = updater.Updater()
     try:
         server = Server(("127.0.0.1", args.port), Handler)
     except OSError as e:
@@ -631,8 +552,7 @@ def main(argv=None):
         host_session(args.log)  # after the port above, so a second copy never gets this far
         threading.Thread(target=collect, args=(args.log, Handler.store, announce), daemon=True).start()
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Strafe Review {updater.VERSION} viewer on {url} (attempts from {args.store})", flush=True)
-    threading.Thread(target=update_loop, args=(server,), daemon=True).start()
+    print(f"Strafe Review {collector.VERSION} viewer on {url} (attempts from {args.store})", flush=True)
     if not args.no_browser:
         # only the copy that got the port opens a tab, so a second start doesn't add one
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
@@ -642,8 +562,6 @@ def main(argv=None):
         pass
     server.server_close()  # free the port before a new copy takes it
     stop_session()
-    if restart_after and RESTART:
-        RESTART()
 
 
 if __name__ == "__main__":

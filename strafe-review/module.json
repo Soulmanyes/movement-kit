@@ -4,7 +4,7 @@
   "summary": "Records your Momentum Mod runs and shows every jump and strafe on a review page.",
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-review-v",
-  "version_from": "collector/updater.py",
+  "version_from": "collector/collector.py",
   "needs_core": "1.0.0",
   "needs": [],
   "data": ["data:strafe-review/attempts", "data:strafe-review/updates.json"]

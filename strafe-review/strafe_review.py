@@ -38,7 +38,6 @@ import collector
 import install
 import server
 import steam
-import updater
 
 from movekit import logfile
 from movekit.dispatch import game_env  # one copy, shared with the kit's core exe
@@ -47,7 +46,6 @@ PORT = int(os.environ.get("STRAFE_REVIEW_PORT", "8765"))  # the variable is for 
 URL = f"http://127.0.0.1:{PORT}/"
 SERVE = "--serve"  # internal: the background copy the launch option starts
 COLLECT = "--collect"  # install, then serve with no page opened (the hub starts this)
-RESTARTED = "--restarted"  # internal: a double-click copy started again after an update (no new tab)
 LOG = steam.data_dir() / "strafe-review.log"
 LOG_MAX = 1 << 20  # bytes; a longer log is started over
 START_WAIT = 10  # seconds the launch option waits for the server it started before opening the page
@@ -92,14 +90,6 @@ def fresh_env():
     # a fresh PyInstaller instance with its own unpack folder; without this it would share this one's,
     # which is deleted when this copy exits
     return {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
-
-
-def start_console():
-    """After an update: the double-click copy again, in a new console window, without a new tab."""
-    if sys.platform == "win32":
-        subprocess.Popen([*me(), RESTARTED], env=fresh_env(), creationflags=subprocess.CREATE_NEW_CONSOLE)
-    else:
-        subprocess.Popen([*me(), RESTARTED], env=fresh_env(), start_new_session=True)
 
 
 def start_background(*extra):
@@ -150,20 +140,13 @@ def launch(game_cmd):
 def main():
     args = sys.argv[1:]
     log_to_file()
-    updater.clean_old()
     if args[:1] == [SERVE]:
-        # no install here, even after an update: the game may be starting and mounting custom/; the
-        # launch wrapper (the new exe after an update) installs at every game start
-        server.RESTART = lambda: start_background(RESTARTED)
+        # no install here: the game may be starting and mounting custom/; the launch option installs
+        # at every game start
         return server.main(["--port", str(PORT), "--no-browser"])
     if args == [COLLECT]:
         # installing here is safe: the hub starts this by hand, as a double-click would
         try_install()
-        server.RESTART = lambda: start_background(RESTARTED)
-        return server.main(["--port", str(PORT), "--no-browser"])
-    if args == [RESTARTED]:
-        try_install()
-        server.RESTART = start_console
         return server.main(["--port", str(PORT), "--no-browser"])
     if args:
         return launch(args)
@@ -171,7 +154,6 @@ def main():
         webbrowser.open(URL)
         return None
     try_install()
-    server.RESTART = start_console
     return server.main(["--port", str(PORT)])
 
 
