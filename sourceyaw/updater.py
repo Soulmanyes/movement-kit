@@ -6,151 +6,43 @@ the app over the installed one. Settings stay where they are, and the new versio
 from the next start. A copy running from a git checkout never installs anything.
 """
 
-import json
-import subprocess
-import tarfile
-import tempfile
-import time
-import urllib.request
 from pathlib import Path
 
+from movekit import updater as kit  # after yawcore, which puts movekit on the path
+
 CHECK_EVERY = 24 * 3600  # seconds between automatic checks
-TIMEOUT = 10
+TIMEOUT = kit.TIMEOUT
+parse_version = kit.parse_version
 
 
-def parse_version(text):
-    """"v1.4.0" or "1.4" -> (1, 4, 0); None if it isn't a plain version number."""
-    parts = text.strip().lstrip("vV").split(".")
-    try:
-        nums = [int(p) for p in parts]
-    except ValueError:
-        return None
-    return tuple(nums + [0] * (3 - len(nums)))
+class Updater(kit.Updater):
+    """check() gives the latest release as {"tag", "url", "notes"} when it is newer, and
+    raises OSError/ValueError when GitHub can't be reached, so callers can stay quiet.
+    install() raises RuntimeError with a message for the user when it fails."""
+    check_every = CHECK_EVERY
 
-
-class Updater:
     def __init__(self, repo, version, app_dir, state_file):
         self.repo = repo                    # "Owner/name" on GitHub
         self.version = version              # the running version, "1.4.0"
         self.app_dir = Path(app_dir)
         # {"auto": bool, "checked": time, "latest": {...}, "installed": tag, "failed": tag}
-        self.state_file = Path(state_file)
-        self.state = self._load()
-
-    def _load(self):
-        try:
-            state = json.loads(self.state_file.read_text())
-            return state if isinstance(state, dict) else {}
-        except (OSError, ValueError):
-            return {}
-
-    def _save(self):
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.state_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.state, indent=2) + "\n")
-        tmp.replace(self.state_file)
-
-    @property
-    def auto(self):
-        return bool(self.state.get("auto"))
-
-    @auto.setter
-    def auto(self, value):
-        self.state["auto"] = bool(value)
-        self._save()
+        super().__init__(f"https://api.github.com/repos/{repo}/releases/latest",
+                         repo.split("/")[-1], state_file)
 
     @property
     def dev_checkout(self):
-        """Running from a git clone: installing over it would clobber local work. In the
-        monorepo the app sits one folder below the clone's root, so both are checked; no
-        further up, where a dotfiles repo in the home folder would count too."""
-        return any((d / ".git").exists() for d in (self.app_dir, self.app_dir.parent))
+        """Running from a git clone: installing over it would clobber local work."""
+        return kit.in_git_checkout(self.app_dir)
 
     def installed(self, latest):
         """Already installed by an earlier update: waiting for a restart."""
         return self.state.get("installed") == latest["tag"]
 
-    def failed(self, latest):
-        """Its install failed before. Auto mode doesn't retry it on every start."""
-        return self.state.get("failed") == latest["tag"]
-
-    def newer(self, latest):
-        mine, theirs = parse_version(self.version), parse_version(latest["tag"])
-        return bool(mine and theirs and theirs > mine)
-
-    def check(self, force=False):
-        """The latest release as {"tag", "url", "notes"} if it is newer than this version,
-        else None. Asks GitHub only when forced or a day after the last check. Raises
-        OSError/ValueError when GitHub can't be reached, so callers can stay quiet."""
-        latest = self.state.get("latest")
-        if force or not latest or time.time() - self.state.get("checked", 0) > CHECK_EVERY:
-            req = urllib.request.Request(
-                f"https://api.github.com/repos/{self.repo}/releases/latest",
-                headers={"Accept": "application/vnd.github+json",
-                         "User-Agent": self.repo.split("/")[-1]})
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-                data = json.load(r)
-            latest = {"tag": data["tag_name"], "url": data.get("html_url", ""),
-                      "notes": data.get("body") or ""}
-            self.state.update(latest=latest, checked=time.time())
-            self._save()
-        return latest if self.newer(latest) else None
-
-    def install(self, latest):
-        """Downloads the release and runs its install.sh. Raises RuntimeError with a
-        message for the user when that fails."""
-        try:
-            self._install(latest)
-        except (OSError, RuntimeError):
-            self.state["failed"] = latest["tag"]
-            self._save()
-            raise
-        self.state["installed"] = latest["tag"]
-        self.state.pop("failed", None)
-        self._save()
+    def release_info(self, data):
+        return {**super().release_info(data), "notes": data.get("body") or ""}
 
     def _install(self, latest):
         if self.dev_checkout:
             raise RuntimeError(f"Running from a git checkout in {self.app_dir}. Use git pull")
-        url = f"https://github.com/{self.repo}/archive/refs/tags/{latest['tag']}.tar.gz"
-        with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / "release.tar.gz"
-            req = urllib.request.Request(url, headers={"User-Agent": self.repo.split("/")[-1]})
-            with urllib.request.urlopen(req, timeout=60) as r:
-                archive.write_bytes(r.read())
-            src = Path(tmp) / "src"
-            src.mkdir()
-            _extract(archive, src)
-            tops = list(src.iterdir())
-            if len(tops) != 1 or not (tops[0] / "install.sh").is_file():
-                raise RuntimeError("The release download has no install.sh")
-            # no terminal (new session, no stdin): an installer that needs sudo for new
-            # system packages fails instead of waiting for a password nobody can type
-            run = subprocess.run(["sh", str(tops[0] / "install.sh")], cwd=tops[0],
-                                 stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                 start_new_session=True, check=False)
-            if run.returncode != 0:
-                last = (run.stderr.strip() or run.stdout.strip()).splitlines()[-1:]
-                raise RuntimeError("The installer stopped" + (f": {last[0]}" if last else "")
-                                   + ". Run install.sh in a terminal")
-
-
-def _extract(archive, dest):
-    try:
-        _extract_tar(archive, dest)
-    except tarfile.TarError as e:  # a cut-off download, or a file the filter refuses
-        raise RuntimeError(f"Couldn't unpack the release: {str(e).splitlines()[0]}") from e
-
-
-def _extract_tar(archive, dest):
-    with tarfile.open(archive) as tar:
-        try:
-            tar.extractall(dest, filter="data")
-        except TypeError:
-            # Python without extraction filters (e.g. Debian 12's 3.11.2): only plain
-            # files and folders, with no absolute or ../ paths
-            for m in tar.getmembers():
-                if not (m.isfile() or m.isdir()) or m.name.startswith("/") \
-                        or ".." in m.name.split("/"):
-                    raise RuntimeError(f"Unexpected file in the release archive: {m.name}")
-            tar.extractall(dest)
+        kit.install_source(
+            f"https://github.com/{self.repo}/archive/refs/tags/{latest['tag']}.tar.gz", self.agent)

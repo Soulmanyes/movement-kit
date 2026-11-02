@@ -11,4 +11,5 @@ installed copy or a PyInstaller exe. Each module covers one concern:
   cfgblock   a tool's marked block of lines in autoexec.cfg
   vpk        which files a VPK holds, and reading one out of it
   binds      binds and aliases in a game's cfg files
+  updater    updates from a tool's GitHub releases (state file, source install, exe swap)
 """
