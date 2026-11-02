@@ -22,6 +22,7 @@ sourceyaw/        Source Yaw
 strafe-review/    Strafe Review
 gain-converter/   Gain Converter
 hud/              in-game display settings, shared by the tools that draw in game (hub section)
+hub/              the hub's Windows exe: entry point, build script and release line
 .github/          the Windows build and release, shared by the tools that ship an exe
 ```
 
@@ -49,7 +50,7 @@ The older per-tool options still work and start only their own tool: `sourceyaw-
 
 ## Releases
 
-Each tool keeps its own version and its own tags: `sourceyaw-v1.6.0`, `strafe-review-v1.5.0`, `gain-converter-v1.1.0`. A tool's updater only looks at releases with its own prefix. A pushed `strafe-review-v*` or `gain-converter-v*` tag builds the Windows exe on GitHub and attaches it to that release. Source Yaw releases are source archives.
+Each tool keeps its own version and its own tags: `sourceyaw-v1.6.0`, `strafe-review-v1.5.0`, `gain-converter-v1.1.0`. A tool's updater only looks at releases with its own prefix. A pushed `strafe-review-v*` or `gain-converter-v*` tag builds the Windows exe on GitHub and attaches it to that release. The hub has its own line, `hub-v*`, for its Windows exe (`movement-kit.exe`, no release yet). Source Yaw releases are source archives.
 
 The tools used to live in their own repos (`Soulmanyes/sourceyaw`, `Soulmanyes/strafe-review`, `Soulmanyes/gain-converter`), and their history and tags came along. Each old repo's last release points its tool's updater here.
 

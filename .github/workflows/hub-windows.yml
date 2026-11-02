@@ -9,8 +9,6 @@ on:
   workflow_dispatch:
   push:
     tags: ["hub-v*"]
-    # test builds before this file is on main, where workflow_dispatch needs it; drop at the merge
-    branches: ["hub-release"]
 permissions:
   contents: write
 jobs:
