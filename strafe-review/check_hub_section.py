@@ -5,9 +5,9 @@ Usage: python strafe-review/check_hub_section.py   (exits 1 on the first failure
 
 Covers: discovery and the bridge finding the section; loading it leaving no bare steam, collector,
 install, server or updater module behind; status with nothing on the port; open_review refusing
-then; status, check_updates and set_auto against a running server (so its local_request accepts the
-section's POSTs); set_auto refusing a non-bool; start() not starting a second copy; open_review
-opening the server's URL (webbrowser patched); stop() ending the server; the server serving the
+then; status against a running server; the update calls gone (the Modules page has them, 3.7b);
+start() not starting a second copy; open_review opening the server's URL (webbrowser patched);
+stop() ending the server (a POST, so the server's local_request accepts the section's POSTs); the server serving the
 shared /web/tokens.css that style.css imports; and start() bringing a stopped server back (the
 detached fallback, systemd-run hidden, so no user unit is made).
 Everything runs in a temp folder: XDG_DATA_HOME, LOCALAPPDATA and MOMENTUM_DIR point there, and the
@@ -89,15 +89,9 @@ def main():
             res = call("status")["result"]
             expect(res["status"]["collecting"], False, "status from the server: collecting")
             expect(res["status"]["saved"], 0, "status from the server: saved")
-            expect(res["update"]["auto"], False, "update info: auto off by default")
-            got = call("check_updates")
-            expect(got["ok"], True, f"check_updates {got}")
-            if not got["result"].get("error"):
-                fail("check_updates against a closed port should keep an error")
-            expect(call("set_auto", auto=True)["result"]["auto"], True, "set_auto(True)")
-            expect(call("status")["result"]["update"]["auto"], True, "auto after set_auto")
-            call("set_auto", auto=False)
-            expect(call("set_auto", auto="yes")["ok"], False, "set_auto with a non-bool")
+            expect("update" in res, False, "status without the update info")
+            for gone in ("check_updates", "set_auto", "install_update"):
+                expect(call(gone)["ok"], False, f"{gone} is no longer a section call")
             expect(call("start")["result"], {"started": False}, "start while serving")
 
             opened = []

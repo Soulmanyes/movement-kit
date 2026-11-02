@@ -10,7 +10,13 @@ hub_section.py that sets
       "page":  "hub/index.html",        # relative to the folder; its folder is served at /s/<key>/
       "api":   {"convert": convert},    # plain functions: JSON-able keyword args in, JSON-able out
       "order": 20,                      # optional, sidebar position (then title)
+      "show_with": ["strafe-review"],   # optional: shown only while one of these modules is installed
   }
+
+Sections come from two places (3.7b in PLAN.md): the core's own folders (hud/; any folder at the kit
+root without a module.json) and the installed modules (movekit/modules.py's Manager.roots()). The
+home page is the Modules page, where each module is installed, updated, rolled back and uninstalled;
+pages reach the manager through Bridge.modules(name, args).
 
 The hub finds sections by folder and never imports tool internals; a new tool is a new folder.
 A section that fails to load (syntax error, missing keys, a key another folder also uses) is skipped and
@@ -39,6 +45,7 @@ import argparse
 import importlib.util
 import json
 import mimetypes
+import os
 import re
 import sys
 import threading
@@ -65,6 +72,7 @@ class Section:
         self.page = folder / spec["page"]
         self.api = dict(spec["api"])
         self.order = spec.get("order", 100)
+        self.show_with = list(spec.get("show_with", []))
         self.lock = threading.Lock()
 
     def info(self):
@@ -108,16 +116,22 @@ def _check(spec, folder):
         return "os must be a list of sys.platform prefixes"
     if not isinstance(spec["api"], dict) or not all(callable(f) for f in spec["api"].values()):
         return "api must map names to functions"
+    show = spec.get("show_with", [])
+    if not isinstance(show, (list, tuple)) or not all(isinstance(k, str) and KEY_RE.match(k) for k in show):
+        return "show_with must list module keys"
     page = (folder / str(spec["page"])).resolve()
     if not page.is_relative_to(folder.resolve()) or not page.is_file():
         return f"page {spec['page']!r} is not a file in the folder"
     return None
 
 
-def discover(root=KIT, platform=sys.platform):
-    """(sections for this OS in sidebar order, problems as [(folder name, text)])."""
+def discover(root=KIT, platform=sys.platform, folders=None):
+    """(sections for this OS in sidebar order, problems as [(folder name, text)]), from the
+    subfolders of root, or from the given folders."""
     found, problems = [], []
-    for folder in sorted(p for p in Path(root).iterdir() if p.is_dir()):
+    if folders is None:
+        folders = sorted(p for p in Path(root).iterdir() if p.is_dir())
+    for folder in folders:
         file = folder / "hub_section.py"
         if not file.is_file():
             continue
@@ -147,14 +161,117 @@ def discover(root=KIT, platform=sys.platform):
     return sections, problems
 
 
-class Bridge:
-    """What pages reach as pywebview.api. Only call() and sections() are public; pywebview exposes
-    every public attribute, so everything else here starts with an underscore."""
+def core_folders(root=KIT):
+    """The core's own section folders: those at root with no module.json (hud/)."""
+    return [p for p in sorted(Path(root).iterdir())
+            if p.is_dir() and not (p / "module.json").is_file()]
 
-    def __init__(self, sections, problems=()):
+
+def kit_sections(manager, root=KIT, platform=sys.platform):
+    """discover() over the core's folders and the installed modules, leaving out sections whose
+    show_with names no installed module."""
+    roots = manager.roots()
+    folders = core_folders(root) + [f for f in roots if f.resolve() not in
+                                    {c.resolve() for c in core_folders(root)}]
+    sections, problems = discover(root, platform, folders)
+    installed = set(manager.installed())
+    sections = [s for s in sections if not s.show_with or installed & set(s.show_with)]
+    problems += [(f, f"module.json: {e}") for f, e in manager.problems()]
+    return sections, problems
+
+
+class Bridge:
+    """What pages reach as pywebview.api. Only call(), sections() and modules() are public;
+    pywebview exposes every public attribute, so everything else here starts with an underscore.
+
+    With a manager (movekit/modules.py), the sections follow what is installed: an install,
+    uninstall, update or roll back rediscovers them, and the page server sees the change."""
+
+    _MODULE_CALLS = ("cards", "check", "install", "update", "update_all", "rollback", "uninstall",
+                    "set_auto")
+
+    def __init__(self, sections, problems=(), manager=None, root=KIT, served=None):
+        self._manager = manager
+        self._root = root
+        self._served = served if served is not None else {}  # key -> Section, read by the page server
+        self._mlock = threading.Lock()
+        self._busy = None  # what the manager is doing, shown on the Modules page
+        self._last = {}    # the last auto update's results
+        self._set(sections, problems)
+
+    def _set(self, sections, problems):
         self._sections = {s.key: s for s in sections}
         self._order = list(sections)
         self._problems = list(problems)
+        self._served.clear()
+        self._served.update(self._sections)
+
+    def _refresh(self):
+        if self._manager is not None:
+            self._set(*kit_sections(self._manager, self._root))
+
+    def _cards(self):
+        m = self._manager
+        return {"cards": m.cards(), "busy": self._busy, "checked": m.state.get("checked"),
+                "auto_results": self._last, "checkout": m.checkout}
+
+    def _auto_update(self):
+        """Run at start in a thread: the auto-update of every module whose switch is on."""
+        if self._manager is None:
+            return
+        with self._mlock:
+            self._busy = "Checking for updates"
+            try:
+                self._last = self._manager.auto_update()
+                if self._last:
+                    self._refresh()
+            finally:
+                self._busy = None
+
+    def modules(self, name, args=None):
+        """The Modules page's calls: cards, check, install(key), update(key), update_all,
+        rollback(key), uninstall(key, delete_data), set_auto(key, value). Every reply carries the
+        cards as they are after the call."""
+        m = self._manager
+        if m is None:
+            return {"ok": False, "error": "no module manager"}
+        if name not in self._MODULE_CALLS:
+            return {"ok": False, "error": f"no module call {name!r}"}
+        args = args or {}
+        if not isinstance(args, dict):
+            return {"ok": False, "error": "args must be an object"}
+        if name == "cards":
+            return {"ok": True, "result": self._cards()}
+        if not self._mlock.acquire(blocking=False):
+            return {"ok": False, "error": f"{self._busy or 'Busy'}; try again in a moment"}
+        try:
+            self._busy = {"check": "Checking for updates", "update_all": "Updating"}.get(
+                name, f"{name.replace('_', ' ').capitalize()} {args.get('key', '')}".strip())
+            if name == "check":
+                m.check(force=True)
+            elif name == "update_all":
+                errors = {k: e for k, e in m.update_all().items() if e}
+                self._refresh()
+                if errors:
+                    raise RuntimeError("; ".join(f"{k}: {e}" for k, e in errors.items()))
+            else:
+                getattr(m, name)(**args)
+                if name != "set_auto":
+                    self._refresh()
+        except TypeError as e:
+            return {"ok": False, "error": f"modules.{name}: {e}", "result": self._cards_safe()}
+        except Exception as e:  # noqa: BLE001 - the card shows the error, the window stays up
+            return {"ok": False, "error": str(e) or type(e).__name__, "result": self._cards_safe()}
+        finally:
+            self._busy = None
+            self._mlock.release()
+        return {"ok": True, "result": self._cards()}
+
+    def _cards_safe(self):
+        try:
+            return self._cards()
+        except Exception:  # noqa: BLE001 - the error reply is what matters
+            return None
 
     def sections(self):
         return {"title": TITLE, "sections": [s.info() for s in self._order],
@@ -229,8 +346,11 @@ class _Pages(BaseHTTPRequestHandler):
 
 
 def serve(sections, port=0):
-    """Serve the pages on 127.0.0.1 in a daemon thread; returns the server (.server_address[1])."""
-    handler = type("Pages", (_Pages,), {"sections": {s.key: s for s in sections}})
+    """Serve the pages on 127.0.0.1 in a daemon thread; returns the server (.server_address[1]).
+    sections is a list, or a key -> Section dict the caller keeps current (Bridge with a manager)."""
+    if not isinstance(sections, dict):
+        sections = {s.key: s for s in sections}
+    handler = type("Pages", (_Pages,), {"sections": sections})
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -303,27 +423,41 @@ def check_sections(out, root=KIT, platform=sys.platform, calls=()):
     return report
 
 
-def run(root=KIT, app_class=None, debug=False, first=None):
+def make_manager(root=KIT, kit_root=None, data=None):
+    """The module manager the window uses. With --root (fixtures), modules live in that root too."""
+    # here, not at the top: only a window needs the manager
+    from movekit import modules
+
+    api = os.environ.get("MOVEKIT_MODULES_API", modules.API)  # tests point it at a fake GitHub
+    return modules.Manager(kit_root=kit_root or (root if root != KIT else None), data=data, api=api)
+
+
+def run(root=KIT, app_class=None, debug=False, first=None, manager=None):
     """Open the hub window, on section `first` if given; returns when it closes."""
     try:
         import webview
     except ImportError:
         sys.exit("The hub needs pywebview: `sudo pacman -S python-pywebview` on Arch,"
                  " `pip install pywebview` elsewhere.")
-    sections, problems = discover(root)
-    for folder, error in problems:
-        print(f"hub: skipped {folder}/hub_section.py: {error}", file=sys.stderr)
-    server = serve(sections)
+    manager = manager or make_manager(root)
+    served = {}
+    bridge = Bridge([], (), manager, root, served)
+    bridge._refresh()
+    for folder, error in bridge._problems:
+        print(f"hub: skipped {folder}: {error}", file=sys.stderr)
+    sections = bridge._order
+    server = serve(served)
     if sys.platform.startswith("linux"):
         # the Wayland app id / X11 class of the GTK window, which docks match to the launcher
         from gi.repository import GLib
         GLib.set_prgname(app_class or APP_ID)
     start = next((s.info()["url"] for s in sections if s.key == first), "/")
     window = webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
-                                   js_api=Bridge(sections, problems), width=1000, height=720,
+                                   js_api=bridge, width=1000, height=720,
                                    min_size=(640, 480), background_color="#15171c")
     if sys.platform.startswith("linux"):
         window.events.shown += lambda: _side_buttons(window)
+    window.events.shown += lambda: threading.Thread(target=bridge._auto_update, daemon=True).start()
     webview.start(debug=debug)
     server.shutdown()
 

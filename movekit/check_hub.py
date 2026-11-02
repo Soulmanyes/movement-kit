@@ -156,8 +156,11 @@ def main():
                            ("winonly", "x", "no section")):
             r = bridge.call(k, n)
             check(r["ok"] is False and text in r["error"], f"{k}.{n} refused: {r['error']}")
-        check(not [a for a in dir(bridge) if not a.startswith("_") and a not in ("call", "sections")],
-              "only call() and sections() are public")
+        public = [a for a in dir(bridge) if not a.startswith("_")]
+        check(sorted(public) == ["call", "modules", "sections"],
+              f"only call(), sections() and modules() are public: {public}")
+        r = bridge.modules("cards")
+        check(r == {"ok": False, "error": "no module manager"}, f"modules() with no manager: {r}")
 
         results = []
         threads = [threading.Thread(target=lambda: results.append(bridge.call("gain", "slow"))) for _ in range(4)]

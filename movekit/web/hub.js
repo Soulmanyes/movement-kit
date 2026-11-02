@@ -1,6 +1,8 @@
 // Shared by every hub page: draws the sidebar and offers hub.call(name, args), which runs one of
 // this section's Python functions (SECTION["api"] in its hub_section.py) and returns its result.
 // Load it with <script src="/web/hub.js"></script> and put <nav id="hub-side"></nav> in the page.
+// The Modules page (home.html) also uses hub.modules(name, args), the module manager's calls, and
+// hub.drawSide() to redraw the sidebar after an install or uninstall changes the sections.
 "use strict";
 
 const hub = (() => {
@@ -22,6 +24,12 @@ const hub = (() => {
 		return reply.result;
 	}
 
+	// {ok, result, error}: the Modules page shows the error on the card and redraws from result
+	async function modules(name, args = {}) {
+		const api = await ready;
+		return api.modules(name, args);
+	}
+
 	async function drawSide() {
 		const side = document.getElementById("hub-side");
 		if (!side) return null;
@@ -33,6 +41,14 @@ const hub = (() => {
 		title.href = "/web/home.html";
 		title.textContent = info.title;
 		side.append(title);
+		const mods = document.createElement("a");
+		mods.href = "/web/home.html";
+		mods.textContent = "Modules";
+		if (!key) mods.className = "active";
+		side.append(mods);
+		const line = document.createElement("div");
+		line.className = "hub-sep";
+		side.append(line);
 		for (const s of info.sections) {
 			const a = document.createElement("a");
 			a.href = s.url;
@@ -56,5 +72,5 @@ const hub = (() => {
 		else go();
 	});
 
-	return { ready, call, key, info };
+	return { ready, call, key, info, modules, drawSide };
 })();

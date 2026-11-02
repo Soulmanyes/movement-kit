@@ -12,9 +12,3 @@ button:disabled { opacity: 0.55; cursor: default; }
 .sr-rows .ok { color: var(--good); }
 .sr-rows .bad { color: var(--warn); }
 .sr-rows .val { overflow-wrap: anywhere; }
-.sr-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.sr-newer { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--card-hi); }
-.sr-newer a { color: var(--accent); margin-left: 6px; }
-.sr-newer button { margin-left: 8px; }
-.sr-auto { display: flex; align-items: center; gap: 8px; margin-top: 10px; cursor: pointer; }
-.sr-auto input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }

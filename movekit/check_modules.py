@@ -25,6 +25,9 @@ uninstall runs the hook and hides the module with its code left, install shows i
 Strafe Review's real hooks from this checkout, with HOME, the data folders and its server port in
 the temp folder: install puts the recorder, autoexec block and launch hook in, uninstall takes them
 out, and uninstall still finishes when the game is gone.
+The hub's Bridge over a manager: the Modules page's calls (cards, check, install, set_auto, an
+error reply still carrying the cards, a call while busy, uninstall), and the sections and page
+server following installs, with a core section's show_with hiding it until its module is in.
 """
 import ast
 import http.server
@@ -157,7 +160,7 @@ def check_own_modules():
         if not modules.module_version(folder, m):
             fail(f"{folder.name}: no VERSION line in {m['version_from']}")
         if (folder / modules.HOOKS).is_file():
-            hooks = modules.hub._load(folder / modules.HOOKS, f"check_modules_{folder.name}")
+            hooks = modules.Manager(kit_root=KIT, data=TMP / "own-data")._hooks(folder.name)
             public = {n for n in vars(hooks) if callable(getattr(hooks, n)) and not n.startswith("_")
                       and getattr(getattr(hooks, n), "__module__", None) == hooks.__name__}
             if public - HOOK_NAMES:
@@ -232,6 +235,9 @@ def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=Fa
             "needs": list(needs), "data": [f"data:{key}"]}))
         z.writestr(f"{key}/tool.py", f'VERSION = "{version}"\n')
         z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken))
+        z.writestr(f"{key}/hub_section.py", f"SECTION = {{'key': '{key}', 'title': '{key.title()}', "
+                   f"'os': ['linux', 'win32'], 'page': 'page.html', 'api': {{'hello': lambda: '{version}'}}}}\n")
+        z.writestr(f"{key}/page.html", "<!DOCTYPE html><title>x</title>")
         if evil:
             z.writestr("../escaped.txt", "x")
     return buf.getvalue()
@@ -265,13 +271,16 @@ class GitHub:
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-    def release(self, tag, asset=None, data=None, **extra):
+    def release(self, tag, asset=None, data=None, manifest=None, **extra):
         r = {"tag_name": tag, "html_url": f"https://example.invalid/{tag}", "body": f"notes {tag}",
              "assets": [], **extra}
-        if asset:
-            path = f"/files/{tag}/{asset}"
-            self.files[path] = data
-            r["assets"].append({"name": asset, "browser_download_url": self.base + path})
+        files = [(asset, data)] if asset else []
+        if manifest is not None:
+            files.append((tag.rsplit("-v", 1)[0] + "-module.json", json.dumps(manifest).encode()))
+        for name, body in files:
+            path = f"/files/{tag}/{name}"
+            self.files[path] = body
+            r["assets"].append({"name": name, "browser_download_url": self.base + path})
         self.releases.insert(0, r)
 
 
@@ -491,10 +500,74 @@ def check_strafe_review_hooks():
     os.environ.pop("MOMENTUM_DIR")
 
 
+def check_bridge():
+    """The hub's Bridge over a manager: the Modules page's calls, and the sections and page server
+    following what is installed. A core section with show_with appears only with its module."""
+    from movekit import hub
+
+    gh = GitHub()
+    gh.release("alpha-v1.0.0", "alpha-module.zip", module_zip("alpha", "1.0.0"))
+    gh.release("alpha-v1.1.0", "alpha-module.zip", module_zip("alpha", "1.1.0"))
+    core = TMP / "core"
+    (core / "hud").mkdir(parents=True)
+    (core / "hud" / "page.html").write_text("<!DOCTYPE html><title>x</title>")
+    (core / "hud" / "hub_section.py").write_text(
+        "SECTION = {'key': 'hud', 'title': 'HUD', 'os': ['linux', 'win32'], 'page': 'page.html', "
+        "'api': {}, 'show_with': ['alpha']}\n")
+    mgr = modules.Manager(kit_root=TMP / "bkit", data=TMP / "bdata", api=gh.base + "/releases")
+    served = {}
+    bridge = hub.Bridge([], (), mgr, core, served)
+    bridge._refresh()
+    expect([s["key"] for s in bridge.sections()["sections"]], [], "sections before any module (HUD hidden)")
+    r = bridge.modules("cards")
+    expect((r["ok"], [c["key"] for c in r["result"]["cards"]]), (True, ["core"]), "cards before a check")
+    expect(bridge.modules("check")["ok"], True, "check through the bridge")
+    expect(bridge.modules("nope")["ok"], False, "an unknown module call")
+    expect(bridge.modules("install", ["alpha"])["ok"], False, "args that aren't an object")
+    r = bridge.modules("install", {"key": "alpha"})
+    expect(r["ok"], True, f"install through the bridge: {r}")
+    card = next(c for c in r["result"]["cards"] if c["key"] == "alpha")
+    expect((card["installed"], card["version"], card["auto"]), (True, "1.1.0", False), "alpha's card after install")
+    expect(sorted(s["key"] for s in bridge.sections()["sections"]), ["alpha", "hud"],
+           "sections after install (HUD shown with alpha)")
+    expect(sorted(served), ["alpha", "hud"], "the page server's sections after install")
+    expect(bridge.call("alpha", "hello"), {"ok": True, "result": "1.1.0"}, "alpha's section call")
+    r = bridge.modules("set_auto", {"key": "alpha", "value": True})
+    expect(next(c for c in r["result"]["cards"] if c["key"] == "alpha")["auto"], True, "auto via the bridge")
+    r = bridge.modules("update", {"key": "alpha"})
+    expect((r["ok"], "up to date" in r["error"]), (False, True), "update with none newer: error, cards still sent")
+    expect(r["result"] is not None, True, "cards in an error reply")
+    bridge._mlock.acquire()
+    bridge._busy = "Installing alpha"
+    r = bridge.modules("check")
+    expect((r["ok"], "Installing alpha" in r["error"]), (False, True), "a call while busy")
+    expect(bridge.modules("cards")["result"]["busy"], "Installing alpha", "cards while busy")
+    bridge._busy = None
+    bridge._mlock.release()
+    # a release's module.json copy names a module before it's installed, and says what core it needs
+    gh.release("gamma-v1.0.0", "gamma-module.zip", module_zip("gamma", "1.0.0"),
+               manifest={"title": "Gamma Tool", "summary": "does gamma things", "needs_core": "1.0.0"})
+    gh.release("delta-v1.0.0", "delta-module.zip", module_zip("delta", "1.0.0", needs_core="9.0.0"),
+               manifest={"title": "Delta", "needs_core": "9.0.0"})
+    r = bridge.modules("check")
+    cards = {c["key"]: c for c in r["result"]["cards"]}
+    expect((cards["gamma"]["title"], cards["gamma"]["summary"], cards["gamma"]["can_install"]),
+           ("Gamma Tool", "does gamma things", True), "gamma's card from its module.json copy")
+    expect((cards["delta"]["waiting_for_core"], cards["delta"]["can_install"]), ("9.0.0", False),
+           "delta needs a newer core: no install offered")
+    expect(cards["alpha"]["title"], "Alpha", "alpha's card (no module.json copy) from its installed files")
+    r = bridge.modules("uninstall", {"key": "alpha", "delete_data": False})
+    expect(r["ok"], True, f"uninstall through the bridge: {r}")
+    expect(([s["key"] for s in bridge.sections()["sections"]], sorted(served)), ([], []),
+           "sections after uninstall")
+    calls()
+
+
 def main():
     check_own_modules()
     check_manager()
     check_checkout()
+    check_bridge()
     check_strafe_review_hooks()
     shutil.rmtree(TMP, ignore_errors=True)
     print("check_modules: all passed")

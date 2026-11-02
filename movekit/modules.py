@@ -42,6 +42,7 @@ an update is the caller's (see Manager.core_installer), since that differs by pl
 
 Standard library only.
 """
+import importlib.util
 import json
 import re
 import shutil
@@ -53,8 +54,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-# hub for its by-path loader (pywebview only loads to open the window)
-from movekit import hub, paths, updater
+from movekit import paths, updater
 
 CORE_VERSION = "1.0.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
@@ -73,6 +73,12 @@ KIT = Path(__file__).resolve().parent.parent  # the repo root, or the folder the
 
 def asset_name(key):
     return f"{key}-module.zip"
+
+
+def manifest_asset(key):
+    """The release's copy of module.json, so the hub can name a module and see what core it needs
+    before downloading it."""
+    return f"{key}-module.json"
 
 
 def data_dir():
@@ -323,13 +329,36 @@ class Manager:
                 if not key:
                     continue
             info = {"tag": tag, "url": r.get("html_url", ""), "notes": r.get("body") or "",
-                    "asset": assets.get(asset_name(key)) if key != CORE else None}
+                    "asset": assets.get(asset_name(key)) if key != CORE else None,
+                    "manifest_url": assets.get(manifest_asset(key)) if key != CORE else None}
             old = latest.get(key)
             if not old or updater.parse_version(tag) > updater.parse_version(old["tag"]):
                 latest[key] = info
+        for key, info in latest.items():
+            url = info.pop("manifest_url", None)
+            if url:
+                info["manifest"] = self._fetch_manifest(url)
         self.state.update(latest=latest, checked=time.time())
         self._save()
         return latest
+
+    def _fetch_manifest(self, url):
+        """The title, summary and needs from a release's module.json copy; {} if it can't be read
+        (the card then shows the key, and the download still checks the real one)."""
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+            with urllib.request.urlopen(req, timeout=updater.TIMEOUT) as r:
+                m = json.loads(r.read(64 * 1024))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(m, dict):
+            return {}
+        out = {k: m[k] for k in ("title", "summary") if isinstance(m.get(k), str)}
+        if isinstance(m.get("needs_core"), str) and updater.parse_version(m["needs_core"]):
+            out["needs_core"] = m["needs_core"]
+        if isinstance(m.get("needs"), list) and all(isinstance(k, str) for k in m["needs"]):
+            out["needs"] = m["needs"]
+        return out
 
     # one card's facts
 
@@ -347,11 +376,17 @@ class Manager:
             installed, manifest = True, {"title": "Movement Kit (core)", "summary":
                                          "The hub window, the HUD settings and the launch option."}
         else:
-            manifest = self.available().get(key) or {"title": key, "summary": ""}
+            remote = (latest or {}).get("manifest") or {}
+            manifest = self.available().get(key) or {"title": remote.get("title", key),
+                                                     "summary": remote.get("summary", ""),
+                                                     "needs": remote.get("needs", [])}
             installed = key in self.installed()
         version = self.version(key) if installed else None
         update = bool(installed and latest and newer(latest["tag"], version))
-        if self.checkout:
+        # a waiting mark counts only for the release that set it; a newer one may not need it
+        waiting = (entry.get("waiting_for_core") if latest and entry.get("waiting_tag") == latest["tag"]
+                   else None) or (self._too_new(latest) if key != CORE else None)
+        if self.checkout or waiting:
             can_update = False
         elif key == CORE:
             can_update = update and self.core_installer is not None
@@ -363,16 +398,23 @@ class Manager:
             "auto": bool(entry.get("auto")),
             "latest": latest, "update": update, "can_update": can_update,
             "can_install": not installed and (self.checkout and key in self.available()
-                                              or bool(latest and latest.get("asset"))),
+                                              or bool(latest and latest.get("asset") and not waiting)),
             "can_rollback": (not self.checkout and installed and key != CORE
                              and (self.data / "previous" / key).is_dir()),
             "previous": entry.get("previous") if not self.checkout else None,
             "failed": entry.get("failed"),
-            "waiting_for_core": entry.get("waiting_for_core"),
+            "waiting_for_core": waiting,
             "needed_by": [k for k, m in self.installed().items() if key in m["needs"]],
             "needs_missing": [k for k in manifest.get("needs", []) if k not in self.installed()],
             "checkout": self.checkout,
         }
+
+    def _too_new(self, latest):
+        """The core version a release says it needs, when that's newer than this core."""
+        need = ((latest or {}).get("manifest") or {}).get("needs_core")
+        if need and updater.parse_version(need) > updater.parse_version(self.core_version):
+            return need
+        return None
 
     def cards(self):
         """The core's card, then one per module the hub can offer."""
@@ -393,9 +435,12 @@ class Manager:
         file = folder / HOOKS
         if not file.is_file():
             return None
-        name = f"movekit_module_{re.sub(r'\W', '_', key)}.hooks"
-        sys.modules.pop(name, None)  # always the code now on disk (after an update or roll back)
-        return hub._load(file, name)
+        name = f"movekit_module_{re.sub(r'\W', '_', key)}_hooks"
+        # a fresh load every time: the code now on disk, after an update or roll back
+        spec = importlib.util.spec_from_file_location(name, file)
+        hooks = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hooks)
+        return hooks
 
     def _call(self, key, hook, folder=None):
         hooks = self._hooks(key, folder)
@@ -590,10 +635,11 @@ class Manager:
             except ValueError as e:
                 raise RuntimeError(f"The {latest['tag']} module is broken: {e}") from e
             if updater.parse_version(manifest["needs_core"]) > updater.parse_version(self.core_version):
-                entry["waiting_for_core"] = manifest["needs_core"]
+                entry["waiting_for_core"], entry["waiting_tag"] = manifest["needs_core"], latest["tag"]
                 raise RuntimeError(f"{latest['tag']} needs core {manifest['needs_core']}; "
                                    "update the core first")
             entry.pop("waiting_for_core", None)
+            entry.pop("waiting_tag", None)
             self._check_needs(key, manifest)
             self._swap(key, new, first)
             if not first:

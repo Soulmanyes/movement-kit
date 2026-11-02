@@ -1,7 +1,7 @@
 // The Strafe Review section (strafe-review/hub_section.py): whether the server runs, a short setup
-// summary, updates, and "Open review", which starts the server first if it's down. The full setup
-// check stays on the review page. Every request goes through Python: the server takes POSTs only
-// from its own page's origin.
+// summary and "Open review", which starts the server first if it's down. The full setup check stays
+// on the review page; updates are the Modules page's (movekit/web/modules.js, 3.7b in PLAN.md).
+// Every request goes through Python: the server takes POSTs only from its own page's origin.
 "use strict";
 
 (() => {
@@ -43,30 +43,6 @@
 		}
 	}
 
-	function drawUpdates(info) {
-		$("sr-updates").hidden = !info;
-		if (!info) return;
-		const state = info.error ? "GitHub couldn't be reached" : info.latest ? `${info.latest.tag} is available` : info.checked ? "up to date" : "";
-		$("sr-version").textContent = `Version ${info.version}${state ? ` · ${state}` : ""}`;
-		const newer = $("sr-newer");
-		newer.hidden = !info.latest;
-		newer.replaceChildren();
-		if (info.latest) {
-			newer.append(`Strafe Review ${info.latest.tag} is available (you have ${info.version}). `);
-			if (info.canInstall) {
-				const go = el("button", { textContent: "Update" });
-				go.addEventListener("click", () => install(go, info));
-				newer.append(go);
-			} else {
-				newer.append("This copy runs from the repo: update it with git pull.");
-			}
-			if (info.latest.url) newer.append(el("a", { href: info.latest.url, target: "_blank", rel: "noopener", textContent: "What's new" }));
-			if (info.failed === info.latest.tag) newer.append(el("span", { className: "muted", textContent: " (installing it failed before)" }));
-		}
-		$("sr-auto-label").hidden = !info.canInstall;
-		$("sr-auto").checked = !!info.auto;
-	}
-
 	function draw(got) {
 		last = got;
 		const on = got.serving;
@@ -77,7 +53,6 @@
 		$("sr-stop").hidden = !on;
 		if (!busy) note(on ? "" : "It starts with the game, or here with Open review. Attempts played while it was off are picked up from the game's log.");
 		drawRows(on ? got.status : null);
-		drawUpdates(on ? got.update : null);
 	}
 
 	async function refresh() {
@@ -126,45 +101,6 @@
 		}
 		setTimeout(refresh, 500);
 	});
-
-	$("sr-check").addEventListener("click", async (ev) => {
-		const btn = ev.target;
-		btn.disabled = true;
-		btn.textContent = "Checking…";
-		try {
-			drawUpdates(await hub.call("check_updates"));
-		} catch (e) {
-			note("Couldn't check: " + e.message, true);
-		}
-		btn.disabled = false;
-		btn.textContent = "Check for updates";
-	});
-
-	$("sr-auto").addEventListener("change", async (ev) => {
-		try {
-			drawUpdates(await hub.call("set_auto", { auto: ev.target.checked }));
-		} catch (e) {
-			ev.target.checked = !ev.target.checked;
-			note("Couldn't save it: " + e.message, true);
-		}
-	});
-
-	async function install(btn, info) {
-		btn.disabled = true;
-		btn.textContent = "Updating…";
-		busy = true;
-		try {
-			await hub.call("install_update");
-			note(`Installed ${info.latest.tag}. Strafe Review is starting again…`);
-			// the old copy answers until it has shut down; wait for the new version
-			const back = await waitServing(120000, (got) => got.serving && got.update.version !== info.version);
-			note(back ? "" : "Strafe Review didn't come back after the update. Start it again with Open review.", !back);
-		} catch (e) {
-			note("The update didn't work: " + e.message, true);
-		}
-		busy = false;
-		refresh();
-	}
 
 	refresh();
 })();

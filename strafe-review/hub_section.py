@@ -52,30 +52,12 @@ def _request(path, body=None, timeout=2):
 
 def status():
     """{"serving": false} when nothing answers on the port; else the server's /api/status (setup and
-    collector) and /api/update (version, newer release, auto mode, canInstall)."""
+    collector). Updates are the Modules page's (movekit/modules.py, 3.7b in PLAN.md)."""
     try:
         st = _request("api/status")
-        upd = _request("api/update")
     except (OSError, ValueError):
         return {"serving": False, "url": url()}
-    return {"serving": True, "url": url(), "status": st, "update": upd}
-
-
-def check_updates():
-    """Ask GitHub now (through the server); answers the new update info."""
-    return _request("api/update/check", {}, timeout=20)
-
-
-def set_auto(auto):
-    if not isinstance(auto, bool):
-        raise TypeError("auto must be true or false")
-    return _request("api/update/auto", {"auto": auto})
-
-
-def install_update():
-    """The server installs the newer release and starts again on it (the Windows exe only;
-    from the repo canInstall is false and the page offers no button)."""
-    return _request("api/update/install", {}, timeout=120)
+    return {"serving": True, "url": url(), "status": st}
 
 
 def _command():
@@ -138,7 +120,6 @@ SECTION = {
     "title": "Strafe Review",
     "os": ["linux", "win32"],
     "page": "hub/index.html",
-    "api": {"status": status, "check_updates": check_updates, "set_auto": set_auto,
-            "install_update": install_update, "start": start, "open_review": open_review, "stop": stop},
+    "api": {"status": status, "start": start, "open_review": open_review, "stop": stop},
     "order": 15,
 }

@@ -5,49 +5,25 @@
 <title>Soulmanyes's Movement Kit</title>
 <link rel="stylesheet" href="/web/hub.css">
 <script src="/web/hub.js"></script>
+<script src="/web/modules.js" defer></script>
 </head>
 <body>
 <nav id="hub-side"></nav>
 <main id="hub-main">
-	<h1>Soulmanyes's Movement Kit</h1>
-	<div class="card" id="home-list"><span class="muted">Loading…</span></div>
+	<h1>Modules</h1>
+	<div class="mod-top">
+		<span id="mod-checked" class="muted"></span>
+		<button id="mod-check">Check for updates</button>
+		<button id="mod-all" class="primary" hidden>Update all</button>
+	</div>
+	<div class="card" id="mod-checkout" hidden>
+		This copy runs from a git checkout, so <b>git pull</b> updates it. Install and Uninstall still
+		put each tool's game files and launch hooks in, or take them out.
+	</div>
+	<div class="card mod-busy" id="mod-busy" hidden></div>
+	<div class="card error" id="mod-page-error" hidden></div>
+	<div id="mod-cards"><div class="card"><span class="muted">Loading…</span></div></div>
 	<div class="card error" id="home-problems" hidden></div>
 </main>
-<script>
-"use strict";
-hub.info.then((info) => {
-	const list = document.getElementById("home-list");
-	list.replaceChildren();
-	if (!info.sections.length) {
-		list.innerHTML = '<h2>No sections yet</h2><p class="muted">Each tool adds its settings here as it moves into the hub.</p>';
-	} else {
-		const h = document.createElement("h2");
-		h.textContent = "Sections";
-		list.append(h);
-		for (const s of info.sections) {
-			const p = document.createElement("p");
-			const a = document.createElement("a");
-			a.href = s.url;
-			a.textContent = s.title;
-			a.style.color = "var(--accent)";
-			p.append(a);
-			list.append(p);
-		}
-	}
-	const probs = document.getElementById("home-problems");
-	if (info.problems.length) {
-		probs.hidden = false;
-		probs.replaceChildren();
-		const h = document.createElement("h2");
-		h.textContent = "Sections that didn't load";
-		probs.append(h);
-		for (const x of info.problems) {
-			const p = document.createElement("p");
-			p.textContent = `${x.folder}/hub_section.py: ${x.error}`;
-			probs.append(p);
-		}
-	}
-});
-</script>
 </body>
 </html>

@@ -52,4 +52,5 @@ SECTION = {
     "page": "hub/index.html",
     "api": {"get": get, "set_line": set_line},
     "order": 20,
+    "show_with": ["strafe-review"],  # the jump-1 line is drawn by Strafe Review's recorder
 }
