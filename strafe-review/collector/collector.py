@@ -25,8 +25,17 @@ from movekit import attempts
 from movekit.files import new_file_mode
 from movekit.logtail import follow
 
-# The repo, or PyInstaller's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
-ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+
+def _bundled():
+    """This file sits inside a one-file exe's unpacked bundle (Strafe Review's own exe until the bridge
+    release, 3.7b in PLAN.md), whose layout is at sys._MEIPASS. A module loaded from disk by the kit's
+    core exe is frozen too, but its files are its own folder."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    return bool(bundle) and Path(__file__).resolve().is_relative_to(Path(bundle).resolve())
+
+
+# Strafe Review's folder, or the old exe's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
+ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent.parent
 GAME = steam.find_game()  # None if Momentum isn't found; then the game folder must be given
 STORE = attempts.store()
 LOG = os.path.join(GAME, "yaw.log") if GAME else None  # con_logfile, shared with Source Yaw's yaws.cfg

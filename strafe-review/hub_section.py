@@ -62,8 +62,8 @@ def status():
 
 def _command():
     """The command that runs the server in the background."""
-    if getattr(sys, "frozen", False):  # the hub exe (3.7): install, then serve (strafe_review.py --collect)
-        return [sys.executable, "--collect"]
+    if getattr(sys, "frozen", False):  # the core exe (3.7b): install, then serve, through --run-script
+        return [sys.executable, "--run-script", str(HERE / "strafe_review.py"), "--collect"]
     return [sys.executable, str(SERVER), "--port", str(port()), "--no-browser"]
 
 

@@ -15,6 +15,9 @@ A module is a tool folder with a module.json:
 
 and, if it changes anything outside its own folder, a module_hooks.py with any of:
 
+    launch(ctx, argv)          before the game starts, when the core is the launch option
+                               (movekit/dispatch.py); argv is the game's command. Must return
+                               quickly; the core runs the game whatever this does.
     install(ctx)               after the folder is in place (first install, update, roll back);
                                puts the game files, autoexec block and launch hooks in. Run again
                                on every version, so it must be safe to repeat.
@@ -59,6 +62,7 @@ from movekit import paths, updater
 CORE_VERSION = "1.0.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
+CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
 REPO = "Soulmanyes/movement-kit"
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=100"
 AGENT = "movement-kit-modules"
@@ -329,7 +333,8 @@ class Manager:
                 if not key:
                     continue
             info = {"tag": tag, "url": r.get("html_url", ""), "notes": r.get("body") or "",
-                    "asset": assets.get(asset_name(key)) if key != CORE else None,
+                    "asset": assets.get(asset_name(key) if key != CORE else CORE_ASSET),
+                    "source": r.get("tarball_url") if key == CORE else None,
                     "manifest_url": assets.get(manifest_asset(key)) if key != CORE else None}
             old = latest.get(key)
             if not old or updater.parse_version(tag) > updater.parse_version(old["tag"]):
@@ -420,6 +425,11 @@ class Manager:
         """The core's card, then one per module the hub can offer."""
         return [self.info(CORE)] + [self.info(k) for k in self.known()]
 
+    def note(self, name, value):
+        """Keep a top-level flag in the state file (the core's one-time steps)."""
+        self.state[name] = value
+        self._save()
+
     # switches
 
     def set_auto(self, key, value):
@@ -442,13 +452,17 @@ class Manager:
         spec.loader.exec_module(hooks)
         return hooks
 
-    def _call(self, key, hook, folder=None):
+    def _call(self, key, hook, folder=None, args=()):
         hooks = self._hooks(key, folder)
         fn = getattr(hooks, hook, None) if hooks else None
         if not fn:
             return None
         folder = Path(folder or self.folder(key))
-        return fn(Context(folder, self.kit, read_manifest(folder)))
+        return fn(Context(folder, self.kit, read_manifest(folder)), *args)
+
+    def run_hook(self, key, hook, *args):
+        """Run an installed module's hook (None if it has none). For the core's launch dispatcher."""
+        return self._call(key, hook, args=args)
 
     def _stop(self, key):
         try:

@@ -23,13 +23,25 @@ import time
 import webbrowser
 from pathlib import Path
 
-ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+def _bundled():
+    """This file sits inside a one-file exe's unpacked bundle (Strafe Review's own exe until the bridge
+    release, 3.7b in PLAN.md), whose layout is at sys._MEIPASS. A module loaded from disk by the kit's
+    core exe is frozen too, but its files are its own folder."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    return bool(bundle) and Path(__file__).resolve().is_relative_to(Path(bundle).resolve())
+
+
+ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT), str(ROOT / "collector"), str(ROOT / "viewer")]  # finds the imports below
 import collector
 import install
 import server
 import steam
 import updater
+
+from movekit import logfile
+from movekit.dispatch import game_env  # one copy, shared with the kit's core exe
 
 PORT = int(os.environ.get("STRAFE_REVIEW_PORT", "8765"))  # the variable is for tests
 URL = f"http://127.0.0.1:{PORT}/"
@@ -41,41 +53,9 @@ LOG_MAX = 1 << 20  # bytes; a longer log is started over
 START_WAIT = 10  # seconds the launch option waits for the server it started before opening the page
 
 
-class Tee:
-    """Writes to the console (if there is one) and to the log file."""
-
-    def __init__(self, *streams):
-        self.streams = [s for s in streams if s is not None]
-
-    def write(self, text):
-        for s in self.streams:
-            try:
-                s.write(text)
-                s.flush()
-            except (OSError, ValueError):
-                pass
-        return len(text)
-
-    def flush(self):
-        pass
-
-
 def log_to_file():
-    """Send this copy's output to the log file too. The background copy's console output goes nowhere,
-    so the file is all there is of it."""
-    try:
-        LOG.parent.mkdir(parents=True, exist_ok=True)
-        if LOG.exists() and LOG.stat().st_size > LOG_MAX:
-            LOG.unlink()  # fails on Windows while another copy has it open; then it waits for the next start
-    except OSError:
-        pass
-    try:
-        f = open(LOG, "a", encoding="utf-8", buffering=1)  # noqa: SIM115 - open for the program's life
-    except OSError:
-        return
-    f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} {' '.join(sys.argv[1:]) or '(double-click)'}\n")
-    sys.stdout = Tee(sys.stdout, f)
-    sys.stderr = Tee(sys.stderr, f)
+    """Send this copy's output to strafe-review.log too."""
+    logfile.tee(LOG, LOG_MAX)
 
 
 def serving():
@@ -99,8 +79,13 @@ def try_install():
 
 
 def me():
-    """The command that starts this program (after an update, the new exe at the same path)."""
-    return [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, str(Path(__file__).resolve())]
+    """The command that starts this program: the old one-file exe itself (after an update, the new exe
+    at the same path); in the kit's core exe, this file through its --run-script; else python."""
+    if _bundled():
+        return [sys.executable]
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--run-script", str(Path(__file__).resolve())]
+    return [sys.executable, str(Path(__file__).resolve())]
 
 
 def fresh_env():
@@ -132,26 +117,6 @@ def start_background(*extra):
         subprocess.Popen([*me(), SERVE, *extra], creationflags=flags, **kw)
 
 
-def game_env():
-    """The environment for the game: PyInstaller's bootloader changes the library search path for its
-    own unpacked libraries, which the game must not load. Restored as PyInstaller's docs describe."""
-    if not getattr(sys, "frozen", False):
-        return None
-    if sys.platform == "win32":
-        import ctypes
-
-        ctypes.windll.kernel32.SetDllDirectoryW(None)
-        return None
-    env = dict(os.environ)
-    for key in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
-        orig = env.pop(key + "_ORIG", None)
-        if orig is not None:
-            env[key] = orig
-        else:
-            env.pop(key, None)
-    return env
-
-
 def open_when_serving(wait):
     for _ in range(wait * 2 or 1):
         if serving():
@@ -160,7 +125,10 @@ def open_when_serving(wait):
         time.sleep(0.5)
 
 
-def launch(game_cmd):
+def prepare_launch():
+    """What the launch option does before the game starts: install, start the server in the
+    background unless one runs, and open the page once it answers (a thread, returned). The kit's
+    core runs the game itself and calls this through module_hooks.launch."""
     try_install()
     started = not serving()
     if started:
@@ -169,6 +137,11 @@ def launch(game_cmd):
     # now may need a moment before it answers
     opener = threading.Thread(target=open_when_serving, args=(START_WAIT if started else 0,))
     opener.start()
+    return opener
+
+
+def launch(game_cmd):
+    opener = prepare_launch()
     status = subprocess.call(game_cmd, env=game_env())
     opener.join()
     return status

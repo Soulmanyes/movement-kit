@@ -25,7 +25,16 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+def _bundled():
+    """This file sits inside a one-file exe's unpacked bundle (Strafe Review's own exe until the bridge
+    release, 3.7b in PLAN.md), whose layout is at sys._MEIPASS. A module loaded from disk by the kit's
+    core exe is frozen too, but its files are its own folder."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    return bool(bundle) and Path(__file__).resolve().is_relative_to(Path(bundle).resolve())
+
+
+ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "collector"))
 import recorder_settings
 import steam  # found through the path above; it also puts movekit on the path

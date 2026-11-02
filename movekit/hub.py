@@ -405,12 +405,13 @@ def _side_buttons(window):
     GLib.idle_add(hook)
 
 
-def check_sections(out, root=KIT, platform=sys.platform, calls=()):
+def check_sections(out, root=KIT, platform=sys.platform, calls=(), manager=None):
     """Write {"sections": [keys], "problems": [[folder, text]], "calls": {...}} to the file out, with
     no window. For the hub exe's smoke test, which has no console to print to. calls are
     "key.name" or "key.name:{json args}", run through the Bridge as a page would; "calls" maps each
-    to its reply. Returns the dict."""
-    sections, problems = discover(root, platform)
+    to its reply. With a manager, the sections are the core's and the installed modules', as the
+    window has them. Returns the dict."""
+    sections, problems = kit_sections(manager, root, platform) if manager else discover(root, platform)
     report = {"sections": [s.key for s in sections], "problems": [list(p) for p in problems]}
     if calls:
         bridge = Bridge(sections, problems)

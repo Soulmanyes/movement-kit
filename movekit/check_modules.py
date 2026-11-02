@@ -70,7 +70,7 @@ os.environ["MODCHECK_OUT"] = str(OUT)
 
 from movekit import modules  # after the path and environment above
 
-HOOK_NAMES = {"install", "uninstall", "stop", "start"}
+HOOK_NAMES = {"install", "uninstall", "stop", "start", "launch"}
 ALLOWED = (set(sys.stdlib_module_names) - {"tkinter", "turtle", "idlelib", "test", "ensurepip"}) \
     | {"movekit", "hud", "webview", "__future__"}
 SKIP = {"build", "dist", "__pycache__", "probe"}  # build output, and tools that never ship
