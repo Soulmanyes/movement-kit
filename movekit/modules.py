@@ -45,13 +45,17 @@ asset) from the last look at GitHub. The core is the entry "core" (line hub-v*);
 an update is the caller's (see Manager.core_installer), since that differs by platform.
 Another program may change an auto switch in the same file while a Manager is open (Source Yaw's
 GTK window, through `python3 -m movekit.modules`): every save and every cards() takes the switches
-from the file, except the ones this Manager changed since its last save.
+from the file, except the ones this Manager changed since its last save. Install, update, roll back
+and uninstall hold a lock file (<data>/modules.lock, Linux) and read the state file afresh, so two
+programs never swap a module's folders at once.
 
 Run as `python3 -m movekit.modules CMD [KEY] [--delete-data]` from a kit root, it does one call with
 no window and prints the reply as JSON (cli()).
 
 Standard library only.
 """
+import contextlib
+import functools
 import importlib.util
 import json
 import os
@@ -219,6 +223,17 @@ class Context:
         return run.stdout
 
 
+def _exclusive(method):
+    """Run a Manager change under the lock file, with the state read afresh (see the top)."""
+    @functools.wraps(method)
+    def run(self, *args, **kwargs):
+        with self._lock():
+            self.state = self._load()
+            self._auto_changed.clear()
+            return method(self, *args, **kwargs)
+    return run
+
+
 class Manager:
     """Every module's install, update, roll back, uninstall and auto switch.
 
@@ -259,6 +274,18 @@ class Manager:
         tmp.write_text(json.dumps(self.state, indent=2) + "\n")
         tmp.replace(self.state_file)
         self._auto_changed.clear()
+
+    @contextlib.contextmanager
+    def _lock(self):
+        try:
+            import fcntl
+        except ImportError:  # Windows: only the core exe changes modules
+            yield
+            return
+        self.data.mkdir(parents=True, exist_ok=True)
+        with open(self.data / "modules.lock", "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            yield
 
     def _merge_auto(self):
         """Take the auto switches another program wrote to the file, except those set here."""
@@ -531,6 +558,7 @@ class Manager:
 
     # changes
 
+    @_exclusive
     def install(self, key):
         """Install a module that isn't installed: the newest release (or, in a git checkout, run
         its install hook from the checkout and show it again)."""
@@ -549,6 +577,7 @@ class Manager:
             raise RuntimeError(f"No {key} module release on GitHub yet")
         self._put(key, latest, first=True)
 
+    @_exclusive
     def update(self, key):
         """Install the newest release of an installed module (or of the core)."""
         if self.checkout:
@@ -598,6 +627,7 @@ class Manager:
                     results[card["key"]] = str(e)
         return results
 
+    @_exclusive
     def rollback(self, key):
         """Swap the kept previous version back in (the current one becomes the previous)."""
         prev = self.data / "previous" / key
@@ -618,6 +648,7 @@ class Manager:
         entry.pop("failed", None)
         self._save()
 
+    @_exclusive
     def uninstall(self, key, delete_data=False):
         """Take a module out: its uninstall hook (game files, autoexec block, launch hooks), then
         its folder (not in a git checkout) and, when asked, its saved data."""
@@ -779,7 +810,7 @@ def cli(argv, mgr=None):
     cmd, key = (words + [None, None])[:2]
     reply = {"ok": True}
     try:
-        mgr = mgr or Manager()
+        mgr = mgr or Manager(api=os.environ.get("MOVEKIT_MODULES_API", API))  # tests: a fake GitHub
         if cmd == "check":
             mgr.check(force=True)
         elif cmd in ("install", "update", "rollback"):

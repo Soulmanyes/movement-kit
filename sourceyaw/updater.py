@@ -6,8 +6,9 @@ which copies the app over the installed one. Settings stay where they are, and t
 runs from the next start. A copy running from a git checkout never installs anything.
 
 When Source Yaw is a module of the Linux core (~/.local/share/movekit/kit/sourceyaw, 3.7b in
-PLAN.md), the core's module manager owns it: the auto switch is the one on its Modules card, and an
-update goes through the manager, so the module folder and this copy stay the same version. Both go
+PLAN.md), the core's module manager owns it: the auto switch is the one on its Modules card, the
+newest release is the one the manager offers (a release with a module zip), and an update goes
+through the manager, so the module folder and this copy stay the same version. All of it goes
 through the core's own copy of movekit (`python3 -m movekit.modules`), never this copy's.
 """
 
@@ -40,6 +41,7 @@ class Updater(kit.Updater):
         self.repo = repo                    # "Owner/movement-kit" on GitHub
         self.version = version              # the running version, "1.4.0"
         self.app_dir = Path(app_dir)
+        self._card_version = None  # as a module: the version the manager has in, from check()
         # {"auto": bool, "checked": time, "latest": {...}, "installed": tag, "failed": tag}
         super().__init__(f"https://api.github.com/repos/{repo}/releases?per_page=100",
                          "sourceyaw", state_file)
@@ -58,13 +60,13 @@ class Updater(kit.Updater):
         """Installed as a module of the core: the core's manager updates it."""
         return not self.dev_checkout and (self.core_kit / KEY / "module.json").is_file()
 
-    def _manager(self, *args):
+    def _manager(self, *args, timeout=15):
         """One call to the core's module manager; its reply. Raises RuntimeError with its error."""
         try:
             run = subprocess.run([sys.executable, "-m", "movekit.modules", *args], cwd=self.core_kit,
                                  env={**os.environ, "PYTHONPATH": str(self.core_kit)},
                                  stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                 timeout=900, check=False)
+                                 timeout=timeout, check=False)
             reply = json.loads(run.stdout.strip().splitlines()[-1])
         except (OSError, ValueError, IndexError, subprocess.TimeoutExpired) as e:
             raise RuntimeError(f"The Movement Kit's module manager didn't answer: {e}") from e
@@ -73,15 +75,21 @@ class Updater(kit.Updater):
                                or reply.get("error"))
         return reply
 
+    def _card(self, cmd="cards"):
+        reply = self._manager(cmd, timeout=60 if cmd == "check" else 15)
+        try:
+            return next(c for c in reply["cards"] if c["key"] == KEY)
+        except (StopIteration, KeyError, TypeError) as e:
+            raise RuntimeError("The module manager has no Source Yaw card") from e
+
     @property
     def auto(self):
         if not self.managed:
             return super().auto
         try:
-            card = next(c for c in self._manager("cards")["cards"] if c["key"] == KEY)
-        except (RuntimeError, StopIteration, KeyError, TypeError):
+            return bool(self._card().get("auto"))
+        except RuntimeError:
             return False
-        return bool(card.get("auto"))
 
     @auto.setter
     def auto(self, value):
@@ -93,8 +101,28 @@ class Updater(kit.Updater):
         except RuntimeError:
             kit.Updater.auto.fset(self, value)  # the core is broken: keep it here at least
 
+    def check(self, force=False):
+        """As a module: the manager's newest release when it is newer than this running copy (the
+        manager asks GitHub now). Raises OSError when the manager can't answer, like GitHub down."""
+        if not self.managed:
+            return super().check(force)
+        try:
+            card = self._card("check")
+        except RuntimeError as e:
+            raise OSError(str(e)) from e
+        self._card_version = card.get("version")
+        latest = card.get("latest")
+        if not latest or not self.newer(latest):
+            return None
+        return {"tag": latest["tag"], "url": latest.get("url", ""), "notes": latest.get("notes", "")}
+
     def installed(self, latest):
-        """Already installed by an earlier update: waiting for a restart."""
+        """Already installed by an earlier update: waiting for a restart. As a module, also when the
+        manager put that version in already (the hub updated it while this window was open)."""
+        if self.managed:
+            have = kit.parse_version(self._card_version)
+            if have and have >= kit.parse_version(latest["tag"]):
+                return True
         return self.state.get("installed") == latest["tag"]
 
     def release_info(self, data):
@@ -102,7 +130,7 @@ class Updater(kit.Updater):
 
     def _install(self, latest):
         if self.managed:
-            self._manager("update", KEY)
+            self._manager("update", KEY, timeout=900)
             return
         if self.dev_checkout:
             raise RuntimeError(f"Running from a git checkout in {self.app_dir}. Use git pull")
