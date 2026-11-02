@@ -1,0 +1,44 @@
+# Builds strafe-review.exe on Windows (PyInstaller can't cross-build), smoke-tests it (smoke_test.py)
+# and zips it with WINDOWS.txt (setup and a tester checklist; README.md links private notes) and the
+# licence. Run by hand (Actions > windows > Run workflow) for a test build, kept as a workflow
+# artifact; a pushed v* tag also attaches the zip to that tag's GitHub release.
+name: windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyinstaller
+      - run: python build.py
+      - name: Smoke test
+        run: python smoke_test.py dist/strafe-review.exe
+        timeout-minutes: 5
+      - name: Zip
+        shell: pwsh
+        run: |
+          # the licence of the Python build bundled in the exe, with its libraries' notices
+          python -c "import shutil, sys, pathlib; shutil.copy(pathlib.Path(sys.base_prefix) / 'LICENSE.txt', 'PYTHON-LICENSE.txt')"
+          Compress-Archive -Path dist/strafe-review.exe, WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, PYTHON-LICENSE.txt, licenses/OpenSSL-LICENSE.txt -DestinationPath strafe-review-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strafe-review-windows
+          path: strafe-review-windows.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # a tag that isn't VERSION would make every copy see an update that never takes
+          version=$(python -c "import sys; sys.path.insert(0, 'collector'); import updater; print(updater.VERSION)")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then echo "tag $GITHUB_REF_NAME but VERSION $version"; exit 1; fi
+          gh release create "$GITHUB_REF_NAME" strafe-review-windows.zip --title "$GITHUB_REF_NAME" --generate-notes || gh release upload "$GITHUB_REF_NAME" strafe-review-windows.zip --clobber

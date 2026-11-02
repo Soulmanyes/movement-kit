@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Strafe Review</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<aside id="side">
+	<div class="side-head">
+		<h1>Strafe Review</h1>
+		<a class="drill-link" href="/drill" title="Jump 1 of every attempt, stacked and side by side">Drill →</a>
+		<a class="drill-link" href="/compare" title="2 to 4 recordings side by side, with stats">Compare →</a>
+		<button id="refresh" title="Load the attempt list again">Refresh</button>
+		<button class="stop">Stop</button>
+	</div>
+	<div id="who" class="who-row" title="Whose recordings to list: yours, replays, or live players you spectated"></div>
+	<label class="drill-toggle" title="Drills: own attempts that didn't finish and landed 7 jumps or fewer. The drill page always uses them.">
+		<input type="checkbox" id="show-drills"><span>Show drills (<span id="drill-count">0</span>)</span>
+	</label>
+	<div id="filters">
+		<label class="f-wide">Search <input id="f-search" type="search" placeholder="Player, map, tag or note" title="Every word must match the player, map, a tag or the note"></label>
+		<label>Map <select id="f-map"></select></label>
+		<label>Tick <select id="f-tick"></select></label>
+		<label>Style <select id="f-style"></select></label>
+		<label>Result <select id="f-result"></select></label>
+		<label>Tag <select id="f-tag"></select></label>
+		<label>Sort <select id="f-sort" title="Order inside each map. Recordings without the value go last."></select></label>
+		<div class="f-foot"><span id="f-count" class="muted"></span><button id="f-clear" title="Show every attempt again">Clear filters</button></div>
+	</div>
+	<div id="list"></div>
+	<div class="side-foot">
+		<div id="ingame"></div>
+		<div id="updates"></div>
+	</div>
+</aside>
+<main id="main">
+	<header id="head"><span class="muted">Pick an attempt on the left.</span></header>
+	<div id="meta" hidden>
+		<div id="tags"></div>
+		<input id="tag-add" list="tag-list" maxlength="40" placeholder="Add tag, Enter" title="Type a tag and press Enter; pick an old one from the list">
+		<datalist id="tag-list"></datalist>
+		<input id="note" maxlength="2000" placeholder="Note (e.g. new sens), saved when you press Enter or click away">
+		<span id="meta-status" class="hint"></span>
+	</div>
+	<section id="run-stats" hidden>
+		<div class="sec-head">
+			<h2>Run stats</h2>
+			<span id="rs-note" class="muted"></span>
+			<label class="cmp" title="A finished bhop run ends in the air on its way into the end zone. Untick to count that last jump in gain, sync, angles, swaps and key shares too. Failed runs always keep it."><input type="checkbox" id="skip-last"> Leave out last jump</label>
+			<span class="hint">Timer start to run end, jumps 1+ · hover a stat for what it means · underlined: click to zoom there</span>
+		</div>
+		<div id="rs-body"></div>
+		<div id="rs-tip" hidden></div>
+	</section>
+	<div id="toolbar">
+		<button id="whole">Whole attempt</button>
+		<button id="jump1">Jump 1</button>
+		<label class="cmp" title="Yaw speed lane with the turn direction kept: up = turning left, down = turning right, like the drill page"><input type="checkbox" id="yaw-signed"> Signed yaw speed</label>
+		<button id="to-compare" title="Open the compare page with this attempt as the reference">Compare page</button>
+		<button id="checks-btn" title="Turn checks on or off and set their thresholds">Check settings</button>
+		<span class="hint">Wheel on the graph: zoom (on the titles: scroll) · drag: pan · double-click: whole attempt · click a jump: zoom to it</span>
+		<section id="settings" hidden>
+			<div class="sec-head">
+				<h2>Check settings</h2>
+				<span class="muted">Saved in this browser. Only changed values are kept, so new defaults still arrive.</span>
+				<label class="cmp" title="Your mouse DPI, for turning degrees into centimetres of mouse movement (shared with the drill page)">Mouse DPI <input id="dpi" type="number" min="100" max="64000" step="50" placeholder="e.g. 800"></label>
+				<span id="cm360" class="hint"></span>
+				<label class="cmp" title="Going back to a sens used before is tagged &quot;old sens&quot; (for 24 h) only after this many attempts at other sens values">Old sens after <input id="auto-old" type="number" min="0" max="10000" step="5"> attempts away</label>
+				<button id="reset-checks">Reset all to defaults</button>
+				<button id="close-checks" title="Close (Esc)">Close</button>
+			</div>
+			<div id="settings-list"></div>
+		</section>
+	</div>
+	<div id="readout"></div>
+	<div id="plot">
+		<canvas id="base"></canvas>
+		<canvas id="over"></canvas>
+	</div>
+	<section id="path-sec">
+		<div class="sec-head">
+			<h2>Path from above</h2>
+			<span id="path-dist" class="path-dist" title="Horizontal distance from the timer start to the run end, and over the ticks shown in the graph (teleports add nothing)"></span>
+			<span class="muted">Built up from speed, so the shape is right but not exact. Turned so the way out of the start zone points up. Fits the ticks shown in the graph (the rest is dimmed) until you zoom or drag it.</span>
+			<label class="cmp" title="Fit the whole path instead of the ticks shown in the graph"><input type="checkbox" id="path-whole"> Whole path</label>
+			<span class="hint">Colour: gain % of ideal (5-tick), red 60 % and under, green 95 % and over; grey = ground · hover: graph cursor · click: zoom to that jump · drag: pan</span>
+		</div>
+		<div id="path-box">
+			<canvas id="path-base"></canvas>
+			<canvas id="path-over"></canvas>
+			<div class="path-zoom">
+				<button id="path-in" title="Zoom in">+</button>
+				<button id="path-out" title="Zoom out">−</button>
+				<button id="path-reset" title="Back to the fit (follows the graph again)" disabled>Reset</button>
+			</div>
+		</div>
+	</section>
+	<section id="mistakes">
+		<div class="sec-head"><h2>Mistakes</h2><span id="mistakes-sum" class="muted"></span></div>
+		<div id="mistakes-list"></div>
+	</section>
+</main>
+<script src="/static/data.js"></script>
+<script src="/static/checks.js"></script>
+<script src="/static/stats.js"></script>
+<script src="/static/mouse.js"></script>
+<script src="/static/runrows.js"></script>
+<script src="/static/autotags.js"></script>
+<script src="/static/listsort.js"></script>
+<script src="/static/snap.js"></script>
+<script src="/static/status.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/stop.js"></script>
+<script src="/static/update.js"></script>
+<script src="/static/ingame.js"></script>
+</body>
+</html>
