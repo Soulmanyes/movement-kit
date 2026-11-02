@@ -18,17 +18,18 @@ The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
 """
 import argparse
 import json
-import os
 import re
 import shutil
 import struct
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "collector"))
-import steam  # found through the path above
+import steam  # found through the path above; it also puts movekit on the path
+
+from movekit import cfgblock
+from movekit.files import write_atomic
 
 BEGIN = "// strafe-review begin"
 END = "// strafe-review end"
@@ -72,54 +73,10 @@ def apply_settings(game):
     return True
 
 
-def without_block(lines):
-    """lines (each with its line ending) minus our block; markers match with or without \\r."""
-    out, inside = [], False
-    for line in lines:
-        bare = line.rstrip("\r\n")
-        if bare == BEGIN:
-            inside = True
-        elif bare == END and inside:
-            inside = False
-        elif not inside:
-            out.append(line)
-    return out
-
-
-def write_atomic(path, text):
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(text)
-        os.replace(tmp, path)
-    except BaseException:
-        os.unlink(tmp)
-        raise
-
-
-def read_cfg(path):
-    """The file's lines with their endings kept, and the line ending it uses (\\r\\n or \\n)."""
-    text = path.read_text(encoding="utf-8", errors="surrogateescape", newline="") if path.exists() else ""
-    return text.splitlines(keepends=True), "\r\n" if "\r\n" in text else "\n"
-
-
 def set_autoexec(game, add):
     autoexec = Path(game) / "cfg" / "autoexec.cfg"
-    lines, nl = read_cfg(autoexec)
-    if add and not autoexec.exists():
-        autoexec.touch()
-    if add:
-        backup = autoexec.with_name(autoexec.name + ".bak-strafe-review")
-        if not backup.exists():
-            shutil.copy2(autoexec, backup)
-    elif not autoexec.exists():
+    if not cfgblock.set_block(autoexec, BLOCK, add, ".bak-strafe-review"):
         return
-    lines = without_block(lines)
-    if add:
-        if lines and not lines[-1].endswith("\n"):
-            lines[-1] += nl
-        lines += [line + nl for line in BLOCK]
-    write_atomic(autoexec, "".join(lines))
     print(f"{'updated' if add else 'removed the strafe-review block from'} {autoexec}")
 
 

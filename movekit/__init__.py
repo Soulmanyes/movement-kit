@@ -7,4 +7,6 @@ installed copy or a PyInstaller exe. Each module covers one concern:
   keyvalues  Valve's text KeyValues format (libraryfolders.vdf, appmanifests, localconfig.vdf)
   steam      Steam installs, their libraries, and a game's folder in them
   paths      where a tool keeps its own files on each OS
+  files      atomic file writes
+  cfgblock   a tool's marked block of lines in autoexec.cfg
 """

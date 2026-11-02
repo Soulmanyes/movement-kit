@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery is in `movekit` (see "Progress").
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery and Strafe Review's autoexec block are in `movekit` (see "Progress").
 
 ## Goal
 
@@ -27,6 +27,7 @@ movement-kit/
     keyvalues.py        Valve KeyValues reader (flat pairs and nested)
     steam.py            Steam roots, libraryfolders.vdf, appmanifests (Linux, Flatpak, Windows registry)
     check_*.py          fixture checks, no game or Steam needed
+    files.py            atomic file writes
     cfgblock.py         named autoexec blocks: // movekit:<module> begin/end, CRLF-safe, backup, uninstall
     vpk.py              read files out of VPKs
     binds.py            config.cfg binds and aliases
@@ -98,8 +99,16 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - Small widenings, both only find more: Source Yaw now also reads `~/.steam/steam`'s own libraryfolders.vdf and matches Momentum builds by name; Strafe Review also tries the usual install folder names and `~/.local/share/Steam` when `XDG_DATA_HOME` points elsewhere.
 - Verified unchanged: both tools find the same folders and launch options on this PC (probe script, before vs after), Source Yaw `--apply` in a sandbox writes byte-identical files, `install.sh` into a sandbox home works and the installed copy imports movekit, Strafe Review `smoke_test.py` on a rebuilt exe passes all 5 steps, `check_recorder.py` 1305 attempts 0 broken, viewer `check_*.js` pass (`check_css_ssj.js` needs a demo recording, not run).
 
+### Phase 1.2: autoexec cfg blocks (2026-11-02)
+
+- `movekit/files.py` (`write_atomic`) and `movekit/cfgblock.py` (`read_cfg`, `without_block(lines, begin, end)`, `set_block(path, block, add, backup_suffix)`), copied from Strafe Review's `install.py`. `set_block` doesn't print; `install.set_autoexec` keeps its messages. `install.py` imports `write_atomic` for settings.json too.
+- Source Yaw's `exec yaws.cfg` line stays in `yawcore` for now. It works differently (one line, not a marked block; turns CRLF into LF; reads with `errors="replace"`; skips the backup for an empty file; checks legacy backup names) and would be its only user, so sharing it would change behaviour.
+- Markers unchanged (`// strafe-review begin/end`). Moving to `// movekit:<tool>` is a behaviour change and waits for a release step with the owner.
+- Verified unchanged: 36 fixture cases (missing, empty, LF, CRLF without a final newline, block in the middle, block only, stray end marker, non-UTF-8 byte, existing backup; add, add twice, add then remove, remove), comparing bytes, file mode and backup, identical before and after. Rebuilt exe bundles `movekit.cfgblock` and `movekit.files`; `smoke_test.py` passes all 5 steps.
+
 ### Notes for later steps
 
 - The tools' `.github/workflows` now sit in `strafe-review/.github` and `gain-converter/.github`, where GitHub ignores them. They move to the root in the release-CI step (with `working-directory` and `<tool>-v*` tag triggers).
 - Pushing the renamed old tags would trigger the new tag-based CI for every old version. Push the branch first and decide about tags then.
 - Source Yaw's updater installs from the release's source archive by running `install.sh` at the archive root; in the monorepo it is `sourceyaw/install.sh`. Fix in the updater step, before any monorepo release of Source Yaw.
+- Found in Phase 1.2, unchanged so far, candidate fixes for the owner: Strafe Review's install crashes (UnicodeEncodeError) on an autoexec.cfg with a non-UTF-8 byte, because it reads with `surrogateescape` but writes strict UTF-8. `write_atomic` leaves files it writes at mode 0600 (`mkstemp`). Source Yaw turns a CRLF autoexec.cfg into LF and replaces non-UTF-8 bytes when it adds or removes its line.
