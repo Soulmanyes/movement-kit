@@ -128,7 +128,7 @@ def read_binds(game_dir):
     unseen = []
     allowed = forwarded()
     for line in binds.cfg_text(cfg / "config.cfg").splitlines():
-        bind = binds.parse_bind(line)
+        bind = binds.parse_bind(binds.strip_comment(line))
         if not bind:
             continue
         key = bind[0].lower()

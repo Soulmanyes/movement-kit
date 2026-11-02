@@ -428,7 +428,7 @@ def key_conflicts(cstrike, key):
     found = []
     for name in ("config.cfg", "autoexec.cfg"):
         for line in binds.cfg_text(cstrike / "cfg" / name).splitlines():
-            bind = binds.parse_bind(line.split("//")[0])
+            bind = binds.parse_bind(binds.strip_comment(line))
             if not bind or bind[0].lower() != key.lower():
                 continue
             command = bind[1].strip().strip('"')

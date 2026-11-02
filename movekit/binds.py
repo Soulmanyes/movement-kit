@@ -1,8 +1,7 @@
 """Binds and aliases in a Source game's cfg files.
 
 Only parsing lives here. What a command means to a tool (Source Yaw's roles, its own aliases)
-stays in the tool. Each parser keeps the rules the tools have always used: callers strip
-comments or quotes themselves where they did before.
+stays in the tool. Callers strip comments (strip_comment) or quotes themselves.
 """
 
 import glob
@@ -21,6 +20,17 @@ def cfg_text(path):
         return Path(path).read_text(errors="replace")
     except OSError:
         return ""
+
+
+def strip_comment(line):
+    """line up to a `//` comment; a `//` inside quotes (`say "http://x"`) is not one."""
+    quoted = False
+    for i, c in enumerate(line):
+        if c == '"':
+            quoted = not quoted
+        elif not quoted and line.startswith("//", i):
+            return line[:i]
+    return line
 
 
 def parse_bind(line):
