@@ -52,7 +52,7 @@ GTK_TO_MOUSE = {1: "mouse1", 2: "mouse3", 3: "mouse2", 8: "mouse4", 9: "mouse5"}
 
 def source_key(keyval, keycode, display):
     # use the unshifted key, so shift+1 still means "1"
-    ok, keys, vals = display.map_keycode(keycode)
+    ok, _keys, vals = display.map_keycode(keycode)
     if ok and vals:
         keyval = vals[0]
     name = Gdk.keyval_name(keyval) or ""
@@ -245,7 +245,7 @@ def texture_from_image(im, size):
 
 
 def hex_color(rgba):
-    return "#%02x%02x%02x" % tuple(round(c * 255) for c in (rgba.red, rgba.green, rgba.blue))
+    return "#" + "".join(f"{round(c * 255):02x}" for c in (rgba.red, rgba.green, rgba.blue))
 
 
 class KeyCaptureDialog(DialogBase):
