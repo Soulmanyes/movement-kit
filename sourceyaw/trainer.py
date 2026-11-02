@@ -24,7 +24,6 @@ import glob
 import math
 import mmap
 import os
-import re
 import select
 import shutil
 import socket
@@ -38,7 +37,7 @@ from pathlib import Path
 
 import yawcore
 
-from movekit import binds  # after yawcore, which puts movekit on the path
+from movekit import binds, logtail  # after yawcore, which puts movekit on the path
 
 SOCKET = "/run/sourceyaw-inputd.sock"
 INPUTD_CONFIG = "/etc/sourceyaw-inputd.conf"
@@ -494,26 +493,10 @@ def connect():
     return s
 
 
-# console lines that mean a map was entered or left; the game starts in its menu
-_MAP_IN = re.compile(r"Host_NewGame on map |^Connected to |^Map: ")
-_MAP_OUT = re.compile(r"Host_ShutdownServer|Host_Shutdown\b|^Disconnect")
-
-
-def map_state(line):
-    """True when the line means a map was entered, False when left, else None."""
-    if _MAP_IN.search(line):
-        return True
-    if _MAP_OUT.search(line):
-        return False
-    return None
-
-
 def map_tickrate(cfg, game, line):
-    # Momentum: "Host_NewGame on map <name>"; CS:S on joining a server: "Map: <name>"
-    m = re.search(r"on map (\S+)|^Map: (\S+)", line)
-    if not m:
+    name = logtail.map_name(line)
+    if name is None:
         return None
-    name = (m.group(1) or m.group(2)).lower()
     for prefix, rate in cfg["map_tickrates"].items():
         if name.startswith(prefix.lower()):
             return rate
@@ -596,7 +579,7 @@ def run(game):
                         overlay.hide()
                         shown_until = 0.0
                     print(f"trainer: offset {'shown' if showing else 'hidden'}", flush=True)
-                state = map_state(line)
+                state = logtail.map_state(line)
                 if state is not None and state != in_map:
                     in_map = state
                     print(f"trainer: {'in a map' if in_map else 'in the menu'}", flush=True)

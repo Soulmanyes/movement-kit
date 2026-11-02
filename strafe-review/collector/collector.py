@@ -22,6 +22,7 @@ import steam  # sets the path to movekit
 from srrec import Assembler, body
 
 from movekit.files import new_file_mode
+from movekit.logtail import follow
 
 # The repo, or PyInstaller's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
@@ -29,47 +30,9 @@ GAME = steam.find_game()  # None if Momentum isn't found; then the game folder m
 STORE = steam.data_dir() / "attempts"
 LOG = os.path.join(GAME, "yaw.log") if GAME else None  # con_logfile, shared with Source Yaw's yaws.cfg
 NOT_FOUND = "Momentum Mod not found in any Steam library; set MOMENTUM_DIR to its momentum folder"
-POLL = 0.25  # seconds between reads when the log has nothing new
 STALE = 600  # seconds after which an attempt without its end line is dropped
 # What run() has seen since it started, for the viewer's status box (/api/status)
 STATS = {"lines": 0, "recorder": 0, "saved": 0, "dropped": 0, "lastLine": None, "lastRecorder": None, "lastSaved": None, "lastLoad": None}
-
-
-def follow(path, once=False):
-    """Yield complete lines of path as they are written. Starts over when the file
-    is truncated or replaced, and waits while it does not exist."""
-    f, ino, buf = None, None, b""
-    while True:
-        if f is None:
-            try:
-                f = open(path, "rb")  # noqa: SIM115 - stays open across reads, closed on truncation
-                ino = os.fstat(f.fileno()).st_ino
-            except FileNotFoundError:
-                if once:
-                    return
-                yield None
-                time.sleep(POLL)
-                continue
-        data = f.read(1 << 16)
-        if data:
-            buf += data
-            *lines, buf = buf.split(b"\n")
-            for line in lines:
-                yield line.decode("utf-8", "replace")
-            continue
-        if once:
-            return
-        try:
-            st = os.stat(path)
-            replaced = st.st_ino != ino or st.st_size < f.tell()
-        except FileNotFoundError:
-            replaced = True
-        if replaced:
-            f.close()
-            f, buf = None, b""
-            continue
-        yield None  # idle tick
-        time.sleep(POLL)
 
 
 def map_dir(name):
