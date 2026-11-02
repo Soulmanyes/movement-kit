@@ -233,8 +233,8 @@ def serve(sections, port=0):
     return server
 
 
-def run(root=KIT, app_class=None, debug=False):
-    """Open the hub window; returns when it closes."""
+def run(root=KIT, app_class=None, debug=False, first=None):
+    """Open the hub window, on section `first` if given; returns when it closes."""
     try:
         import webview
     except ImportError:
@@ -248,7 +248,8 @@ def run(root=KIT, app_class=None, debug=False):
         # the Wayland app id / X11 class of the GTK window
         from gi.repository import GLib
         GLib.set_prgname(app_class)
-    webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}/",
+    start = next((s.info()["url"] for s in sections if s.key == first), "/")
+    webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
                           js_api=Bridge(sections, problems), width=1000, height=720,
                           min_size=(640, 480), background_color="#15171c")
     webview.start(debug=debug)
@@ -260,8 +261,9 @@ def main():
     ap.add_argument("--root", type=Path, default=KIT, help="folder whose subfolders hold the sections")
     ap.add_argument("--class", dest="app_class", help="window class / app id (tests use *-test)")
     ap.add_argument("--debug", action="store_true", help="allow the web inspector")
+    ap.add_argument("--section", help="open on this section's page (screenshot checks)")
     args = ap.parse_args()
-    run(args.root, args.app_class, args.debug)
+    run(args.root, args.app_class, args.debug, args.section)
 
 
 if __name__ == "__main__":
