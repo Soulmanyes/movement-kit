@@ -67,7 +67,7 @@ Attempts are kept in `~/.local/share/strafe-review/attempts`.
 
 ## Updates and settings
 
-- The page checks GitHub for a new release every few hours and shows a banner when there is one. The Windows exe installs it with **Update** and starts again; tick **Install updates automatically** (bottom left of the main page) to skip the button. It never updates while a game is being played. A copy running from this repo only reports new versions: `git pull` brings them, then `python install.py` again when the recorder changed (it did in 1.2.0) and `panorama_reload` in the game console. The exe installs the recorder by itself at every start.
+- The page checks GitHub for a new release every few hours and shows a banner when there is one. The Windows exe installs it with **Update** and starts again; tick **Install updates automatically** (bottom left of the main page) to skip the button. It never updates while a game is being played. A copy running from this repo only reports new versions: `git pull` brings them, then restart Strafe Review (the page's **Stop** button, then start it again with the game or `systemctl --user restart strafe-review`), because a server still running the old code can't serve the new page files. Run `python install.py` again when the recorder changed (it did in 1.2.0) and `panorama_reload` in the game console. The exe installs the recorder by itself at every start.
 - **Show the jump-1 line in game** (bottom left of the main page) turns on the in-game line after jump 1. It is off by default so it doesn't land on top of anyone's own HUD. Type `panorama_reload` in the game console after changing it.
 
 ## Building the exe
