@@ -1,7 +1,9 @@
 Third-party software in movement-kit.exe
 ========================================
 
-Soulmanyes's Movement Kit's own code is CC0 1.0 (see LICENSE). The Windows exe also contains:
+Soulmanyes's Movement Kit's own code is CC0 1.0 (see LICENSE). The Windows exe (movement-kit.exe,
+or strafe-review.exe in a Strafe Review release, the same program under its old name) also
+contains:
 
 - Python 3.13 (the CPython runtime and standard library), with libffi and the Microsoft Visual C++
   runtime (Microsoft Distributable Code). Licence: the Python Software Foundation License, with the

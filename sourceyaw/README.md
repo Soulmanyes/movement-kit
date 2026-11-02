@@ -41,12 +41,22 @@ install the dependencies yourself.
 
 ## Install
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh
-```
+Two ways, and they end up the same:
 
-It installs the latest release. Or clone the repository and run `./install.sh` from it. Run the
-same command again to update, or let the app do it (see **Updates** below).
+- **In the hub:** install [Soulmanyes's Movement Kit](../README.md#install) and click **Install**
+  on the Source Yaw card of its Modules page. The card runs the same `install.sh`, but it has no
+  terminal to ask for your password: if Python, GTK 4, libadwaita or Pillow is missing, it stops
+  with an error. Install them (or run `install.sh` once in a terminal), then press Install again.
+- **On its own:**
+
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh
+  ```
+
+  It installs the latest release. Or clone the repository and run `./install.sh` from it. Run the
+  same command again to update, or let the app do it (see **Updates** below). If you install the
+  hub later, it takes this copy over as its Source Yaw module the first time it starts, keeping
+  your auto-update choice.
 
 Then:
 
@@ -68,8 +78,9 @@ That's all Momentum Mod needs. For CS:S's crosshair colours, also:
    starts each one that is installed (see the repository's README to turn one off per game).
    `sourceyaw-run`, its name before, still works and starts only Source Yaw.
 
-To remove the app, run the install command with `--uninstall` and take `movekit-run` (or `sourceyaw-run`)
-out of the launch options, unless another movement tool still uses it:
+To remove the app, press **Uninstall** on its card in the hub, or run the install command with
+`--uninstall`. Then take `movekit-run` (or `sourceyaw-run`) out of the launch options, unless
+another movement tool still uses it:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh -s -- --uninstall
@@ -77,7 +88,8 @@ curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/source
 ./install.sh --uninstall
 ```
 
-It asks whether to remove `yaws.cfg` and its `autoexec.cfg` line too. If you installed the strafe
+The command asks whether to remove `yaws.cfg` and its `autoexec.cfg` line too; the card always
+removes them, and keeps your settings unless you tick **Also delete saved data**. If you installed the strafe
 trainer's input service, the uninstall prints the command that removes it.
 
 If you already had a `yaws.cfg` of your own, the app saves it as `yaws.cfg.bak-sourceyaw`
@@ -101,7 +113,9 @@ before writing its own, and uninstalling puts it back.
   one, a banner offers **Update**, which downloads it and runs its installer; restart the app
   to use it. Turn on **Install updates automatically** to skip the banner. A copy running
   from a git clone only tells you about the update. If a new release needs new system
-  packages, the update stops and asks you to run `install.sh` in a terminal.
+  packages, the update stops and asks you to run `install.sh` in a terminal. Once the hub
+  manages Source Yaw, this switch and the hub's card are the same switch, and **Update** installs
+  through the hub, so both always run the same version.
 
 If the game is already running when you press Apply, run `exec yaws` in the console.
 

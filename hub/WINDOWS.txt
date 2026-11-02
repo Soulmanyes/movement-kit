@@ -1,47 +1,59 @@
 Soulmanyes's Movement Kit for Windows (test build)
 =================================================
 
-One program for the kit's tools on Windows:
-- the hub, a settings window with a section per tool (Strafe Review, HUD, Gain Converter);
-- Strafe Review, which records your Momentum Mod bhop attempts and shows them on a review page in
-  your browser (graphs of each jump, mistakes, comparisons). It only reads the game's console log
-  and adds a HUD script; it sends nothing anywhere. The page runs on your own PC at
+One program for the kit's tools on Windows: the hub, a window with a Modules page and a section per
+installed tool. The tools are modules the hub downloads when you install them:
+- Strafe Review records your Momentum Mod bhop attempts and shows them on a review page in your
+  browser (graphs of each jump, mistakes, comparisons). It only reads the game's console log and
+  adds a HUD script; it sends nothing anywhere. The page runs on your own PC at
   http://127.0.0.1:8765/
+- Gain Converter converts strafe gain between CS:S and Momentum Mod.
 
 This is an untested build. Windows may warn about it, because the exe isn't signed.
 
 Coming from strafe-review.exe? Its update installs this program under the old name
-strafe-review.exe, so your Steam launch option keeps working. A double-click now opens the hub
-instead of a console window.
+strafe-review.exe, so your Steam launch option keeps working. On its first start it downloads the
+Strafe Review module and keeps your attempts and your auto-update choice. If it's offline then, it
+tries again on the next start; the game starts either way. A double-click now opens the hub instead
+of a console window. Wherever these steps say movement-kit.exe, yours is strafe-review.exe.
 
 
 Setup
 -----
 
 1. Unzip this folder somewhere you keep it, for example Documents\movement-kit.
-2. In Steam, right-click Momentum Mod > Properties > Launch options, and put in
+2. Double-click movement-kit.exe. The hub opens on its Modules page, with no tools installed yet.
+3. Click Install on the Strafe Review card. It needs Momentum Mod installed through Steam: it finds
+   the game and adds the recorder and the autoexec.cfg lines (see below).
+4. In Steam, right-click Momentum Mod > Properties > Launch options, and put in
        "C:\full\path\to\movement-kit.exe" %command%
-   (with the quotes, and your real path to the exe). From then on, starting the game installs
-   the recorder, starts Strafe Review in the background and opens the review page.
-3. Double-click movement-kit.exe to open the hub. In its Strafe Review section, "Open review"
-   starts Strafe Review if it isn't running (and installs the recorder) and opens the page.
-   "Stop" stops it. Without the launch option, use "Open review" before you play.
-4. Restart Momentum Mod if it was running, so it reads the new lines in cfg\autoexec.cfg.
+   (with the quotes, and your real path to the exe). From then on, starting the game starts
+   Strafe Review in the background and opens the review page.
+5. Without the launch option, use "Open review" in the hub's Strafe Review section before you
+   play. It starts Strafe Review if it isn't running and opens the page. "Stop" stops it.
+6. Restart Momentum Mod if it was running, so it reads the new lines in cfg\autoexec.cfg.
 
-What it changes in the game folder:
+What Strafe Review changes in the game folder:
 - adds the folder custom\0-strafe-review (the HUD script that records attempts). Its name sorts
   first, so it works next to other HUD mods in custom\. It copies their timer.xml (or the game's)
   and adds one line, and does that again on every start, so their updates carry over.
 - adds a block between "// movekit:strafe-review begin" and "// movekit:strafe-review end" to
   cfg\autoexec.cfg
   (the original is kept as cfg\autoexec.cfg.bak-strafe-review)
-To undo: delete custom\0-strafe-review and that block.
+Uninstall on its card takes both out again.
 
-Attempts are saved in %LOCALAPPDATA%\strafe-review\attempts. Everything the program prints goes
-to %LOCALAPPDATA%\strafe-review\strafe-review.log.
+The Modules page:
+- Update shows on a card when a new version is out; "What's new" lists the changes. "Update all"
+  at the top updates every card that has one. The hub itself has a card too.
+- Auto-update is off for every card. While it's off the card shows an amber "Auto-update off"
+  strip; "Turn on" turns it on.
+- Roll back returns to the version before the last update.
+- Uninstall removes the tool, its game files and its autoexec.cfg block. Your attempts stay
+  unless you tick "Also delete saved data".
 
-Updates: the hub's Strafe Review section and the review page show when a new version is out, with
-an Update button; it installs it and starts again by itself.
+Attempts are saved in %LOCALAPPDATA%\strafe-review\attempts. The hub's own messages go to
+%LOCALAPPDATA%\movekit\movement-kit.log, Strafe Review's to
+%LOCALAPPDATA%\strafe-review\strafe-review.log.
 
 The jump-1 line in game (landing speed, gain %, per strafe, biggest mistake, top middle of the
 screen) is off by default. Turn it on in the hub's HUD section, then type panorama_reload in the
@@ -51,21 +63,26 @@ game console.
 Test checklist
 --------------
 
-Please note what you see for each step. Screenshots help. If something fails, send the file
-%LOCALAPPDATA%\strafe-review\strafe-review.log (paste that path into the Explorer address bar).
+Please note what you see for each step. Screenshots help. If something fails, send the files
+%LOCALAPPDATA%\movekit\movement-kit.log and %LOCALAPPDATA%\strafe-review\strafe-review.log (paste
+a path into the Explorer address bar).
 
 1. Windows warnings: did SmartScreen ("Windows protected your PC") or your antivirus say anything
-   when you unzipped or started the exe? What exactly?
-2. Double-click movement-kit.exe. Does the hub window open? Click through its sections.
-3. In the Strafe Review section, click "Open review". Does the review page open in your browser?
-4. Play: restart Momentum, play a few attempts on any bhop map. Do they show up on the page?
-5. Click Stop in the Strafe Review section. Does movement-kit.exe leave Task Manager (the hub
-   window's own copy stays while the hub is open)?
-6. Steam way: set the launch option from Setup step 2 and start the game from Steam.
+   when you unzipped or started the exe, or when the hub downloaded a module? What exactly?
+2. Double-click movement-kit.exe. Does the hub open on the Modules page?
+3. Install Strafe Review and Gain Converter from their cards. Do their sections show up in the
+   sidebar? Click through them.
+4. In the Strafe Review section, click "Open review". Does the review page open in your browser?
+5. Play: restart Momentum, play a few attempts on any bhop map. Do they show up on the page?
+6. Click Stop in the Strafe Review section. Does the second movement-kit.exe leave Task Manager
+   (the hub window's own copy stays while the hub is open)?
+7. Steam way: set the launch option from Setup step 4 and start the game from Steam.
    - Does the review page open while the game starts? Do attempts show up?
    - Quit the game. Does Steam still show Momentum Mod as "Running" or "Stop"?
    - Is movement-kit.exe still in Task Manager? (Strafe Review stays running in the background,
      so the page keeps working after the game.)
-7. Gain Converter section: type a gain. Does the other side and the graph follow?
+8. Gain Converter section: type a gain. Do the other side and the graph follow?
+9. Uninstall Gain Converter from its card. Does its section go away? Install it again.
+10. If a card offers Update, try it, then Roll back.
 
 Thanks for testing!

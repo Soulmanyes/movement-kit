@@ -16,7 +16,7 @@ Replays played to the end count as finishes (see [Replays](#replays)). Bonus tra
 
 Run stats, graphs and paths on `/` and `/compare` each have Copy and Save buttons: Copy puts a picture of that section on the clipboard, Save downloads it as a PNG.
 
-Everything stays on your PC: the page runs at http://127.0.0.1:8765/ and the only thing it asks the internet for is whether a new release is out.
+Everything stays on your PC: the page runs at http://127.0.0.1:8765/ and asks the internet for nothing. Updates come through the kit's hub.
 
 ## Replays
 
@@ -37,42 +37,35 @@ Version 1.1.0 changes how recordings are read, so numbers on attempts you alread
 ## Requirements
 
 - Momentum Mod from Steam (the Playtest build works; the game folder is found through Steam's library list).
-- Windows 10 or 11 for the exe, or Linux with Python 3.10 or newer and a systemd user session for the launch wrapper.
+- [Soulmanyes's Movement Kit](../README.md#install), the hub that installs it: Windows 10 or 11, or Linux with Python 3.10 or newer and a systemd user session.
 - A browser.
 
-## Install on Windows
+## Install
 
-1. Download `strafe-review-windows.zip` from the [latest Strafe Review release](https://github.com/Soulmanyes/movement-kit/releases?q=strafe-review-v&expanded=true) and unzip it to a folder you keep (the Steam launch option points at it).
-2. Double-click `strafe-review.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed. It finds Momentum, installs the recorder and the `autoexec.cfg` block (see below), then opens the review page. Keep its console window open while playing, or click **Stop** on the page to end it.
-3. Restart Momentum once, so it reads the new `autoexec.cfg` lines.
-4. Or let Steam start it with the game: Momentum Mod > Properties > Launch options: `"C:\path\to\strafe-review.exe" %command%`. It then runs in the background, opens the page as the game starts, and keeps running for review until you click **Stop**.
+1. Install the hub (see the [repository's README](../README.md#install)) and open it.
+2. Click **Install** on the Strafe Review card of the Modules page. It finds Momentum (`MOMENTUM_DIR` points it at another folder), installs the recorder and the `autoexec.cfg` block (see below) and registers its launch step.
+3. Set Momentum Mod's Steam launch options (Properties > Launch options) to the kit's launch option:
+   - Windows: `"C:\full\path\to\movement-kit.exe" %command%`. It starts Strafe Review in the background as the game starts and opens the page.
+   - Linux: `movekit-run %command%`, shared with the other tools (see the repository's README). The older `strafe-review-run %command%` still works and starts only Strafe Review. The server runs as the systemd user unit `strafe-review`.
+4. Restart Momentum once, so it reads the new `autoexec.cfg` lines.
 
-Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts`, and everything it prints also goes to `%LOCALAPPDATA%\strafe-review\strafe-review.log`. `WINDOWS.txt` in the zip has the same steps.
+The server keeps running after the game quits, so the page stays up for review. **Stop** on the page or in the hub's Strafe Review section ends it; **Open review** there starts it again (or before playing, without the launch option).
 
-## Install on Linux
+Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts` on Windows and `~/.local/share/strafe-review/attempts` on Linux. What the server prints also goes to `strafe-review.log` in the folder above.
 
-1. Clone [Movement Kit](https://github.com/Soulmanyes/movement-kit) and keep it where it is; the launcher runs from its `strafe-review` folder.
-2. In `strafe-review`, `python install.py` finds Momentum (or pass `--game DIR`, or set `MOMENTUM_DIR`), installs the recorder and the `autoexec.cfg` block, registers its launch hook with `movekit-run` and links `movekit-run` into `~/.local/bin`.
-3. Set Momentum Mod's Steam launch options to `movekit-run %command%`, the launch option the movement tools share (it also starts Source Yaw if that is installed; see the repository's README). The older `strafe-review-run %command%` still works and starts only Strafe Review. The game start then starts the server as the systemd user unit `strafe-review`, which keeps running after the game quits; the page opens as the game starts. **Stop** on the page or `systemctl --user stop strafe-review` ends it.
-4. Restart Momentum once. Or start the server by hand: `python viewer/server.py` (`--port`, `--no-collect` to only serve, `--no-browser`).
-
-Attempts are kept in `~/.local/share/strafe-review/attempts`.
+**From a clone** of the repository (Linux): `python install.py` in `strafe-review` does what the card's Install does (`--game DIR` for another game folder), and `python viewer/server.py` starts the server by hand (`--port`, `--no-collect` to only serve, `--no-browser`). The hub run from the clone shows the same card and runs the tool in place.
 
 ## What it changes in the game folder
 
 - `custom/0-strafe-review`: the recorder script, plus a `timer.xml` that loads it. That file is a copy of the one the game would use otherwise (another HUD mod's in `custom/`, or the game's own) with one line added, made again on every start so other mods' updates carry over. The folder name sorts first because the game mounts `custom/` folders alphabetically and the first file found wins.
 - `cfg/autoexec.cfg`: a block between `// movekit:strafe-review begin` and `// movekit:strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to) and `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick). The first install keeps the original as `autoexec.cfg.bak-strafe-review`. A block from before 2026-11-02 (`// strafe-review begin`) is replaced where it stands.
 
-`python install.py --uninstall` (or deleting both by hand on Windows) takes them out again. If no attempts show up, the main page shows a **Setup check** box that says where it stops.
+**Uninstall** on the card takes them out again (`python install.py --uninstall` from a clone). Your attempts stay unless you tick **Also delete saved data**. If no attempts show up, the main page shows a **Setup check** box that says where it stops.
 
 ## Updates and settings
 
-- The page checks GitHub for a new release every few hours and shows a banner when there is one. The Windows exe installs it with **Update** and starts again; tick **Install updates automatically** (bottom left of the main page) to skip the button. It never updates while a game is being played. A copy running from this repo only reports new versions: `git pull` brings them, then restart Strafe Review (the page's **Stop** button, then start it again with the game or `systemctl --user restart strafe-review`), because a server still running the old code can't serve the new page files. Run `python install.py` again when the recorder changed (it did in 1.2.0) and `panorama_reload` in the game console. The exe installs the recorder by itself at every start.
-- **Show the jump-1 line in game** (bottom left of the main page) turns on the in-game line after jump 1. It is off by default so it doesn't land on top of anyone's own HUD. Type `panorama_reload` in the game console after changing it.
-
-## Building the exe
-
-`python build.py` (with `pip install pyinstaller`) builds `dist/strafe-review.exe` on Windows. `.github/workflows/strafe-review-windows.yml` at the monorepo root does it on GitHub, runs `smoke_test.py` against the built exe and attaches the zip to a `strafe-review-v*` tag's release.
+- Updates come from Strafe Review's card on the hub's Modules page: **Update** with **What's new**, **Roll back**, and an auto-update switch that starts off. An update stops the server, swaps the files, reinstalls the recorder and starts the server again. A copy running from a clone is updated by `git pull`: then restart Strafe Review (**Stop**, then start it again with the game or `systemctl --user restart strafe-review`), because a server still running the old code can't serve the new page files, and run `python install.py` again when the recorder changed. Type `panorama_reload` in the game console after a recorder change.
+- **Show the jump-1 line in game** (bottom left of the main page, or the hub's HUD section) turns on the in-game line after jump 1. It is off by default so it doesn't land on top of anyone's own HUD. Type `panorama_reload` in the game console after changing it.
 
 More plans: [PLAN.md](PLAN.md). The saved attempt format, for tools that read attempts: [FORMAT.md](FORMAT.md).
 
@@ -80,4 +73,4 @@ More plans: [PLAN.md](PLAN.md). The saved attempt format, for tools that read at
 
 Thanks to Frank for testing the Windows version.
 
-License: CC0 1.0 (see [LICENSE](LICENSE)). The Windows exe also bundles Python, OpenSSL and the PyInstaller bootloader under their own licences; see [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+License: CC0 1.0 (see [LICENSE](LICENSE)). The hub's Windows exe, which runs it there, bundles Python and other parts under their own licences; see [hub/THIRD-PARTY-NOTICES.txt](../hub/THIRD-PARTY-NOTICES.txt).

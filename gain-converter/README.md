@@ -19,23 +19,6 @@ The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top r
 
 ## Install
 
-### Windows
+### Licence
 
-Download `gain-converter-windows.zip` from the [latest Gain Converter release](https://github.com/Soulmanyes/movement-kit/releases?q=gain-converter-v&expanded=true), unzip it and double-click `gain-converter.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed.
-
-### Linux (or Windows with Python)
-
-Needs Python 3 with tkinter (Arch/CachyOS: `pacman -S tk`; Debian/Ubuntu: `apt install python3-tk`). No other packages.
-
-```
-git clone https://github.com/Soulmanyes/movement-kit
-python movement-kit/gain-converter/gain_converter.py
-```
-
-## In the hub
-
-The kit's settings hub (`python movekit/hub.py`, needs pywebview) has a Gain Converter section with the same controls. The curve for it is `movekit/web/gain.js`.
-
-## Licence
-
-CC0 1.0 (see `LICENSE`). The Windows exe also bundles Python, Tcl/Tk and the PyInstaller bootloader; their licences are in the zip (see `THIRD-PARTY-NOTICES.txt`).
+CC0 1.0 (see `LICENSE`). Its own Windows exe also bundles Python, Tcl/Tk and the PyInstaller bootloader; their licences are in the zip (see `THIRD-PARTY-NOTICES.txt`).
