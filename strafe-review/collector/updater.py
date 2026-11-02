@@ -1,11 +1,11 @@
 """Update check against Strafe Review's GitHub releases. Only the standard library.
 
-check() asks GitHub for the latest release at most every CHECK_EVERY seconds and remembers the
-answer in <data_dir>/updates.json (the same keys as the owner's other apps: auto, checked, latest,
-installed, failed). install() is for the Windows exe only: it downloads the release zip, puts the
-new exe next to the running one and swaps them (a running exe can be renamed, not overwritten);
-the new version runs from the next start, which the server does right away. A copy running from
-the repo (Linux, or Python on Windows) only reports updates: git pull brings them.
+check() asks GitHub for the latest strafe-review-v* release at most every CHECK_EVERY seconds and
+remembers the answer in <data_dir>/updates.json (the same keys as the owner's other apps: auto,
+checked, latest, installed, failed). install() is for the Windows exe only: it downloads the
+release zip, puts the new exe next to the running one and swaps them (a running exe can be renamed,
+not overwritten); the new version runs from the next start, which the server does right away. A
+copy running from the repo (Linux, or Python on Windows) only reports updates: git pull brings them.
 """
 import os
 import re
@@ -18,13 +18,13 @@ import steam
 from movekit import updater as kit  # after steam, which puts movekit on the path
 
 VERSION = "1.4.0"  # bump in the same commit as the release tag
-REPO = "Soulmanyes/strafe-review"
+REPO = "Soulmanyes/movement-kit"
 ASSET = "strafe-review-windows.zip"
 EXE = "strafe-review.exe"
 CHECK_EVERY = 6 * 3600  # seconds between automatic checks
 TIMEOUT = kit.TIMEOUT
-# Tests point this at a local server; it answers like GitHub's releases/latest
-API = os.environ.get("STRAFE_REVIEW_UPDATE_API", f"https://api.github.com/repos/{REPO}/releases/latest")
+# Tests point this at a local server; it answers like GitHub's release list
+API = os.environ.get("STRAFE_REVIEW_UPDATE_API", f"https://api.github.com/repos/{REPO}/releases?per_page=100")
 STATE_FILE = steam.data_dir() / "updates.json"
 
 parse_version = kit.parse_version
@@ -46,6 +46,7 @@ def checkout_version():
 
 class Updater(kit.Updater):
     check_every = CHECK_EVERY
+    tag_prefix = "strafe-review-v"
 
     def __init__(self, state_file=STATE_FILE, version=None):
         self._version = version

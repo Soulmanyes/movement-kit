@@ -11,9 +11,10 @@ Run by .github/workflows/windows.yml on the Windows build; it runs on Linux too.
    exits with an error (the SO_REUSEADDR check on Windows).
 3. Launch option: runs the "game", hands back its exit code, leaves the server running, opens the page.
 4. The page's Stop button (POST /api/stop) ends that background server.
-5. Update: a fake GitHub answers with v99.0.0 and a zip of this exe; a copy of the program in its own
-   folder downloads it, swaps the exe and starts again. The new copy is the same build, so it
-   must mark v99.0.0 as failed, which keeps auto mode from looping.
+5. Update: a fake GitHub lists strafe-review-v99.0.0 (behind another tool's release) and a zip of
+   this exe; a copy of the program in its own folder downloads it, swaps the exe and starts again.
+   The new copy is the same build, so it must mark strafe-review-v99.0.0 as failed, which keeps
+   auto mode from looping.
 The browser is a stand-in that writes the URL to a file.
 """
 import http.server
@@ -103,13 +104,17 @@ def post(path, body=None):
 
 
 def fake_github(zip_path):
-    """A local stand-in for GitHub's releases/latest and the release asset; returns its port."""
+    """A local stand-in for GitHub's release list and the release asset; returns its port. The list
+    holds another tool's newer release first, as the monorepo's does."""
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             port = self.server.server_address[1]
-            if self.path == "/latest":
-                body = json.dumps({"tag_name": "v99.0.0", "html_url": "", "assets": [
-                    {"name": "strafe-review-windows.zip", "browser_download_url": f"http://127.0.0.1:{port}/asset"}]}).encode()
+            if self.path == "/releases":
+                body = json.dumps([
+                    {"tag_name": "sourceyaw-v100.0.0", "html_url": "", "assets": []},
+                    {"tag_name": "strafe-review-v99.0.0", "html_url": "", "assets": [
+                        {"name": "strafe-review-windows.zip", "browser_download_url": f"http://127.0.0.1:{port}/asset"}]},
+                ]).encode()
             else:
                 body = zip_path.read_bytes()
             self.send_response(200)
@@ -254,13 +259,13 @@ def main():
         with zipfile.ZipFile(tmp / "release.zip", "w") as z:
             z.write(exe, "strafe-review.exe")
         api = fake_github(tmp / "release.zip")
-        env2 = {**env, "STRAFE_REVIEW_UPDATE_API": f"http://127.0.0.1:{api}/latest"}
+        env2 = {**env, "STRAFE_REVIEW_UPDATE_API": f"http://127.0.0.1:{api}/releases"}
         before = copy.stat().st_mtime_ns
         subprocess.Popen([copy, "--serve"], env=env2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         wait_serving()
         post("/api/update/check")
         info = json.loads(get("/api/update")[1])
-        if not (info.get("latest") and info["latest"]["tag"] == "v99.0.0" and info.get("canInstall")):
+        if not (info.get("latest") and info["latest"]["tag"] == "strafe-review-v99.0.0" and info.get("canInstall")):
             fail(f"/api/update after the check: {info}")
         code, body = post("/api/update/install")
         if code != 200:
@@ -268,7 +273,7 @@ def main():
         time.sleep(3)
         wait_serving()
         state = json.loads((tmp / "data" / "strafe-review" / "updates.json").read_text())
-        if state.get("failed") != "v99.0.0" or copy.stat().st_mtime_ns == before:
+        if state.get("failed") != "strafe-review-v99.0.0" or copy.stat().st_mtime_ns == before:
             fail(f"after the update: exe swapped {copy.stat().st_mtime_ns != before}, state {state}")
         end = time.time() + 30
         while (app / (exe.name + ".old")).exists() and time.time() < end:

@@ -18,7 +18,7 @@ import trainer  # noqa: E402
 import updater
 
 APP_ID = "io.github.soulmanyes.SourceYaw"
-REPO = "Soulmanyes/sourceyaw"
+REPO = "Soulmanyes/movement-kit"
 
 # GDK key names -> Source bind names, for keys whose names differ
 GDK_TO_SOURCE = {

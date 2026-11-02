@@ -10,6 +10,7 @@ install modes below:
   swap_exe        download the release zip and swap in its exe next to the running one (Windows)
 """
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -25,8 +26,10 @@ TIMEOUT = 10  # seconds for the release check
 
 
 def parse_version(text):
-    """"v1.4.0" or "1.4" -> (1, 4, 0); None if it isn't a plain version number."""
-    parts = (text or "").strip().lstrip("vV").split(".")
+    """"v1.4.0", "1.4" or a monorepo tag like "sourceyaw-v1.4.0" -> (1, 4, 0); None if it isn't
+    a plain version number."""
+    text = re.sub(r"^[A-Za-z][A-Za-z0-9_-]*-(?=[vV]\d)", "", (text or "").strip())
+    parts = text.lstrip("vV").split(".")
     try:
         nums = [int(p) for p in parts]
     except ValueError:
@@ -48,9 +51,10 @@ def frozen_exe():
 
 class Updater:
     check_every = 24 * 3600  # seconds between automatic checks; a tool sets its own
+    tag_prefix = ""          # the tool's tags in the monorepo, "sourceyaw-v"; a tool sets its own
 
     def __init__(self, api_url, agent, state_file):
-        self.api_url = api_url              # GitHub's releases/latest for the tool
+        self.api_url = api_url              # GitHub's release list for the repo, ?per_page=100
         self.agent = agent                  # User-Agent for GitHub
         self.state_file = Path(state_file)
         self.state = self._load()
@@ -90,11 +94,26 @@ class Updater:
         return {"tag": data["tag_name"], "url": data.get("html_url", "")}
 
     def fetch(self):
-        """GitHub's answer for the latest release, parsed. Raises OSError/ValueError."""
+        """GitHub's answer for this tool's latest release, parsed. Raises OSError/ValueError."""
         req = urllib.request.Request(self.api_url, headers={
             "Accept": "application/vnd.github+json", "User-Agent": self.agent})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return json.load(r)
+            return self.pick(json.load(r))
+
+    def pick(self, releases):
+        """The highest version among the repo's releases with this tool's tag_prefix, leaving
+        out drafts and pre-releases. The monorepo lists every tool's releases, newest first by
+        date, so the first entry may belong to another tool. Raises ValueError, not TypeError:
+        callers catch OSError/ValueError/KeyError."""
+        if not isinstance(releases, list):
+            raise ValueError("GitHub's answer isn't a release list")  # noqa: TRY004 (see above)
+        mine = [r for r in releases if isinstance(r, dict)
+                and isinstance(r.get("tag_name"), str) and r["tag_name"].startswith(self.tag_prefix)
+                and not r.get("draft") and not r.get("prerelease")
+                and parse_version(r["tag_name"])]
+        if not mine:
+            raise ValueError(f"No {self.tag_prefix}* release on GitHub yet")
+        return max(mine, key=lambda r: parse_version(r["tag_name"]))
 
     def _refresh(self):
         return self._store(self.release_info(self.fetch()))
