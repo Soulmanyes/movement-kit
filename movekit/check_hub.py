@@ -11,7 +11,7 @@ the bridge (a result, no
 args, an unknown section or function, args that aren't an object, wrong arguments, a function
 that raises, a result JSON can't hold, one section's calls never overlapping), and the page server
 (home redirect, /web/ files, a section's page and its neighbours, path traversal and unknown
-sections refused, a foreign Host header refused).
+sections refused, a foreign Host header refused), and the kit's own sections loading on both OSes.
 """
 import http.client
 import sys
@@ -175,6 +175,11 @@ def main():
             check(get(port, "/web/hub.js", host=f"evil.example:{port}")[0] == 403, "foreign Host refused")
         finally:
             server.shutdown()
+    # the real kit: every section loads, on both OSes
+    for plat in ("linux", "win32"):
+        real, probs = hub.discover(hub.KIT, platform=plat)
+        check(not probs and "gain-converter" in [s.key for s in real], f"the kit's own sections load on {plat}: "
+              f"{[s.key for s in real]} {probs}")
     print("all hub checks passed")
 
 

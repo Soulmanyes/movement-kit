@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). Left: archiving the old repos once a real install has moved. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd; 3.1 (shell) done 2026-11-02.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). Left: archiving the old repos once a real install has moved. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd; 3.1 (shell) and 3.2 (Gain Converter section) done 2026-11-02.
 
 ## Goal
 
@@ -117,7 +117,7 @@ Toolkit and split decided by the owner 2026-11-02; steps 3.1–3.8 OK'd the same
 
 **Steps** (the old windows keep working throughout; checks: the existing ones plus a screenshot check of each new section):
 1. **3.1 Shell.** `movekit/hub.py`, section discovery, the `call` bridge, shared CSS, and `movekit/check_hub.py` (discovery, bridge and OS filter, run without a window). Install `python-pywebview`.
-2. **3.2 Gain Converter section.** The simplest section, so it proves the contract. It settles "gain math in one language": one JS module `movekit/web/gain.js`, used by this section and the viewer's CSS-SSJ code; Python keeps no copy.
+2. **3.2 Gain Converter section.** The simplest section, so it proves the contract. It settles "gain math in one language": one JS module `movekit/web/gain.js` for every page. (Found in 3.2: the viewer has no copy of the conversion curve; its CSS-SSJ code scores ticks, a different calculation. So `gain.js` serves the section, and `gain_converter.py` keeps its copy until 3.8, held equal by `gain-converter/check_gain.py`.)
 3. **3.3 HUD section.** `hud/` takes over the jump-1 setting. The review page's sidebar toggle stays until the hub ships on Windows (3.7), then goes.
 4. **3.4 Strafe Review section.** Status, the updater, "Open review" (starts the server if it's down).
 5. **3.5 Source Yaw logic out of the window.** Most of it is already in `yawcore` (`load_settings`, `validate`, `apply`, `key_conflicts`, `set_autoexec`, `install_krosshair`, `recolor`). Still in `app.py`: `check_setup`'s problem text, `base_options`, `collect`, `trainer_value` and the trainer status. They move to `sourceyaw/settings_api.py`, and the GTK app calls it, with no change in behaviour.
@@ -130,7 +130,7 @@ Done when: the hub window runs on Linux and Windows with every section, the revi
 ## Later / undecided
 
 - **Panorama module kit.** One installer for `custom/0-*` folders and `timer.xml` includes, shared by the recorder, `mmod-trainer-height` and a future JHUD.
-- **Gain math in one language.** Settled in the Phase 3 draft (3.2): one shared JS module, if the plan is OK'd.
+- **Gain math in one language.** Done in 3.2: `movekit/web/gain.js`; the Python copy goes with the tkinter window in 3.8.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
 
 ## Progress
@@ -276,6 +276,12 @@ The first behaviour changes, one commit each:
 - `python movekit/hub.py [--root DIR] [--class NAME] [--section KEY] [--debug]`. pywebview is imported only there, so the rest of `movekit` stays stdlib. `--class movekit-hub-test` makes the window float without focus (Hyprland rule for `*-test`), and `--section` opens on a section's page for screenshot checks.
 - Window checked 2026-11-02 (pywebview 6.2.1, WebKitGTK) with fixture sections from a temp `--root`: home page with the section list and the broken one listed, the sidebar's active section, and a bridge call (`add`) returning into the page.
 - Checked: new `movekit/check_hub.py` (43 checks: discovery, OS filter, every kind of broken section, same-named helpers kept apart, the bridge's errors, calls not overlapping, the page server's paths and Host check).
+
+### Phase 3.2: Gain Converter section (2026-11-02)
+
+- `gain-converter/hub_section.py` (key `gain-converter`, Linux and Windows, no Python functions) and `gain-converter/hub/` (`index.html`, `gain-page.js`, `gain.css`): the tkinter window's controls in the page. The direction switch, − / box / +, the slider, the result, and the SVG graph with the measured dots, the current-value guides and click or drag to pick.
+- `movekit/web/gain.js` holds the curve (`K`, `MEASURED`, `cssToMom`, `momToCss`) for browsers and node. The viewer turned out to have no copy of it (see step 3.2 above), so the only other copy is `gain_converter.py`, kept for the old window until 3.8.
+- Checked: new `gain-converter/check_gain.py` (node runs `gain.js`; K, the measured points and 401 values each way equal Python's). `check_hub.py` now also loads the kit's own sections on Linux and Windows with no problems. Window screenshot: 90 % CS:S gives ≈ 96.5 % Momentum, as in the tkinter window; all layers visible. Clicking and dragging in the window untested (needs focus).
 
 ### Notes for later steps
 

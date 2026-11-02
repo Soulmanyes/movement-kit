@@ -1,0 +1,20 @@
+:root { --css: #f0a63a; --mom: #4fb3ff; }
+.gc-switch { display: flex; gap: 8px; margin-bottom: 12px; }
+.gc-switch button { font-weight: 600; padding: 8px 16px; color: var(--muted); }
+.gc-switch button.on { color: #101216; }
+.gc-switch .gc-css.on { background: var(--css); border-color: var(--css); }
+.gc-switch .gc-mom.on { background: var(--mom); border-color: var(--mom); }
+.gc-input { text-align: center; }
+.gc-in-label { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+.gc-row { display: flex; justify-content: center; align-items: center; gap: 10px; }
+.gc-step { font-size: 18px; font-weight: 700; width: 42px; }
+#gc-box { width: 96px; text-align: center; font-size: 22px; font-weight: 700; }
+.gc-unit { font-size: 18px; margin-left: -6px; }
+#gc-slider { width: 100%; margin-top: 12px; }
+.gc-result { text-align: center; margin: 6px 0 12px; }
+#gc-result { font-size: 26px; font-weight: 700; }
+.gc-graph { padding: 8px; }
+#gc-graph { display: block; width: 100%; height: 320px; cursor: crosshair; touch-action: none; }
+#gc-graph text { font: 11px system-ui, sans-serif; fill: var(--muted); }
+#gc-graph .axis-title { font-weight: 600; font-size: 12px; }
+.gc-note { text-align: center; font-size: 12px; }

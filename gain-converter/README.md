@@ -32,6 +32,10 @@ git clone https://github.com/Soulmanyes/movement-kit
 python movement-kit/gain-converter/gain_converter.py
 ```
 
+## In the hub
+
+The kit's settings hub (`python movekit/hub.py`, needs pywebview) has a Gain Converter section with the same controls. The curve for it is `movekit/web/gain.js`.
+
 ## Licence
 
 CC0 1.0 (see `LICENSE`). The Windows exe also bundles Python, Tcl/Tk and the PyInstaller bootloader; their licences are in the zip (see `THIRD-PARTY-NOTICES.txt`).
