@@ -33,6 +33,7 @@ class LogTail:
             raise ValueError(f"start must be 'begin' or 'end', not {start!r}")
         self.path = path
         self._f, self._ino, self._buf = None, None, b""
+        self.opened = 0  # files opened so far; it goes up when the log is replaced, truncated or appears
         if start == "end" and self._open():
             self._f.seek(0, os.SEEK_END)
 
@@ -42,6 +43,7 @@ class LogTail:
         except FileNotFoundError:
             return False
         self._ino = os.fstat(self._f.fileno()).st_ino
+        self.opened += 1
         return True
 
     def lines(self):
@@ -66,6 +68,11 @@ class LogTail:
             self.close()
             return self.lines()  # read the new file (or wait for it) at once
         return []
+
+    @property
+    def pending(self):
+        """The line still being written (no line break yet), as read so far; "" if none."""
+        return self._buf.decode("utf-8", "replace")
 
     @property
     def exists(self):
