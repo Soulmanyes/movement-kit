@@ -1,4 +1,4 @@
-"""Update check against the app's GitHub releases. No GUI code, only the standard library.
+"""Update check against the app's GitHub releases. No GUI code; yawcore is imported only to put movekit on the path.
 
 check() asks GitHub for the latest sourceyaw-v* release at most once a day and remembers the
 answer; install() downloads that release's source archive and runs its sourceyaw/install.sh,
@@ -7,6 +7,8 @@ runs from the next start. A copy running from a git checkout never installs anyt
 """
 
 from pathlib import Path
+
+import yawcore  # noqa: F401 - puts movekit on the path
 
 from movekit import updater as kit  # after yawcore, which puts movekit on the path
 

@@ -10,12 +10,12 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-import yawcore as core  # noqa: E402
-import trainer  # noqa: E402
+import trainer
 import updater
+import yawcore as core
 
 APP_ID = "io.github.soulmanyes.SourceYaw"
 REPO = "Soulmanyes/movement-kit"
@@ -1086,7 +1086,7 @@ class Window(Adw.ApplicationWindow):
             try:
                 core.install_krosshair()
                 error = None
-            except Exception as e:  # network, checksum, disk: all shown to the user
+            except Exception as e:  # noqa: BLE001 - network, checksum, disk: all shown to the user
                 error = str(e)
             GLib.idle_add(finished, error)
 

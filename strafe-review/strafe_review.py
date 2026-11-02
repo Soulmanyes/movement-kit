@@ -23,12 +23,11 @@ from pathlib import Path
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path[:0] = [str(ROOT), str(ROOT / "collector"), str(ROOT / "viewer")]  # finds the imports below
+import collector
+import install
 import server
 import steam
 import updater
-
-import collector
-import install
 
 PORT = int(os.environ.get("STRAFE_REVIEW_PORT", "8765"))  # the variable is for tests
 URL = f"http://127.0.0.1:{PORT}/"

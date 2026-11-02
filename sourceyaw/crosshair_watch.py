@@ -9,7 +9,7 @@ break; chat is ignored. launch-hook.sh starts the game with KROSSHAIR_IMG pointi
 and KROSSHAIR reloads that file whenever its mtime changes. It also empties LOG first,
 since con_logfile appends forever.
 """
-import os  # noqa: I001 - yawcore must come before movekit: it puts movekit on the path
+import os
 import re
 import shutil
 import signal
