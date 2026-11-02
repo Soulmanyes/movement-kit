@@ -13,6 +13,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import settings_api
 import trainer
 import updater
 import yawcore as core
@@ -731,10 +732,7 @@ class Window(Adw.ApplicationWindow):
     # ------------------------------------------------------------ strafe trainer
 
     def add_trainer_group(self, page):
-        saved = self.data.get("trainer") or {}
-        cfg = {**trainer.TRAINER_DEFAULTS, **saved}
-        cfg["colors"] = {**trainer.TRAINER_DEFAULTS["colors"], **saved.get("colors", {})}
-        cfg["tickrate"] = {**trainer.TRAINER_DEFAULTS["tickrate"], **saved.get("tickrate", {})}
+        cfg = settings_api.trainer_config(self.data.get("trainer"))
         self.trainer_cfg = cfg
         self.overlay = None
 
@@ -883,34 +881,24 @@ class Window(Adw.ApplicationWindow):
         return spin
 
     def inputd_command(self):
-        return f"sudo sh {core.HERE / 'inputd/install-inputd.sh'}"
+        return settings_api.inputd_command()
 
     def show_trainer_status(self):
         on = self.trainer_row.get_active()
         for row in self.trainer_rows:
             row.set_sensitive(on)
-        # the tone sounds for as long as the key is wrong; game sounds repeat
-        tone = self.cue_choices[self.cue_sound.get_selected()][0] == "tone"
+        status = settings_api.trainer_status(self.cstrike,
+                                             self.cue_choices[self.cue_sound.get_selected()][0])
+        tone = status["tone"]
         self.tone_volume.set_visible(tone)
         self.tone_pitch.set_visible(tone)
         self.cue_repeat.set_visible(not tone)
-        self.cue_wrong_row.set_subtitle("Higher tone" if tone else "")
-        self.cue_none_row.set_subtitle("Lower tone" if tone else "")
-        installed = trainer.forwarded() is not None
-        if installed:
-            self.service_row.set_subtitle("Installed: forwards only the keys in "
-                                          "/etc/sourceyaw-inputd.conf")
-        else:
-            self.service_row.set_subtitle(GLib.markup_escape_text(
-                "Not installed. It reads your keyboard as root and passes on only the "
-                "trainer's keys. Run in a terminal: " + self.inputd_command()))
-        self.service_copy.set_visible(not installed)
-        if self.cstrike:
-            _, unseen = trainer.read_binds(self.cstrike)
-            self.binds_row.set_subtitle(GLib.markup_escape_text(
-                "⚠ Not forwarded by the input service: " + ", ".join(unseen)
-                + ". Add them to /etc/sourceyaw-inputd.conf" if unseen
-                else "Strafe, turn and jump keys come from your binds in the game"))
+        self.cue_wrong_row.set_subtitle(status["wrong_note"])
+        self.cue_none_row.set_subtitle(status["none_note"])
+        self.service_row.set_subtitle(GLib.markup_escape_text(status["service"]))
+        self.service_copy.set_visible(not status["installed"])
+        if status["binds"] is not None:
+            self.binds_row.set_subtitle(GLib.markup_escape_text(status["binds"]))
 
     def trainer_changed(self):
         self.show_trainer_status()
@@ -919,27 +907,24 @@ class Window(Adw.ApplicationWindow):
             self.preview_overlay()
 
     def trainer_value(self):
-        cfg = dict(self.trainer_cfg)
-        cfg.update({
+        return settings_api.trainer_value(self.trainer_cfg, {
             "enabled": self.trainer_row.get_active(),
             "show_offset": self.offset_row.get_active(),
             "offset_key": self.offset_key,
-            "x": round(self.pos_x.get_value() / 100, 3),
-            "y": round(self.pos_y.get_value() / 100, 3),
-            "size": int(self.size_spin.get_value()),
+            "x": self.pos_x.get_value(),
+            "y": self.pos_y.get_value(),
+            "size": self.size_spin.get_value(),
             "colors": {k: hex_color(b.get_rgba()) for k, b in self.offset_colors.items()},
             "sound": self.cue_choices[self.cue_sound.get_selected()][0],
-            "wrong_ticks": int(self.cue_ticks.get_value()),
-            "repeat": round(self.cue_repeat.get_value(), 2),
-            "tone_volume": round(self.tone_volume.get_value() / 100, 2),
-            "tone_pitch": int(self.tone_pitch.get_value()),
+            "wrong_ticks": self.cue_ticks.get_value(),
+            "repeat": self.cue_repeat.get_value(),
+            "tone_volume": self.tone_volume.get_value(),
+            "tone_pitch": self.tone_pitch.get_value(),
             "cue_wrong_key": self.cue_wrong_row.get_active(),
             "cue_no_key": self.cue_none_row.get_active(),
-            "target": int(self.target_spin.get_value()),
-        })
-        if self.tick_spin is not None:
-            cfg["tickrate"] = {**cfg["tickrate"], self.game: int(self.tick_spin.get_value())}
-        return cfg
+            "target": self.target_spin.get_value(),
+            "tickrate": None if self.tick_spin is None else self.tick_spin.get_value(),
+        }, self.game)
 
     def preview_overlay(self):
         """Shows a sample number in a game started through movekit-run."""
@@ -972,12 +957,7 @@ class Window(Adw.ApplicationWindow):
     # ------------------------------------------------------------ state
 
     def check_setup(self):
-        problem = None
-        if not self.cstrike and core.flatpak_steam_only(self.game):
-            problem = ("Flatpak Steam isn't supported: movekit-run can't run inside "
-                       "its sandbox. Use Steam from your distro's packages")
-        elif not self.cstrike:
-            problem = f"{self.info['name']} not found in your Steam libraries"
+        problem = settings_api.setup_problem(self.game, self.cstrike)
         self.banner.set_title(problem or "")
         self.banner.set_revealed(bool(problem))
         self.apply_btn.set_sensitive(bool(self.cstrike))
@@ -985,15 +965,7 @@ class Window(Adw.ApplicationWindow):
     # ------------------------------------------------------------ crosshair
 
     def base_options(self):
-        options = []
-        cm = core.crosshair_maker_png()
-        if cm:
-            options.append(("crosshair-maker", f"crosshair-maker: {cm.stem}"))
-        options.append(("builtin", "Plain cross"))
-        if self.base_choice not in ("crosshair-maker", "builtin"):
-            options.append((self.base_choice, os.path.basename(self.base_choice)))
-        options.append(("pick", "Choose an image…"))
-        return options
+        return settings_api.base_options(self.base_choice)
 
     def fill_base_row(self):
         self.base_opts = self.base_options()
@@ -1113,12 +1085,9 @@ class Window(Adw.ApplicationWindow):
 
     def collect(self):
         start = next((i for i, row in enumerate(self.rows) if row.start.get_active()), 0)
-        return {"key": self.key, "crosshair": self.color_row.get_active(), "start": start,
-                "base": self.base_choice,
-                # Momentum: the user's own crosshair colour, put back when colours are off
-                "original_color": self.data.get("original_color"),
-                "trainer": self.trainer_value(),
-                "entries": [row.value() for row in self.rows]}
+        return settings_api.collect(self.key, self.color_row.get_active(), start, self.base_choice,
+                                    self.data.get("original_color"), self.trainer_value(),
+                                    [row.value() for row in self.rows])
 
     # ------------------------------------------------------------ actions
 
