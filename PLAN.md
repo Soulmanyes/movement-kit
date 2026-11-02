@@ -123,6 +123,7 @@ Toolkit and split decided by the owner 2026-11-02; steps 3.1–3.8 OK'd the same
 5. **3.5 Source Yaw logic out of the window.** Most of it is already in `yawcore` (`load_settings`, `validate`, `apply`, `key_conflicts`, `set_autoexec`, `install_krosshair`, `recolor`). Still in `app.py`: `check_setup`'s problem text, `base_options`, `collect`, `trainer_value` and the trainer status. They move to `sourceyaw/settings_api.py`, and the GTK app calls it, with no change in behaviour.
 6. **3.6 Source Yaw section** over `settings_api`: key map with fallbacks, colours, sounds and previews. Linux-only for now; a Windows Source Yaw stays a later item.
 7. **3.7 Hub release.** `hub-v*` CI (PyInstaller, pywebview and Pillow included) and a desktop entry on Linux. On Windows, one exe: no arguments opens the hub, `%command%` stays Strafe Review's launch option, and the last `strafe-review-v*` release updates itself into it.
+7b. **3.7b Modules** (owner request 2026-11-02, see "Phase 3.7b"): per-tool install, update, auto-update switch, roll back and uninstall from the hub, on Windows and Linux. Comes before `hub-v1.0.0`.
 8. **3.8 Retire the old windows** after the owner has used the hub for a while. The GTK app and the tkinter app go, or become thin launchers that open the hub.
 
 Done when: the hub window runs on Linux and Windows with every section, the review page opens from it, and installed copies have moved onto it.
@@ -344,6 +345,66 @@ Left:
 3. After the bridge: move `settings.json` out of Strafe Review's data folder (`hud/settings.py` reads the old file once as a fallback) and take the jump-1 toggle out of the review page's sidebar (3.3).
 4. Done 2026-11-02: `strafe-review/check_hub_section.py` passed on the branch. At the merge the temporary `branches: ["hub-release"]` push trigger came out of `hub-windows.yml`; test builds now go through Actions > hub-windows > Run workflow.
 5. The `hub-v1.0.0` release (ask the owner first). Nobody has tested the hub exe by hand on Windows yet.
+
+### Phase 3.7b: modules (planned 2026-11-02, waiting for the owner's OK)
+
+The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates on its own, so someone who doesn't use a tool never downloads it; each tool can be uninstalled on its own; and each has its own auto-update switch. `hub-v1.0.0` stays untagged until 3.7b ships. This replaces 3.7's "one Windows exe with everything inside": the exe stays one program, but the tools become modules it downloads.
+
+**Owner's answers (2026-11-02):**
+- Both Windows and Linux, with the same module cards in the hub.
+- Modules: Strafe Review, Gain Converter, Source Yaw (Linux only). The HUD is part of the core. It shows only when a module that draws in game is installed.
+- Uninstall always removes the module's game files, autoexec block and launch hooks. Saved data (attempts, settings) goes only if the uninstall dialog's "Also delete saved data" box is ticked, which is off by default.
+- A fresh install starts with no modules; each is installed from its card.
+- Auto-update starts off for each module and for the core. The card must show plainly that it's off, with a one-click way to turn it on: no popup.
+- Extras: release notes for an available update, roll back to the previous version, and one "Update all" button.
+
+**Shape.**
+- **Core:** the hub window, `movekit`, `hud/` and the launch dispatcher. Line `hub-v*`. On Windows it's `movement-kit.exe` (PyInstaller); on Linux it's the hub from a source archive. The core never imports tool code, so it runs with no modules installed.
+- **Module:** a tool folder with a `module.json`: `key`, `title`, `os`, `tag_prefix`, `version`, `needs_core` (the lowest core version it runs on), `needs` (other modules), `data` (the folders "Also delete saved data" removes), and its hooks file. The hooks file is `module_hooks.py`, with `install(ctx)`, `uninstall(ctx, delete_data)` and `launch(ctx, argv)` if the module has a launch step. Each module ships on its existing tag line as `<tool>-module.zip`, the tool folder only.
+- **`movekit/modules.py`, one manager for every module.** It does no per-tool work: everything tool-specific is in `module.json` and the hooks.
+  - Its state file is `modules.json` in the kit's data folder (`%LOCALAPPDATA%\MovementKit`, `~/.local/share/movement-kit`). Per module it keeps installed version, `auto` (default false), previous version and the `failed` mark.
+  - Modules sit in `modules/<key>/current`, with `modules/<key>/previous` kept for roll back.
+  - Calls: `list`, `check` (one GitHub release list for every line, at most every 6 h), `notes(key)` (the release body), `install`, `update`, `update_all`, `rollback`, `uninstall(key, delete_data)` and `set_auto`.
+  - It reuses `movekit/updater.py`: `parse_version`, the download code, the `failed` mark, and `in_git_checkout`.
+  - An update that needs a newer core than the one running waits and says so on the card. It never installs halfway.
+  - Before an update, roll back or uninstall it stops what the module runs (Strafe Review's server), then swaps the folder and starts it again.
+  - `needs` blocks uninstalling a module another installed module needs, and the card names the dependent module.
+- **Git checkout (the owner's copy):** modules come from the checkout and the cards say "updated by git pull", as Strafe Review's section does now. Uninstall still runs the hooks, so game files and launch hooks come out, and hides the section; it never deletes code from the checkout.
+- **Discovery:** `hub.discover()` takes the installed module folders (or the checkout's tool folders) as roots, so sections are only those of installed modules. Section loading by path stays as it is.
+
+**Hub page.** A "Modules" page sits at the top of the sidebar, part of the core, not a section. The hub opens on it while no module is installed. Every module, and the core, gets a card:
+- Name, installed version, and Install, or Update when one is available. Update has a "What's new" fold with the release notes.
+- Roll back, shown only when a previous version is kept.
+- Uninstall, with the "Also delete saved data" box.
+- The auto-update switch. While it's off the card shows an amber "Auto-update off" strip with a **Turn on** button, so it stands out with no popup.
+
+"Update all" sits at the top, shown when at least one update is waiting. The cards follow `ui-visibility`.
+
+**Launch option (must never break the game).** `%command%` goes to the core's dispatcher: `movement-kit.exe %command%` on Windows, `movekit-run %command%` on Linux. It calls each installed module's `launch` hook. A hook that is missing, raises or is mid-update is skipped and logged. The game always starts with its own arguments, even with no modules installed. `movekit-run` already does this on Linux (`movekit/launch.py`); the Windows exe gets the same rule.
+
+**Windows core and downloaded code.** A frozen exe can only import what PyInstaller bundled, and modules arrive later.
+- The core bundles the whole standard library except `tkinter`, `test`, `idlelib` and `ensurepip`, plus `movekit`, `hud` and pywebview.
+- A check (`movekit/check_modules.py`) reads every module's imports (AST) and fails on anything outside stdlib, `movekit`, `hud`, `webview` and the module's own files. Today all three tools pass: stdlib plus `movekit`.
+- The Windows smoke test starts the core with an empty modules folder. It installs each `<tool>-module.zip` from a local fake GitHub, then runs the sections and the launch from the downloaded folder, not from the bundle.
+
+**Linux core.**
+- `movekit/install-hub.sh` gets a copy mode for other users: core files into `~/.local/share/movement-kit/core`, with `movekit-run` linked from there.
+- From a git checkout it keeps running in place (the owner's case).
+- Source Yaw's module hooks wrap what exists: `install_source` and `sourceyaw/install.sh` (it still installs to `~/.local/share/sourceyaw`), plus a non-interactive `--uninstall` that takes a keep-or-delete-data flag. Its GTK window and the manager share one auto-update state.
+
+**Migration.**
+- **Windows:** the bridge release (the last `strafe-review-v*`) ships the core exe as `strafe-review.exe`. On first start the core sees Strafe Review's old data folder. It installs the Strafe Review module (download) and carries over the old `auto` value, so the friend's copy keeps working and keeps its Steam launch option. The rule from 3.7 stands: this waits until the first migration is confirmed.
+- **Linux:** the manager adopts an existing `~/.local/share/sourceyaw` as an installed Source Yaw module.
+- **HUD:** because the HUD is part of the core, its `settings.json` moves to the kit's data folder here (was 3.7 Left #3), reading the old file once. It writes the recorder through the Strafe Review module's hooks; with no Strafe Review installed, the HUD section says the line needs Strafe Review.
+
+**Steps** (checks after each: the existing ones plus the new ones named):
+1. **3.7b.1 Manager.** `module.json` for the three tools, `module_hooks.py` that wrap what exists (`install.py`, Source Yaw's `install.sh`), and `movekit/modules.py`. New checks: `movekit/check_modules.py` (manifests, the import rule, install, update, roll back and uninstall against a fake GitHub in a temp data folder, the needs block, a core-too-old wait) and the launch pass-through with no modules or a broken one.
+2. **3.7b.2 Hub page.** The Modules page and cards, `discover()` over installed modules, and Strafe Review's section losing its own update UI to its card. Then a screenshot check, and an owner click test.
+3. **3.7b.3 Windows core.** The `hub/build.py` split (core only, whole stdlib), the core dispatcher in `hub/movement_kit.py`, and `<tool>-module.zip` CI from one script reading `module.json`. Also the smoke test described above.
+4. **3.7b.4 Linux core.** The copy mode in `install-hub.sh`, the Source Yaw adoption and the shared auto state.
+5. **3.7b.5 Docs and release.** README, WINDOWS.txt and the per-tool READMEs. Then `hub-v1.0.0` and the first `<tool>-module.zip` releases, after the owner's OK. The bridge follows later, as above.
+
+Risks: Windows Defender may flag a downloaded zip; it has the same signing status as the exe now. The bridge is the one moment both Strafe Review lines must work, so it gets its own smoke step (old exe, update to bridge, module installed, launch works).
 
 ### Notes for later steps
 
