@@ -38,8 +38,8 @@ from PIL import Image
 _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
-from movekit import games as kit_games  # after the path above
-from movekit import keyvalues, steam, vpk
+from movekit import binds, keyvalues, steam, vpk  # after the path above
+from movekit import games as kit_games
 
 VERSION = "1.5.1"
 
@@ -419,14 +419,7 @@ def keys_bound_to_cycle(cstrike, command="yaw_cycle"):
     """Keys config.cfg binds to yaw_cycle (or `command`). It keeps binds across
     launches and the game rewrites it on exit, so a key that was changed away
     from stays bound there until yaws.cfg unbinds it."""
-    try:
-        text = (cstrike / "cfg/config.cfg").read_text(errors="replace")
-    except OSError:
-        return []
-    return re.findall(rf'^bind "([^"]+)" "{re.escape(command)}"', text, re.MULTILINE)
-
-
-_BIND = re.compile(r'^\s*bind\s+(?:"([^"]+)"|(\S+))\s+(.*?)\s*$', re.IGNORECASE)
+    return binds.keys_bound_to(binds.cfg_text(cstrike / "cfg/config.cfg"), command)
 
 
 def key_conflicts(cstrike, key):
@@ -434,15 +427,11 @@ def key_conflicts(cstrike, key):
     commands in the configs that run before yaws.cfg would take the key over."""
     found = []
     for name in ("config.cfg", "autoexec.cfg"):
-        try:
-            lines = (cstrike / "cfg" / name).read_text(errors="replace").splitlines()
-        except OSError:
-            continue
-        for line in lines:
-            m = _BIND.match(line.split("//")[0])
-            if not m or (m.group(1) or m.group(2)).lower() != key.lower():
+        for line in binds.cfg_text(cstrike / "cfg" / name).splitlines():
+            bind = binds.parse_bind(line.split("//")[0])
+            if not bind or bind[0].lower() != key.lower():
                 continue
-            command = m.group(3).strip().strip('"')
+            command = bind[1].strip().strip('"')
             if command not in ("yaw_cycle", OFFSETS_ALIAS):
                 found.append((name, command))
     return found

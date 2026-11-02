@@ -37,6 +37,7 @@ import time
 from pathlib import Path
 
 import yawcore
+from movekit import binds  # after yawcore, which puts movekit on the path
 
 SOCKET = "/run/sourceyaw-inputd.sock"
 INPUTD_CONFIG = "/etc/sourceyaw-inputd.conf"
@@ -117,51 +118,20 @@ def settings(game):
 
 # ---------------------------------------------------------------- binds
 
-_ALIAS = re.compile(r'^\s*alias\s+"?([^\s"]+)"?\s+"?(.*?)"?\s*(//.*)?$', re.IGNORECASE)
-
-
-def _commands(text):
-    return [c.strip().strip('"').split()[0].lower() for c in text.split(";") if c.strip().strip('"')]
-
-
 def read_binds(game_dir):
     """{role: set of evdev codes or "wheel"}, plus Source key names with a role the
     input service does not forward."""
     cfg = Path(game_dir) / "cfg"
-    aliases = {}
-    for path in sorted(glob.glob(str(cfg / "**/*.cfg"), recursive=True)):
-        try:
-            text = Path(path).read_text(errors="replace")
-        except OSError:
-            continue
-        for line in text.splitlines():
-            m = _ALIAS.match(line)
-            if m:
-                aliases.setdefault(m.group(1).lower(), []).append(m.group(2))
-
-    def roles_of(command, depth=0):
-        found = set()
-        for cmd in _commands(command):
-            if cmd in ROLES:
-                found.add(ROLES[cmd])
-            elif depth < 6 and cmd in aliases:
-                for body in aliases[cmd]:
-                    found |= roles_of(body, depth + 1)
-        return found
-
+    alias_map = binds.aliases(cfg)
     roles = {r: set() for r in ROLES.values()}
     unseen = []
     allowed = forwarded()
-    try:
-        config = (cfg / "config.cfg").read_text(errors="replace")
-    except OSError:
-        config = ""
-    for line in config.splitlines():
-        m = yawcore._BIND.match(line)
-        if not m:
+    for line in binds.cfg_text(cfg / "config.cfg").splitlines():
+        bind = binds.parse_bind(line)
+        if not bind:
             continue
-        key = (m.group(1) or m.group(2)).lower()
-        for role in roles_of(m.group(3).strip()):
+        key = bind[0].lower()
+        for role in binds.resolve(bind[1].strip(), ROLES, alias_map):
             code = SOURCE_KEYS.get(key)
             if code is None or (allowed is not None and code not in allowed):
                 unseen.append(f"{key} ({role.replace('_', ' ')})")
