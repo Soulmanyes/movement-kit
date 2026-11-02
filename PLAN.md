@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps waiting for the owner's OK.
 
 ## Goal
 
@@ -92,12 +92,45 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 
 ## Phase 3: hub app
 
-- One window with a section per tool, on Linux and Windows. Open question: the UI toolkit. Source Yaw is GTK (Linux only), Strafe Review is a web page that already runs on Windows, Gain Converter is tkinter. A web UI served by the session daemon is the likely fit.
+Toolkit and split decided by the owner 2026-11-02; steps drafted, waiting for the owner's OK. Release line of its own, tag prefix `hub-v*`.
+
+**Split (owner).** The hub is a real app window for **settings**. Strafe Review's review page stays in the browser, as now. Sections:
+- **Source Yaw**: everything its GTK window does.
+- **HUD**: in-game display settings, whichever tool draws them. Starts with the jump-1 line toggle. That toggle sits in the review page's sidebar today only by accident, because the recorder draws the line. Later the per-jump stat display (JHUD) and the Panorama module kit join it.
+- **Gain Converter**: the converter and its graph.
+- **Strafe Review**: collector and update status, and an "Open review" button. The button starts the server if it isn't running, then opens the browser.
+
+**Toolkit (owner): pywebview.** A native window showing HTML pages, with WebKitGTK on Linux (installed here) and WebView2 on Windows (part of Windows 10/11).
+- Licence BSD-3. On Arch it's `python-pywebview` in extra (6.2.1); the Windows exe bundles it.
+- Section pages share CSS with the review page.
+- Its file dialogs return real paths, so Source Yaw keeps "Choose an image…" as it is.
+- Key capture uses a `KeyboardEvent.code` to Source-name map in place of `GDK_TO_SOURCE`. Super never arrives (Hyprland takes it), as in the GTK window. Keys that can't be caught get a pick-from-list fallback.
+- Previews keep Pillow (`yawcore.recolor`), so the exe bundles Pillow.
+
+**Shape.**
+- `movekit/hub.py` opens the window and serves the shell page: a sidebar of sections, with shared CSS following `ui-visibility` (strong card fill and border, bar tracks, typeable number boxes).
+- **Section contract.** Each section folder has a `hub_section.py` with `SECTION = {key, title, os, page, api}`. `api` holds plain functions taking and returning JSON-able data. The page calls them as `pywebview.api.call(key, name, args)`. The hub discovers sections by folder and never imports tool internals, so a new tool is a new folder. Pages that want live events read the session on 8766 over SSE.
+- **Lifetime.** The hub is only the settings window, opened and closed by hand. The Strafe Review server keeps its current lifetime (launch hook on Linux, the exe on Windows), so collecting doesn't change.
+- **HUD home.** A new top-level `hud/` folder owns in-game display settings. The jump-1 setting's code (`install.save_setting("inGameLine")`, `/api/settings` in `viewer/server.py`) moves there. The recorder install stays in Strafe Review, and `hud/` asks it to rewrite the setting.
+
+**Prerequisite:** the Phase 1 bridge releases. No `<tool>-v*` release exists yet, and the old repos are still live. The Windows hub exe replacing the Strafe Review exe is a second migration for installed copies, so it waits until the first one has shipped.
+
+**Steps** (the old windows keep working throughout; checks: the existing ones plus a screenshot check of each new section):
+1. **3.1 Shell.** `movekit/hub.py`, section discovery, the `call` bridge, shared CSS, and `movekit/check_hub.py` (discovery, bridge and OS filter, run without a window). Install `python-pywebview`.
+2. **3.2 Gain Converter section.** The simplest section, so it proves the contract. It settles "gain math in one language": one JS module `movekit/web/gain.js`, used by this section and the viewer's CSS-SSJ code; Python keeps no copy.
+3. **3.3 HUD section.** `hud/` takes over the jump-1 setting. The review page's sidebar toggle stays until the hub ships on Windows (3.7), then goes.
+4. **3.4 Strafe Review section.** Status, the updater, "Open review" (starts the server if it's down).
+5. **3.5 Source Yaw logic out of the window.** Most of it is already in `yawcore` (`load_settings`, `validate`, `apply`, `key_conflicts`, `set_autoexec`, `install_krosshair`, `recolor`). Still in `app.py`: `check_setup`'s problem text, `base_options`, `collect`, `trainer_value` and the trainer status. They move to `sourceyaw/settings_api.py`, and the GTK app calls it, with no change in behaviour.
+6. **3.6 Source Yaw section** over `settings_api`: key map with fallbacks, colours, sounds and previews. Linux-only for now; a Windows Source Yaw stays a later item.
+7. **3.7 Hub release.** `hub-v*` CI (PyInstaller, pywebview and Pillow included) and a desktop entry on Linux. On Windows, one exe: no arguments opens the hub, `%command%` stays Strafe Review's launch option, and the last `strafe-review-v*` release updates itself into it.
+8. **3.8 Retire the old windows** after the owner has used the hub for a while. The GTK app and the tkinter app go, or become thin launchers that open the hub.
+
+Done when: the hub window runs on Linux and Windows with every section, the review page opens from it, and installed copies have moved onto it.
 
 ## Later / undecided
 
 - **Panorama module kit.** One installer for `custom/0-*` folders and `timer.xml` includes, shared by the recorder, `mmod-trainer-height` and a future JHUD.
-- **Gain math in one language.** Either Python serves it over the API, or one shared JS module serves both the viewer and Gain Converter.
+- **Gain math in one language.** Settled in the Phase 3 draft (3.2): one shared JS module, if the plan is OK'd.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
 
 ## Progress
