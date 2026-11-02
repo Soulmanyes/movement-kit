@@ -18,8 +18,10 @@ import tempfile
 import time
 from pathlib import Path
 
-import steam
+import steam  # sets the path to movekit
 from srrec import Assembler, body
+
+from movekit.files import new_file_mode
 
 # The repo, or PyInstaller's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
@@ -91,6 +93,7 @@ def save(store, attempt):
     try:
         with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt", encoding="utf-8") as f:
             json.dump(attempt, f, separators=(",", ":"))
+        os.chmod(tmp, new_file_mode())  # mkstemp makes it 0600
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
