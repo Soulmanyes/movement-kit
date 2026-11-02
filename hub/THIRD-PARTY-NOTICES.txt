@@ -7,6 +7,13 @@ Soulmanyes's Movement Kit's own code is CC0 1.0 (see LICENSE). The Windows exe a
   runtime (Microsoft Distributable Code). Licence: the Python Software Foundation License, with the
   notices of those parts; the full text is in PYTHON-LICENSE.txt next to this file.
 
+- Expat, the XML parser inside Python's pyexpat and xml modules (the core carries the whole standard
+  library, because the tools it downloads may use any of it). Licence: MIT, in expat-LICENSE.txt
+  next to this file. https://libexpat.github.io/
+
+- SQLite (sqlite3.dll, for Python's sqlite3 module). Public domain, no licence needed.
+  https://www.sqlite.org/copyright.html
+
 - OpenSSL 3 (libssl and libcrypto, for HTTPS when looking for updates). Licence: Apache License 2.0,
   in OpenSSL-LICENSE.txt next to this file. https://www.openssl.org/
 

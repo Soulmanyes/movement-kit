@@ -29,5 +29,5 @@ jobs:
         $p = Start-Process dist/strafe-review.exe -PassThru; Start-Sleep 15;
         if ($p.HasExited) { Write-Error "strafe-review.exe exited with $($p.ExitCode)"; exit 1 };
         taskkill /F /T /PID $p.Id
-      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt, licenses/WebView2-LICENSE.txt, licenses/WebView2-NOTICE.txt
+      files: WINDOWS.txt, LICENSE, THIRD-PARTY-NOTICES.txt, licenses/OpenSSL-LICENSE.txt, licenses/expat-LICENSE.txt, licenses/WebView2-LICENSE.txt, licenses/WebView2-NOTICE.txt
       version: python ../.github/scripts/version.py strafe-review
