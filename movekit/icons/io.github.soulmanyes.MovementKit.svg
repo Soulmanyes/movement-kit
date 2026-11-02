@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#1e2230"/>
+  <!-- a strafe path: the curve a bhop run draws, with a jump arc on top -->
+  <path d="M 26 92 C 42 92 44 64 60 64 S 78 92 94 92" fill="none" stroke="#3dff6e" stroke-width="8" stroke-linecap="round"/>
+  <path d="M 34 52 Q 64 18 94 52" fill="none" stroke="#ff3df2" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="94" cy="52" r="7" fill="#ff3df2"/>
+</svg>

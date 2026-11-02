@@ -51,6 +51,7 @@ if str(KIT) not in sys.path:
     sys.path.insert(1, str(KIT))  # run as movekit/hub.py: sections import movekit and hud from the kit root
 WEB = Path(__file__).resolve().parent / "web"
 TITLE = "Soulmanyes's Movement Kit"
+APP_ID = "io.github.soulmanyes.MovementKit"  # Linux app id; install-hub.sh names the launcher after it
 REQUIRED = ("key", "title", "os", "page", "api")
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
@@ -295,10 +296,10 @@ def run(root=KIT, app_class=None, debug=False, first=None):
     for folder, error in problems:
         print(f"hub: skipped {folder}/hub_section.py: {error}", file=sys.stderr)
     server = serve(sections)
-    if app_class and sys.platform.startswith("linux"):
-        # the Wayland app id / X11 class of the GTK window
+    if sys.platform.startswith("linux"):
+        # the Wayland app id / X11 class of the GTK window, which docks match to the launcher
         from gi.repository import GLib
-        GLib.set_prgname(app_class)
+        GLib.set_prgname(app_class or APP_ID)
     start = next((s.info()["url"] for s in sections if s.key == first), "/")
     window = webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
                                    js_api=Bridge(sections, problems), width=1000, height=720,
@@ -312,7 +313,7 @@ def run(root=KIT, app_class=None, debug=False, first=None):
 def main():
     ap = argparse.ArgumentParser(description=f"{TITLE}: the settings hub.")
     ap.add_argument("--root", type=Path, default=KIT, help="folder whose subfolders hold the sections")
-    ap.add_argument("--class", dest="app_class", help="window class / app id (tests use *-test)")
+    ap.add_argument("--class", dest="app_class", help=f"window class / app id, default {APP_ID} (tests use *-test)")
     ap.add_argument("--debug", action="store_true", help="allow the web inspector")
     ap.add_argument("--section", help="open on this section's page (screenshot checks)")
     args = ap.parse_args()
