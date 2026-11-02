@@ -34,8 +34,10 @@ done
 HELPERS=""
 if [ "$GAME" = css ] && [ "${COLORS:-0}" = 1 ] && [ -n "${LOG:-}" ] && [ -f "$CFG/current.png" ]; then
     export KROSSHAIR=1 KROSSHAIR_IMG="$CFG/current.png"
+    # con_logfile appends forever; start fresh each launch, before the watcher or trainer reads it
+    : > "$LOG"
     # started directly (not via a function) so $! is the watcher itself
-    LOG="$LOG" "$DIR/yaw-watch.sh" >> "$RUNLOG" 2>&1 &
+    python3 "$DIR/crosshair_watch.py" "$LOG" >> "$RUNLOG" 2>&1 &
     HELPERS="$HELPERS $!"
 fi
 # strafe trainer: reads keys from the input service and draws the offset through

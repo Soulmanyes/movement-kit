@@ -37,7 +37,7 @@ from pathlib import Path
 
 import yawcore
 
-from movekit import binds, logtail  # after yawcore, which puts movekit on the path
+from movekit import binds, session  # after yawcore, which puts movekit on the path
 
 SOCKET = "/run/sourceyaw-inputd.sock"
 INPUTD_CONFIG = "/etc/sourceyaw-inputd.conf"
@@ -493,14 +493,42 @@ def connect():
     return s
 
 
-def map_tickrate(cfg, game, line):
-    name = logtail.map_name(line)
+def map_tickrate(cfg, game, name):
+    """The tickrate for map `name`, or None when the name isn't known (CS:S's "Connected to" line)."""
     if name is None:
         return None
     for prefix, rate in cfg["map_tickrates"].items():
         if name.startswith(prefix.lower()):
             return rate
     return cfg["tickrate"].get(game, 66)
+
+
+class GameEvents:
+    """What the movekit session's events (map loads, the offsets toggle's echo) mean for the trainer."""
+
+    def __init__(self, cfg, game, tickrate, in_map, showing):
+        self.cfg, self.game = cfg, game
+        self.tickrate = tickrate
+        self.in_map = in_map
+        self.showing = showing
+
+    def handle(self, event):
+        kind, data = event["type"], event["data"]
+        if kind == "token" and data.get("name") == yawcore.OFFSETS_TOKEN:
+            self.showing = not self.showing
+            print(f"trainer: offset {'shown' if self.showing else 'hidden'}", flush=True)
+        elif kind == "map_loaded":
+            if not self.in_map:
+                print("trainer: in a map", flush=True)
+            self.in_map = True
+            rate = map_tickrate(self.cfg, self.game, data.get("name"))
+            if rate:
+                self.tickrate = rate
+                print(f"trainer: map {data['name']} -> {rate} tick", flush=True)
+        elif kind == "map_left":
+            if self.in_map:
+                print("trainer: in the menu", flush=True)
+            self.in_map = False
 
 
 def run(game):
@@ -522,11 +550,13 @@ def run(game):
         return 1
 
     shown_until = 0.0
-    showing = cfg["show_offset"]
+    log_path = game_dir / "yaw.log"
+    # without a console log there is no way to tell, so everything counts until it shows up
+    game_events = GameEvents(cfg, game, cfg["tickrate"].get(game, 66), not log_path.exists(), cfg["show_offset"])
 
     def offset(ticks):
         nonlocal shown_until
-        if not showing:
+        if not game_events.showing:
             return
         target = cfg["target"]
         row = 0 if ticks < target else 1 if ticks == target else 2
@@ -545,15 +575,13 @@ def run(game):
         if tone:
             tone.mode = reason
 
-    trainer = Trainer(cfg, roles, cfg["tickrate"].get(game, 66), offset, wrong, wrong_state)
+    trainer = Trainer(cfg, roles, game_events.tickrate, offset, wrong, wrong_state)
     focus = FocusWatch(yawcore.GAMES[game]["process"])
-    log_path = game_dir / "yaw.log"
-    log = open(log_path, errors="replace") if log_path.exists() else None  # noqa: SIM115 - followed until exit
-    if log:
-        log.seek(0, os.SEEK_END)
+    # map loads and the offsets toggle come from the movekit session (after the input service
+    # check above, so a trainer that gives up never holds the session's port)
+    joined = session.join(log_path)
+    print(f"trainer: session events ({joined.mode})", flush=True)
     buf = b""
-    # without a console log there is no way to tell, so everything counts
-    in_map = log is None
     while True:
         ready, _, _ = select.select([sock], [], [], 0.002)
         if ready:
@@ -566,30 +594,18 @@ def run(game):
                 sec, usec, etype, code, value = EVENT.unpack_from(buf)
                 buf = buf[EVENT.size:]
                 trainer.feed(sec + usec / 1e6, etype, code, value)
-        trainer.focused = focus.focused and in_map
+        while not joined.events.empty():
+            was_showing = game_events.showing
+            game_events.handle(joined.events.get())
+            trainer.tickrate = game_events.tickrate
+            if was_showing and not game_events.showing:
+                overlay.hide()
+                shown_until = 0.0
+        trainer.focused = focus.focused and game_events.in_map
         trainer.check(time.time())
         if shown_until and time.monotonic() > shown_until:
             overlay.hide()
             shown_until = 0.0
-        if log:
-            for line in log.readlines():
-                if yawcore.OFFSETS_TOKEN in line:
-                    showing = not showing
-                    if not showing:
-                        overlay.hide()
-                        shown_until = 0.0
-                    print(f"trainer: offset {'shown' if showing else 'hidden'}", flush=True)
-                state = logtail.map_state(line)
-                if state is not None and state != in_map:
-                    in_map = state
-                    print(f"trainer: {'in a map' if in_map else 'in the menu'}", flush=True)
-                rate = map_tickrate(cfg, game, line)
-                if rate:
-                    trainer.tickrate = rate
-                    print(f"trainer: {line.strip()} -> {rate} tick", flush=True)
-        elif log_path.exists():
-            log = open(log_path, errors="replace")  # noqa: SIM115 - followed until exit
-            in_map = False  # the game just started logging: it's in its menu
 
 
 def main():

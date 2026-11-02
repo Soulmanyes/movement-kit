@@ -131,7 +131,7 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$DEST/"
+install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$SRC/crosshair_watch.py" "$DEST/"
 # movekit: the code the movement tools share, one folder up in the repo; yawcore finds it next to itself.
 # Replaced whole, so a module dropped from movekit doesn't linger in the installed copy.
 rm -rf "$DEST/movekit"
@@ -141,7 +141,8 @@ rm -f "$DEST/movekit/check_"*.py
 # the input service's files; its installer (run with sudo) copies them to root-owned places
 mkdir -p "$DEST/inputd"
 install -m 644 "$SRC"/inputd/sourceyaw-inputd.* "$SRC/inputd/install-inputd.sh" "$DEST/inputd/"
-install -m 755 "$SRC/app.py" "$SRC/yaw-watch.sh" "$SRC/yaw-run" "$DEST/"
+install -m 755 "$SRC/app.py" "$SRC/yaw-run" "$DEST/"
+rm -f "$DEST/yaw-watch.sh"  # replaced by crosshair_watch.py (movekit session) in Phase 2.4
 cp -r "$SRC/icons" "$DEST/"
 install -m 644 "$SRC/icons/hicolor/scalable/apps/$APP_ID.svg" "$ICONS/"
 ln -sf "$DEST/app.py" "$BIN/$NAME"

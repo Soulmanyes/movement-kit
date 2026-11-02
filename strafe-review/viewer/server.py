@@ -6,8 +6,8 @@
 It also runs the collector (collector/collector.py) in a thread, tailing Momentum's yaw.log, so one
 process records and serves. If the port is taken, another copy is already doing both and this one exits.
 Once it serves, it opens the page in the default browser.
-While collecting it also hosts the movekit game session (movekit/session.py, port 8766) unless another
-process already does, and announces every saved attempt there as attempt_saved {dir, id}.
+While collecting it also hosts the movekit game session (movekit/session.py, port 8766), once no other
+process holds that port, and announces every saved attempt there as attempt_saved {dir, id}.
 
 Routes:
   /                          the page (viewer/static/index.html)
@@ -88,6 +88,8 @@ POLL = 0.5  # seconds between store scans for /api/events
 COLLECT_RETRY = 5  # seconds before the collector thread starts over after an error
 collect_error = None  # {"time", "text"} of the collector thread's last error, for /api/status
 hosted = None  # (session, its HTTP server) when this process hosts the movekit session
+session_closing = threading.Event()  # set on the way out: stop trying to host
+SESSION_RETRY = 5  # seconds between tries to host the session while another process has its port
 UPDATES = None  # updater.Updater, made in main()
 UPDATE_LOOP = 3600  # seconds between looks at updates (GitHub itself is asked every updater.CHECK_EVERY)
 QUIET_FOR = 600  # auto mode installs only when the game log has been still this long (no game being played)
@@ -535,29 +537,39 @@ def update_loop(server):
         time.sleep(UPDATE_LOOP if not latest else 300)  # a waiting update is retried once the game is quiet
 
 
-def announce(bus):
-    """collector.run's on_saved: tell the session's listeners about a new attempt (dir as in /api/attempt)."""
-    def on_saved(path, attempt):
-        bus.publish("attempt_saved", dir=path.parent.name, id=attempt["id"])
-    return on_saved
+def announce(path, attempt):
+    """collector.run's on_saved: tell the session's listeners about a new attempt (dir as in
+    /api/attempt), while this process hosts the session."""
+    got = hosted
+    if got:
+        got[0].bus.publish("attempt_saved", dir=path.parent.name, id=attempt["id"])
 
 
 def host_session(log):
-    """Host the movekit session for `log`, unless another process already serves one on its port.
-    Returns collector.run's on_saved callback, or None when the session is elsewhere."""
-    global hosted
-    hosted = session.start(log)
-    if hosted is None:
-        print(f"Strafe Review: a movekit session already runs on port {session.PORT}; "
-              "new attempts aren't announced on it", flush=True)
-        return None
-    print(f"Strafe Review: movekit session on {session.URL}/events", flush=True)
-    return announce(hosted[0].bus)
+    """Host the movekit session for `log` in a thread. While another process holds its port (Source
+    Yaw's trainer during a CS:S game, say), try again every SESSION_RETRY s: this server runs for
+    days, the other one only while its game does."""
+    def loop():
+        global hosted
+        said = False
+        while not session_closing.is_set():
+            got = session.start(log)
+            if got:
+                hosted = got
+                print(f"Strafe Review: movekit session on {session.URL}/events", flush=True)
+                return
+            if not said:
+                print(f"Strafe Review: port {session.PORT} is taken; hosting the movekit session once "
+                      "it is free (new attempts aren't announced until then)", flush=True)
+                said = True
+            session_closing.wait(SESSION_RETRY)
+    threading.Thread(target=loop, name="movekit-session-host", daemon=True).start()
 
 
 def stop_session():
     """Free the session's port before a new copy (an update, a restart) wants it."""
     global hosted
+    session_closing.set()
     if hosted:
         sess, srv = hosted
         sess.stop.set()
@@ -611,8 +623,8 @@ def main(argv=None):
         sys.exit(f"Strafe Review: port {args.port} is in use ({e.strerror}); is it already running?")
     if not args.no_collect:
         Handler.log = Path(args.log)
-        on_saved = host_session(args.log)  # after the port above, so a second copy never gets this far
-        threading.Thread(target=collect, args=(args.log, Handler.store, on_saved), daemon=True).start()
+        host_session(args.log)  # after the port above, so a second copy never gets this far
+        threading.Thread(target=collect, args=(args.log, Handler.store, announce), daemon=True).start()
     url = f"http://127.0.0.1:{args.port}/"
     print(f"Strafe Review {updater.VERSION} viewer on {url} (attempts from {args.store})", flush=True)
     threading.Thread(target=update_loop, args=(server,), daemon=True).start()

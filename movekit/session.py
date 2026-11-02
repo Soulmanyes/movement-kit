@@ -18,6 +18,9 @@ changes the port, for tests):
 A process that wants the session calls start(log). It gets (session, server), or None when the port
 is taken: another process (the Strafe Review server, or `python -m movekit.session`) already has one,
 and this one only listens with listen().
+A tool that needs the events for its log calls join(log): it hosts the session if the port is free,
+listens if the session there reads the same log, and otherwise (the Strafe Review server still
+serving Momentum's log while CS:S runs) reads the log with a private Session of its own.
 
 Stdlib only; works on Linux and Windows.
 """
@@ -227,12 +230,21 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b": movekit session\n\n")
             self.wfile.flush()
-            while True:
+            # end the stream when the session stops, so listeners notice at once (shutdown() only
+            # stops new connections) and one of them can take the port over
+            stop = getattr(self.session, "stop", None)
+            quiet = 0
+            while not (stop and stop.is_set()):
                 try:
-                    event = q.get(timeout=PING)
+                    event = q.get(timeout=1)
                 except queue.Empty:
+                    quiet += 1
+                    if quiet < PING:
+                        continue
+                    quiet = 0
                     self.wfile.write(b": ping\n\n")
                 else:
+                    quiet = 0
                     data = json.dumps(event, separators=(",", ":"))
                     self.wfile.write(f"id: {event['id']}\nevent: {event['type']}\ndata: {data}\n\n".encode())
                 self.wfile.flush()
@@ -302,6 +314,94 @@ def listen(url=URL, after=None, retry=1.0, stop=None):
                 return
         else:
             time.sleep(retry)
+
+
+def same_log(a, b):
+    """True if paths a and b name the same file (or, while it doesn't exist, the same path)."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def status(url=URL, timeout=2):
+    """The /status of the session on `url`, or None when nothing answers there."""
+    try:
+        with urlopen(url.rstrip("/") + "/status", timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except (OSError, ValueError):
+        return None
+
+
+class Joined:
+    """The session's events for one log, however this process gets them; see join().
+    mode: "host" (this process serves it), "listen" (another process does) or "private" (the
+    port serves another log, so this process reads its own log without serving it)."""
+
+    def __init__(self, log, port=PORT, poll=POLL, retry=1.0):
+        self.log = Path(log)
+        self.events = queue.SimpleQueue()  # what the tool reads: every event, in order
+        self.stop = threading.Event()
+        self._port, self._poll, self._retry = port, poll, retry
+        self._url = f"http://{HOST}:{port}"
+        self._hosted = None
+        if self._host():
+            return
+        st = status(self._url)
+        if st is not None and same_log(st.get("log", ""), self.log):
+            self.mode = "listen"
+            threading.Thread(target=self._listen, args=(st.get("lastId"),), name="movekit-join", daemon=True).start()
+            return
+        self.mode = "private"
+        self.session = Session(self.log)
+        self._forward(self.session.bus)
+        threading.Thread(target=self.session.run, args=(self.stop, poll), name="movekit-session", daemon=True).start()
+
+    def _host(self):
+        got = start(self.log, port=self._port, poll=self._poll)
+        if got is None:
+            return False
+        self._hosted = got
+        self.mode = "host"
+        self.session = got[0]
+        self._forward(self.session.bus)
+        return True
+
+    def _forward(self, bus):
+        """Copy the bus's events into self.events from now on."""
+        q = bus.subscribe()
+
+        def pump():
+            while not self.stop.is_set():
+                try:
+                    self.events.put(q.get(timeout=0.5))
+                except queue.Empty:
+                    pass
+            bus.unsubscribe(q)
+        threading.Thread(target=pump, name="movekit-join-pump", daemon=True).start()
+
+    def _listen(self, after):
+        for event in listen(self._url, after=after, retry=self._retry, stop=self.stop):
+            if event is not None:
+                self.events.put(event)
+            elif self._host():  # the host went away: serve the session from here instead
+                return
+
+    def close(self):
+        self.stop.set()
+        if self._hosted:
+            session, server = self._hosted
+            session.stop.set()
+            server.shutdown()
+            server.server_close()
+            self._hosted = None
+
+
+def join(log, port=PORT, poll=POLL, retry=1.0):
+    """The session's events for `log` as Joined(...).events, a queue of event dicts. Hosts the
+    session when the port is free; listens when it serves the same log; reads the log privately
+    when it serves another one. Call close() when done (it frees the port if this process hosts)."""
+    return Joined(log, port, poll, retry)
 
 
 def main():

@@ -7,9 +7,13 @@ Covers: the bus (ids, history for late subscribers, its limit, unsubscribe), tok
 echoes, a token cut off mid-write, one at the line end, chat ignored, look-alikes), the session's
 map and token events for Momentum and CS:S lines, start="end", an emptied log, and over HTTP:
 /status, /events, a reconnect with Last-Event-ID, a foreign Host refused, CORS for localhost pages
-only, and a second start() on a taken port.
+only, and a second start() on a taken port. join(): hosting on a free port, listening to a session
+of the same log, a private session when the port serves another log, and a listener taking over
+when the host closes.
 """
 import json
+import queue
+import socket
 import sys
 import tempfile
 import threading
@@ -152,11 +156,62 @@ def check_http(log):
     s.stop.set()
 
 
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def take(joined, timeout=5):
+    try:
+        return kinds([joined.events.get(timeout=timeout)])[0]
+    except queue.Empty:
+        return None
+
+
+def wait_for(cond, timeout=5):
+    end = threading.Event()
+    for _ in range(int(timeout / 0.01)):
+        if cond():
+            return True
+        end.wait(0.01)
+    return False
+
+
+def check_join(tmp):
+    port = free_port()
+    log_a, log_b = Path(tmp) / "a.log", Path(tmp) / "b.log"
+    write(log_a, b"old\n", "wb")
+    write(log_b, b"", "wb")
+    a = session.join(log_a, port=port, poll=0.01, retry=0.05)
+    check("join on a free port: host", a.mode, "host")
+    b = session.join(log_a, port=port, poll=0.01, retry=0.05)
+    check("join, same log served: listen", b.mode, "listen")
+    c = session.join(log_b, port=port, poll=0.01, retry=0.05)
+    check("join, another log served: private", c.mode, "private")
+    wait_for(lambda: a.session.bus.listeners >= 2)  # a's own pump and b's stream
+    write(log_a, b"YAW_210\n")
+    write(log_b, b"SY_OFFSETS\n")
+    check("host gets its log's events", take(a), ("token", "YAW_210"))
+    check("listener gets them too", take(b), ("token", "YAW_210"))
+    check("private gets its own log's", take(c), ("token", "SY_OFFSETS"))
+    check("private gets nothing of the other log", take(c, 0.3), None)
+    a.close()
+    check("listener takes over when the host closes", wait_for(lambda: b.mode == "host"), True)
+    write(log_a, b"Host_NewGame on map bhop_b\n")
+    check("and reads the log itself", take(b), ("map_loaded", "bhop_b"))
+    b.close()
+    c.close()
+    check("closed host frees the port", session.status(f"http://127.0.0.1:{port}", timeout=0.5), None)
+
+
 def main():
     check_bus()
     check_tokens()
     with tempfile.TemporaryDirectory() as tmp:
         check_http(check_session(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        check_join(tmp)
     print("all session checks passed")
 
 

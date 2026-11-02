@@ -8,12 +8,13 @@ For CS:S the pieces fit together like this:
   - the game runs yaws.cfg (autoexec has `exec yaws.cfg`). Pressing the cycle
     key sets the next cl_yawspeed, plays its sound and echoes YAW_<speed>.
   - `con_logfile yaw.log` copies the console into cstrike/yaw.log.
-  - yaw-watch.sh tails that log and copies crosshairs/YAW_<speed>.png over
+  - crosshair_watch.py gets the YAW_<speed> echoes from the movekit session
+    reading that log, and copies crosshairs/YAW_<speed>.png over
     ~/.config/sourceyaw/current.png. The game runs with KROSSHAIR_IMG pointing at
     that file, and the KROSSHAIR Vulkan layer reloads it inside the game's own
     frames (no compositor overlay, so no stutter).
   - yaw-run is the Steam launch option wrapper: it runs `yawcore.py --apply`,
-    sets KROSSHAIR=1 and KROSSHAIR_IMG for the game, and runs yaw-watch.sh for
+    sets KROSSHAIR=1 and KROSSHAIR_IMG for the game, and runs crosshair_watch.py for
     as long as the game runs. The app only edits settings.
 """
 
