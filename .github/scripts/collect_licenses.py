@@ -5,8 +5,9 @@ print what was found, for the zip next to an exe (windows-release.yml, input `li
 Usage: python collect_licenses.py OUT_FOLDER pywebview [more packages...]
 
 Reads the installed distributions' metadata (importlib.metadata), so the list is what the build
-machine had, not what someone remembers. A package with no licence file in its metadata is an error:
-its terms would be missing from the zip.
+machine had, not what someone remembers. A package whose metadata has no licence file takes
+licenses/<name>-LICENSE.txt from the current folder (the tool's), a copy of its upstream licence
+kept by hand; with neither it is an error, because its terms would be missing from the zip.
 """
 import re
 import sys
@@ -47,7 +48,11 @@ def main():
         licence = dist.metadata.get("License-Expression") or dist.metadata.get("License") or ""
         print(f"{dist.metadata['Name']} {dist.version}: {licence.splitlines()[0] if licence else '?'}"
               f" ({', '.join(str(f) for f in files) or 'no licence file'})")
-        if not files:
+        kept = Path("licenses") / f"{norm(dist.metadata['Name'])}-LICENSE.txt"
+        if not files and kept.is_file():
+            print(f"  using {kept}, kept in the repo")
+            (out / kept.name).write_bytes(kept.read_bytes())
+        elif not files:
             missing.append(dist.metadata["Name"])
         for i, f in enumerate(files):
             stem = f"{norm(dist.metadata['Name'])}-{Path(str(f)).name}" + (f"-{i}" if i else "")
