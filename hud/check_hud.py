@@ -42,9 +42,31 @@ def main():
         from movekit import hub
 
         # the store
-        expect(settings.file(), tmp / "data" / "strafe-review" / "settings.json", "settings file")
+        expect(settings.file(), tmp / "data" / "movekit" / "hud.json", "settings file")
+        old = tmp / "data" / "strafe-review" / "settings.json"
+        expect(settings.old_file(), old, "old settings file")
         expect(settings.load(), {"inGameLine": False}, "defaults with no file")
-        settings.file().parent.mkdir(parents=True)
+
+        # the old file (Strafe Review's data folder) counts until hud.json exists, and stays as it was
+        old.parent.mkdir(parents=True)
+        old.write_text("{not json")
+        expect(settings.get("inGameLine"), False, "a broken old file reads as defaults")
+        old.write_text('{"inGameLine": true, "kept": 1}')
+        expect(settings.get("inGameLine"), True, "value from the old file")
+        expect(settings.file().exists(), False, "reading doesn't write hud.json")
+        settings.save("inGameLine", False)
+        expect(json.loads(settings.file().read_text()), {"inGameLine": False, "kept": 1}, "first save carries the old keys")
+        expect(old.read_text(), '{"inGameLine": true, "kept": 1}', "old file after the first save")
+        old.write_text('{"inGameLine": true}')
+        expect(settings.get("inGameLine"), False, "the old file is ignored once hud.json exists")
+        settings.file().unlink()
+        old.unlink()
+        if (tmp / "data" / "strafe-review").exists():
+            (tmp / "data" / "strafe-review").rmdir()
+        settings.save("inGameLine", False)
+        expect((tmp / "data" / "strafe-review").exists(), False, "saving doesn't make Strafe Review's folder")
+        settings.file().unlink()
+        settings.file().parent.mkdir(parents=True, exist_ok=True)
         settings.file().write_text("{not json")
         expect(settings.get("inGameLine"), False, "a broken file reads as defaults")
         settings.file().write_text('{"inGameLine": "yes", "other": 3}')

@@ -70,6 +70,9 @@ os.environ["MODCHECK_OUT"] = str(OUT)
 
 from movekit import modules  # after the path and environment above
 
+CORE = modules.CORE_VERSION
+_major, _minor, *_ = CORE.split(".")
+NEXT_CORE = f"{_major}.{int(_minor) + 1}.0"  # a hub-v* release newer than this core
 HOOK_NAMES = {"install", "uninstall", "stop", "start", "launch"}
 ALLOWED = (set(sys.stdlib_module_names) - {"tkinter", "turtle", "idlelib", "test", "ensurepip"}) \
     | {"movekit", "hud", "webview", "__future__"}
@@ -313,7 +316,7 @@ def check_manager():
 
     gh.release("alpha-v1.0.0", "alpha-module.zip", module_zip("alpha", "1.0.0"))
     gh.release("beta-v1.0.0", "beta-module.zip", module_zip("beta", "1.0.0", needs=["alpha"]))
-    gh.release("hub-v1.0.0")
+    gh.release(f"hub-v{CORE}")
     latest = mgr.check(force=True)
     expect(sorted(latest), ["alpha", "beta", "core"], "lines found")
     expect(latest["alpha"]["tag"], "alpha-v1.0.0", "alpha's newest release")
@@ -321,7 +324,7 @@ def check_manager():
     card = mgr.info("alpha")
     expect((card["installed"], card["can_install"], card["auto"]), (False, True, False),
            "alpha's card before install")
-    expect(mgr.info("core")["update"], False, "core 1.0.0 against hub-v1.0.0")
+    expect(mgr.info("core")["update"], False, f"core {CORE} against hub-v{CORE}")
 
     raises(lambda: mgr.install("beta"), "needs alpha", "beta before alpha")
     expect((kit / "beta").exists(), False, "beta's folder after the refused install")
@@ -392,11 +395,11 @@ def check_manager():
     # update_all takes every module with an update, then the core
     gh.release("alpha-v1.5.0", "alpha-module.zip", module_zip("alpha", "1.5.0"))
     gh.release("beta-v1.1.0", "beta-module.zip", module_zip("beta", "1.1.0", needs=["alpha"]))
-    gh.release("hub-v1.1.0")
+    gh.release(f"hub-v{NEXT_CORE}")
     mgr.check(force=True)
     expect(mgr.update_all(), {"alpha": None, "beta": None, "core": None}, "update_all")
     expect((mgr.version("alpha"), mgr.version("beta")), ("1.5.0", "1.1.0"), "versions after update_all")
-    expect([c["tag"] for c in core_installs], ["hub-v1.1.0"], "core installer calls")
+    expect([c["tag"] for c in core_installs], [f"hub-v{NEXT_CORE}"], "core installer calls")
     calls()
 
     # a swap that fails halfway (Windows: a file still in use) puts everything back

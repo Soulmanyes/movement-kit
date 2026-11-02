@@ -3,10 +3,11 @@
 Keys (bool unless noted; DEFAULTS has each one's value when unset):
   inGameLine   Strafe Review's recorder shows the jump-1 line (landing speed, gain, mistakes)
 
-The file is settings.json in Strafe Review's data folder (%LOCALAPPDATA%\\strafe-review on Windows,
-~/.local/share/strafe-review elsewhere), where the review page kept it before hud/ took it over.
-Installed strafe-review v1.5.0 exes read and write it there, so it stays until the hub release
-(PLAN.md 3.7). Keys this module doesn't know are kept as they are.
+The file is hud.json in the kit's data folder (%LOCALAPPDATA%\\movekit on Windows,
+~/.local/share/movekit elsewhere). Until the first save there, the values come from the old file,
+settings.json in Strafe Review's data folder, where the review page kept them before the HUD
+took them over (PLAN.md 3.9). The old file is left alone: a strafe-review v1.5.0 exe that hasn't
+updated yet still reads it. Keys this module doesn't know are kept as they are.
 
 Saving only stores a value; the tool that draws it writes it into the game (for the jump-1 line:
 strafe-review/recorder_settings.py).
@@ -20,12 +21,18 @@ DEFAULTS = {"inGameLine": False}
 
 
 def file():
+    return paths.data_dir("movekit") / "hud.json"
+
+
+def old_file():
+    """Where the values were kept before hud.json; read only while hud.json doesn't exist."""
     return paths.data_dir("strafe-review") / "settings.json"
 
 
 def _stored():
+    path = file() if file().exists() else old_file()
     try:
-        got = json.loads(file().read_text(encoding="utf-8"))
+        got = json.loads(path.read_text(encoding="utf-8"))
         return got if isinstance(got, dict) else {}
     except (OSError, ValueError):
         return {}

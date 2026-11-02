@@ -307,7 +307,3 @@ body.stopped { align-items: center; justify-content: center; }
 .status-row.bad { border-color: #c0564f; }
 .status-row.bad b { color: #e06c64; }
 
-/* sidebar foot on the main page (the in-game line toggle, ingame.js) */
-#ingame { display: grid; gap: 6px; }
-.side-foot { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--border); display: grid; gap: 6px; font-size: 12px; }
-.upd-auto { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }

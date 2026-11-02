@@ -28,9 +28,6 @@ Routes:
                              last change), what the collector has seen, its last error, and
                              the movekit session's status if this process hosts it (else null)
   /api/events                server-sent events: "attempt" with {dir, id} when a new attempt is saved
-  GET /api/settings          {"inGameLine": bool}
-  POST /api/settings         {"inGameLine": bool}: saved, and written into the installed recorder
-                             (answers {"applied": false} when it isn't installed)
   POST /api/stop             stops this program (the page's Stop button); it starts again with the game
                              or by hand
   POST /api/meta/<map>/<id>  {"note": str, "tags": [str]}: sets the attempt's note and tags, answers
@@ -51,10 +48,9 @@ from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
 import collector
-import install
 
-from hud import settings as hud_settings  # collector set the path to the repo root
-from movekit import attempts as attempt_files  # and so to movekit
+# collector set the path to the repo root, and so to movekit
+from movekit import attempts as attempt_files
 from movekit import session
 
 STATIC = collector.ROOT / "viewer" / "static"
@@ -349,20 +345,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parts = self.path.split("?", 1)[0].strip("/").split("/")
-        if parts == ["api", "settings"]:
-            if not self.local_request():
-                return self.fail(403, "forbidden")
-            try:
-                size = int(self.headers.get("Content-Length") or 0)
-                body = json.loads(self.rfile.read(size)) if 0 < size <= MAX_BODY else None
-                line = body["inGameLine"]
-                if not isinstance(line, bool):
-                    raise TypeError
-            except (ValueError, TypeError, KeyError):
-                return self.fail(400, 'expected {"inGameLine": true or false}')
-            hud_settings.save("inGameLine", line)
-            applied = bool(MOM_DIR) and install.apply_settings(MOM_DIR)
-            return self.send(200, json.dumps({**hud_settings.load(), "applied": applied}).encode(), "application/json")
         if parts == ["api", "stop"]:
             if not self.local_request():
                 return self.fail(403, "forbidden")
@@ -410,8 +392,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, TOKENS.read_bytes(), "text/css; charset=utf-8")
         elif parts == ["api", "events"]:
             return self.events()
-        elif parts == ["api", "settings"]:
-            return self.send(200, json.dumps({"inGameLine": hud_settings.get("inGameLine")}).encode(), "application/json")
         elif parts == ["api", "status"]:
             return self.send(200, json.dumps(status(self)).encode(), "application/json")
         elif parts == ["api", "mouse"]:

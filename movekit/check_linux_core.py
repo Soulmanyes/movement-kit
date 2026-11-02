@@ -42,6 +42,8 @@ os.environ.pop("MOVEKIT_MODULES_API", None)
 from movekit import hub, launch, modules, paths  # after the environment above
 
 KIT = modules.core_kit()
+_major, _minor, _patch = modules.CORE_VERSION.split(".")
+NEXT_CORE = f"{_major}.{_minor}.{int(_patch) + 1}"  # a hub-v* release newer than this core
 BIN = Path(os.environ["HOME"]) / ".local" / "bin" / "movekit-run"
 
 
@@ -194,7 +196,7 @@ def check_launch_link():
 
 def check_core_update(gh):
     # a source archive like GitHub's: one top folder holding the repo, here with a marked core
-    src = TMP / "src" / "movement-kit-hub-v1.0.1"
+    src = TMP / "src" / f"movement-kit-hub-v{NEXT_CORE}"
     for d in ("movekit", "hud"):
         shutil.copytree(REPO / d, src / d, ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copy(REPO / "LICENSE", src / "LICENSE")
@@ -202,9 +204,9 @@ def check_core_update(gh):
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         tar.add(src, arcname=src.name)
-    gh.add("hub-v1.0.1", tarball_url=None)
-    gh.releases[0]["tarball_url"] = gh.base + "/source/hub-v1.0.1.tar.gz"
-    gh.files["/source/hub-v1.0.1.tar.gz"] = buf.getvalue()
+    gh.add(f"hub-v{NEXT_CORE}", tarball_url=None)
+    gh.releases[0]["tarball_url"] = gh.base + f"/source/hub-v{NEXT_CORE}.tar.gz"
+    gh.files[f"/source/hub-v{NEXT_CORE}.tar.gz"] = buf.getvalue()
     keep = KIT / "keepme"
     keep.mkdir()
     (keep / "module.json").write_text("{}")
@@ -218,7 +220,7 @@ def check_core_update(gh):
         fail("the core update didn't copy the new core")
     if not (keep / "module.json").is_file():
         fail("the core update removed a module folder")
-    expect(mgr.state["modules"]["core"].get("installed"), "hub-v1.0.1", "the core update is marked")
+    expect(mgr.state["modules"]["core"].get("installed"), f"hub-v{NEXT_CORE}", "the core update is marked")
     expect(BIN.resolve(), (KIT / "movekit" / "movekit-run").resolve(), "movekit-run after the core update")
     shutil.rmtree(keep)
     gh.releases.clear()

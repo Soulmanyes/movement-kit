@@ -371,7 +371,7 @@ function onTargetChange(why: string) {
 
 const LINE_TAG = 'SRLINE';
 // Off by default, so it never lands on top of someone's own HUD. install.py rewrites this line from the
-// viewer's "Show the jump-1 line in game" switch; the SRLINE log line is written either way.
+// hub's HUD section ("Show the jump-1 line in game"); the SRLINE log line is written either way.
 const SHOW_LINE = false;
 const SHOW = { landing: true, gain: true, strafes: true, cause: true, mistake: true };
 const LINE_SECONDS = 4;
