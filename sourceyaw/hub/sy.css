@@ -1,0 +1,194 @@
+/* The Source Yaw section's page (sourceyaw/hub/). Colours come from movekit/web/tokens.css. */
+.sy-head {
+	position: sticky;
+	top: -22px;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: -22px -26px 14px;
+	padding: 16px 26px 12px;
+	background: var(--bg);
+	border-bottom: 1px solid var(--border);
+}
+.sy-head h1 { margin: 0; }
+.sy-primary { background: var(--accent); border-color: var(--accent); color: #0d1117; font-weight: 600; padding: 6px 18px; }
+.sy-primary:disabled { background: var(--card-hi); border-color: var(--border); color: var(--muted); cursor: default; }
+button:disabled { opacity: 0.55; cursor: default; }
+button:disabled:hover { border-color: var(--border); }
+
+.sy-banner {
+	margin-bottom: 14px;
+	padding: 10px 14px;
+	border: 1px solid var(--warn);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--warn) 14%, var(--card));
+	color: var(--text);
+}
+
+.sy-desc { margin: -4px 0 8px; }
+.sy-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.sy-group-head h2 { margin-bottom: 2px; }
+
+.sy-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 0;
+	border-top: 1px solid var(--border);
+}
+.card > h2 + .sy-row, .sy-group-head + .sy-row, .sy-desc + .sy-row { border-top: none; }
+.sy-label { flex: 1; min-width: 0; font-weight: 500; }
+.sy-label .muted { font-weight: normal; font-size: 13px; }
+.sy-label .muted.warn, .warn { color: var(--warn); }
+.sy-field { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.sy-field input[type="number"] { width: 78px; }
+.sy-trainer.off { opacity: 0.45; pointer-events: none; }
+
+/* on/off switches: a visible track either way */
+.sy-switch {
+	appearance: none;
+	flex: none;
+	width: 44px;
+	height: 24px;
+	margin: 0;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: var(--track);
+	position: relative;
+	cursor: pointer;
+}
+.sy-switch::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--text);
+	transition: left 0.12s;
+}
+.sy-switch:checked { background: var(--accent); border-color: var(--accent); }
+.sy-switch:checked::after { left: 22px; }
+.sy-switch:disabled { opacity: 0.5; cursor: default; }
+
+.sy-seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.sy-seg button { border: none; border-radius: 0; background: var(--bg); }
+.sy-seg button + button { border-left: 1px solid var(--border); }
+.sy-seg button.active { background: var(--accent); color: #0d1117; font-weight: 600; }
+
+.sy-key {
+	min-width: 34px;
+	padding: 3px 10px;
+	text-align: center;
+	font-weight: 700;
+	font-family: ui-monospace, monospace;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.sy-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0d1117; }
+
+/* one yawspeed per row */
+.sy-entry {
+	display: grid;
+	grid-template-columns: auto auto 22px 37px minmax(90px, 120px) 46px minmax(150px, 1fr) auto auto;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	margin-top: 6px;
+	background: var(--card-hi);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.sy-entry.start { border-color: var(--accent); }
+.sy-move { display: flex; flex-direction: column; gap: 2px; }
+.sy-move button { padding: 0 6px; font-size: 10px; line-height: 14px; }
+.sy-entry input[type="radio"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.sy-num { font-weight: 700; color: var(--muted); text-align: right; }
+.sy-preview {
+	width: 33px;
+	height: 33px;
+	image-rendering: pixelated;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+}
+.sy-entry input[type="number"] { width: 100%; }
+.sy-sound-wrap { display: flex; gap: 6px; min-width: 0; }
+.sy-sound-wrap select { flex: 1; min-width: 0; }
+
+input[type="color"] {
+	width: 46px;
+	height: 30px;
+	padding: 2px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	cursor: pointer;
+}
+.sy-sound { min-width: 170px; }
+
+.sy-launch {
+	flex: 1;
+	padding: 8px 10px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font-family: ui-monospace, monospace;
+	user-select: all;
+	overflow-wrap: anywhere;
+}
+
+/* key capture */
+.sy-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.55);
+}
+.sy-dialog {
+	width: min(460px, 90vw);
+	padding: 16px 18px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+}
+.sy-capture-area {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 130px;
+	margin-bottom: 8px;
+	text-align: center;
+	background: var(--card);
+	border: 2px dashed var(--border);
+	border-radius: 8px;
+	outline: none;
+}
+.sy-capture-area:focus { border-color: var(--accent); }
+.sy-dialog-buttons { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+#sy-toasts {
+	position: fixed;
+	right: 18px;
+	bottom: 18px;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: min(460px, 70vw);
+}
+.sy-toast {
+	padding: 9px 14px;
+	background: var(--card-hi);
+	border: 1px solid var(--accent);
+	border-radius: 8px;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.sy-toast.error { border-color: var(--warn); }
