@@ -1,0 +1,408 @@
+#!/usr/bin/env python3
+"""Checks movekit.modules (3.7b in PLAN.md) without touching this system: fixture modules, a fake
+GitHub on a local port, and every data and config folder pointed into a temp folder.
+
+Usage: python movekit/check_modules.py   (exits 1 on the first failure)
+
+Covers, for the kit's own modules: each module.json is valid and its version_from file has a
+VERSION; module_hooks.py loads and defines only known hooks; core 1.0.0 matches hub/hub_release.py;
+and the import rule: a module that runs on Windows imports only the standard library (less tkinter),
+movekit, hud, webview and its own files, since the core exe can only give it what it bundled
+(files module.json lists as standalone, such as an old window, are left out).
+For the manager, against fixture modules alpha and beta (beta needs alpha) in a plain kit folder:
+GitHub's list read once (drafts, pre-releases, releases with no module zip and other tools' tags
+left out; the highest version wins), a fresh kit with nothing installed, install refused while a
+needed module is missing, install, update (previous kept, install hook run again, stop and start
+around it), roll back and back again, auto off by default and auto_update doing nothing until the
+switch is on, a broken release (install hook fails: marked failed, the old version back, auto
+skipping it), a release that needs a newer core (waits, nothing changed), a zip with a ../ path
+refused, set_auto refusing a non-bool, uninstall refused while another module needs it, uninstall
+(hook run, folder and previous gone, saved data kept or deleted as asked, the auto switch kept),
+update_all, and the core's card using the installer it was given. In a git checkout: no downloads,
+uninstall runs the hook and hides the module with its code left, install shows it again.
+"""
+import ast
+import http.server
+import io
+import json
+import os
+import shutil
+import sys
+import tempfile
+import threading
+import zipfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+KIT = HERE.parent
+sys.path.insert(0, str(KIT))
+TMP = Path(tempfile.mkdtemp(prefix="check-modules-"))
+for var, sub in (("XDG_DATA_HOME", "data"), ("XDG_CONFIG_HOME", "config"),
+                 ("LOCALAPPDATA", "data"), ("APPDATA", "config")):
+    os.environ[var] = str(TMP / sub)
+OUT = TMP / "hook-calls"
+OUT.mkdir()
+os.environ["MODCHECK_OUT"] = str(OUT)
+
+from movekit import modules  # after the path and environment above
+
+HOOK_NAMES = {"install", "uninstall", "stop", "start"}
+ALLOWED = (set(sys.stdlib_module_names) - {"tkinter", "turtle", "idlelib", "test", "ensurepip"}) \
+    | {"movekit", "hud", "webview", "__future__"}
+SKIP = {"build", "dist", "__pycache__", "probe"}  # build output, and tools that never ship
+
+
+def fail(msg):
+    shutil.rmtree(TMP, ignore_errors=True)
+    sys.exit(f"FAIL: {msg}")
+
+
+def expect(got, want, what):
+    if got != want:
+        fail(f"{what}: got {got!r}, want {want!r}")
+
+
+def raises(fn, text, what):
+    try:
+        fn()
+    except (RuntimeError, ValueError) as e:
+        if text not in str(e):
+            fail(f"{what}: error {e!r} doesn't say {text!r}")
+        return
+    fail(f"{what}: no error")
+
+
+# the kit's own modules
+
+def own_names(folder):
+    """Module names a tool's own files can import: its .py files and folders, at any depth (the
+    tools put their subfolders on the path)."""
+    names = set()
+    for p in folder.rglob("*"):
+        if SKIP & set(p.relative_to(folder).parts):
+            continue
+        if p.suffix == ".py":
+            names.add(p.stem)
+        elif p.is_dir():
+            names.add(p.name)
+    return names
+
+
+def shipped_files(folder):
+    for p in sorted(folder.rglob("*.py")):
+        rel = p.relative_to(folder)
+        if SKIP & set(rel.parts) or rel.name.startswith("check_") \
+                or rel.name in ("build.py", "smoke_test.py"):
+            continue
+        yield p
+
+
+def optional(tree):
+    """Import nodes inside a try that catches ImportError: the file runs without them."""
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try) and any(
+                isinstance(h.type, ast.Name) and h.type.id in ("ImportError", "ModuleNotFoundError")
+                for h in node.handlers):
+            out |= {id(n) for stmt in node.body for n in ast.walk(stmt)}
+    return out
+
+
+def imports(file):
+    """(top-level name, line) of each import the file needs."""
+    tree = ast.parse(file.read_text(encoding="utf-8"), str(file))
+    skip = optional(tree)
+    for node in ast.walk(tree):
+        if id(node) in skip:
+            continue
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                yield a.name.split(".")[0], node.lineno
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            yield node.module.split(".")[0], node.lineno
+
+
+def check_own_modules():
+    hub_release = (KIT / "hub" / "hub_release.py").read_text()
+    expect(modules.VERSION_RE.search(hub_release).group(1), modules.CORE_VERSION,
+           "hub_release.VERSION against CORE_VERSION")
+    found = []
+    for folder in sorted(p for p in KIT.iterdir() if (p / modules.MANIFEST).is_file()):
+        try:
+            m = modules.read_manifest(folder)
+        except ValueError as e:
+            fail(f"{folder.name}/module.json: {e}")
+        found.append(m["key"])
+        if not modules.module_version(folder, m):
+            fail(f"{folder.name}: no VERSION line in {m['version_from']}")
+        if (folder / modules.HOOKS).is_file():
+            hooks = modules.hub._load(folder / modules.HOOKS, f"check_modules_{folder.name}")
+            public = {n for n in vars(hooks) if callable(getattr(hooks, n)) and not n.startswith("_")
+                      and getattr(getattr(hooks, n), "__module__", None) == hooks.__name__}
+            if public - HOOK_NAMES:
+                fail(f"{folder.name}/module_hooks.py defines {sorted(public - HOOK_NAMES)}")
+        if "win32" in m["os"]:
+            own = own_names(folder)
+            for file in shipped_files(folder):
+                if str(file.relative_to(folder)) in m["standalone"]:
+                    continue
+                for name, line in imports(file):
+                    if name not in ALLOWED and name not in own:
+                        fail(f"{file.relative_to(KIT)}:{line} imports {name}, which the core exe "
+                             "doesn't carry")
+    expect(sorted(found), ["gain-converter", "sourceyaw", "strafe-review"], "the kit's modules")
+    # discovery from the checkout finds every module's folder (the manager itself, next)
+    mgr = modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="linux")
+    expect(mgr.problems(), [], "problems in the kit's module.json files")
+    expect(sorted(mgr.available()), sorted(found), "modules available on Linux")
+    expect(sorted(modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="win32").available()),
+           ["gain-converter", "strafe-review"], "modules available on Windows")
+
+
+# fixture modules and a fake GitHub
+
+HOOKS_SRC = '''import os
+from pathlib import Path
+
+from movekit.modules import module_version
+
+BROKEN = {broken}
+
+
+def _note(ctx, what):
+    v = module_version(ctx.folder, ctx.manifest)
+    (Path(os.environ["MODCHECK_OUT"]) / f"{{ctx.manifest['key']}}-{{what}}-{{v}}").write_text("")
+
+
+def install(ctx):
+    if BROKEN:
+        raise RuntimeError("no game here")
+    _note(ctx, "install")
+
+
+def uninstall(ctx):
+    _note(ctx, "uninstall")
+
+
+def stop(ctx):
+    _note(ctx, "stop")
+    return True
+
+
+def start(ctx):
+    _note(ctx, "start")
+'''
+
+
+def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=False):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(f"{key}/module.json", json.dumps({
+            "key": key, "title": key.title(), "summary": f"{key} module", "os": ["linux", "win32"],
+            "tag_prefix": f"{key}-v", "version_from": "tool.py", "needs_core": needs_core,
+            "needs": list(needs), "data": [f"data:{key}-data"]}))
+        z.writestr(f"{key}/tool.py", f'VERSION = "{version}"\n')
+        z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken))
+        if evil:
+            z.writestr("../escaped.txt", "x")
+    return buf.getvalue()
+
+
+class GitHub:
+    """Answers like GitHub's release list, and serves the zips it names."""
+
+    def __init__(self):
+        self.releases, self.files = [], {}
+        gh = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/releases"):
+                    body = json.dumps(gh.releases).encode()
+                elif self.path in gh.files:
+                    body = gh.files[self.path]
+                else:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def release(self, tag, asset=None, data=None, **extra):
+        r = {"tag_name": tag, "html_url": f"https://example.invalid/{tag}", "body": f"notes {tag}",
+             "assets": [], **extra}
+        if asset:
+            path = f"/files/{tag}/{asset}"
+            self.files[path] = data
+            r["assets"].append({"name": asset, "browser_download_url": self.base + path})
+        self.releases.insert(0, r)
+
+
+def calls():
+    """The hook calls since the last look, sorted, and clears them."""
+    out = sorted(p.name for p in OUT.iterdir())
+    for p in OUT.iterdir():
+        p.unlink()
+    return out
+
+
+def check_manager():
+    gh = GitHub()
+    kit, data = TMP / "kit", TMP / "mgr"
+    core_installs = []
+    mgr = modules.Manager(kit_root=kit, data=data, api=gh.base + "/releases?per_page=100",
+                          core_installer=core_installs.append)
+
+    # nothing on GitHub that the manager offers yet
+    gh.release("alpha-v0.9.0")  # from before 3.7b: no module zip
+    gh.release("gamma-v1.0.0", "gamma-windows.zip", b"")  # a tool exe, not a module
+    gh.release("alpha-v2.0.0", "alpha-module.zip", module_zip("alpha", "2.0.0"), draft=True)
+    gh.release("alpha-v3.0.0", "alpha-module.zip", module_zip("alpha", "3.0.0"), prerelease=True)
+    expect(mgr.check(force=True), {}, "releases the manager offers before any module zip")
+    expect([c["key"] for c in mgr.cards()], ["core"], "cards of a fresh kit")
+    expect(mgr.installed(), {}, "a fresh kit installs nothing")
+
+    gh.release("alpha-v1.0.0", "alpha-module.zip", module_zip("alpha", "1.0.0"))
+    gh.release("beta-v1.0.0", "beta-module.zip", module_zip("beta", "1.0.0", needs=["alpha"]))
+    gh.release("hub-v1.0.0")
+    latest = mgr.check(force=True)
+    expect(sorted(latest), ["alpha", "beta", "core"], "lines found")
+    expect(latest["alpha"]["tag"], "alpha-v1.0.0", "alpha's newest release")
+    expect(latest["alpha"]["notes"], "notes alpha-v1.0.0", "release notes kept")
+    card = mgr.info("alpha")
+    expect((card["installed"], card["can_install"], card["auto"]), (False, True, False),
+           "alpha's card before install")
+    expect(mgr.info("core")["update"], False, "core 1.0.0 against hub-v1.0.0")
+
+    raises(lambda: mgr.install("beta"), "needs alpha", "beta before alpha")
+    expect((kit / "beta").exists(), False, "beta's folder after the refused install")
+    mgr.install("alpha")
+    expect(calls(), ["alpha-install-1.0.0"], "hooks on install (no stop on a first install)")
+    expect(mgr.version("alpha"), "1.0.0", "alpha's version")
+    expect(sorted(mgr.installed()), ["alpha"], "installed after alpha")
+    expect([p.name for p in mgr.roots()], ["alpha"], "section roots")
+    mgr.install("beta")
+    calls()
+    raises(lambda: mgr.install("alpha"), "already installed", "installing twice")
+
+    # an update keeps the previous version and runs the hooks around the swap
+    gh.release("alpha-v1.1.0", "alpha-module.zip", module_zip("alpha", "1.1.0"))
+    mgr.check(force=True)
+    card = mgr.info("alpha")
+    expect((card["update"], card["can_update"], card["latest"]["tag"]), (True, True, "alpha-v1.1.0"),
+           "alpha's card with an update")
+    expect(mgr.auto_update(), {}, "auto_update with every switch off")
+    expect(mgr.version("alpha"), "1.0.0", "alpha after auto_update with auto off")
+    mgr.update("alpha")
+    expect(calls(), ["alpha-install-1.1.0", "alpha-start-1.1.0", "alpha-stop-1.0.0"],
+           "hooks on update")
+    card = mgr.info("alpha")
+    expect((card["version"], card["can_rollback"], card["previous"]), ("1.1.0", True, "alpha-v1.0.0"),
+           "alpha after the update")
+    raises(lambda: mgr.update("alpha"), "up to date", "updating an up-to-date module")
+
+    mgr.rollback("alpha")
+    expect(mgr.version("alpha"), "1.0.0", "alpha after roll back")
+    expect(mgr.info("alpha")["previous"], "alpha-v1.1.0", "previous after roll back")
+    expect("alpha-install-1.0.0" in calls(), True, "install hook after roll back")
+    mgr.rollback("alpha")
+    expect(mgr.version("alpha"), "1.1.0", "alpha after rolling back the roll back")
+    calls()
+
+    # auto on: auto_update installs; a broken release fails once and is skipped after
+    raises(lambda: mgr.set_auto("alpha", "yes"), "true or false", "set_auto with a string")
+    mgr.set_auto("alpha", True)
+    gh.release("alpha-v1.2.0", "alpha-module.zip", module_zip("alpha", "1.2.0", broken=True))
+    mgr.check(force=True)
+    result = mgr.auto_update()
+    expect(list(result), ["alpha"], "auto_update tried alpha")
+    if "no game here" not in (result["alpha"] or ""):
+        fail(f"auto_update's error for the broken release: {result['alpha']!r}")
+    expect(mgr.version("alpha"), "1.1.0", "alpha after the broken update")
+    expect(mgr.info("alpha")["failed"], "alpha-v1.2.0", "failed mark")
+    calls()
+    expect(mgr.auto_update(), {}, "auto_update skipping the failed release")
+
+    # a release needing a newer core waits
+    gh.release("alpha-v1.3.0", "alpha-module.zip", module_zip("alpha", "1.3.0", needs_core="9.0.0"))
+    mgr.check(force=True)
+    raises(lambda: mgr.update("alpha"), "needs core 9.0.0", "update needing a newer core")
+    expect(mgr.version("alpha"), "1.1.0", "alpha after the refused update")
+    expect(mgr.info("alpha")["waiting_for_core"], "9.0.0", "waiting_for_core on the card")
+    expect(calls(), [], "no hooks for an update that waits for the core")
+
+    gh.release("alpha-v1.4.0", "alpha-module.zip", module_zip("alpha", "1.4.0", evil=True))
+    mgr.check(force=True)
+    raises(lambda: mgr.update("alpha"), "Unexpected file", "a zip with ../")
+    expect((TMP / "mgr" / "escaped.txt").exists() or (TMP / "escaped.txt").exists(), False,
+           "file outside the staging folder")
+    expect(mgr.version("alpha"), "1.1.0", "alpha after the refused zip")
+
+    # update_all takes every module with an update, then the core
+    gh.release("alpha-v1.5.0", "alpha-module.zip", module_zip("alpha", "1.5.0"))
+    gh.release("beta-v1.1.0", "beta-module.zip", module_zip("beta", "1.1.0", needs=["alpha"]))
+    gh.release("hub-v1.1.0")
+    mgr.check(force=True)
+    expect(mgr.update_all(), {"alpha": None, "beta": None, "core": None}, "update_all")
+    expect((mgr.version("alpha"), mgr.version("beta")), ("1.5.0", "1.1.0"), "versions after update_all")
+    expect([c["tag"] for c in core_installs], ["hub-v1.1.0"], "core installer calls")
+    calls()
+
+    # uninstall
+    raises(lambda: mgr.uninstall("alpha"), "beta needs alpha", "uninstalling a needed module")
+    raises(lambda: mgr.uninstall("core"), "can't be uninstalled", "uninstalling the core")
+    for key in ("alpha", "beta"):
+        d = modules.paths.data_dir(f"{key}-data")
+        d.mkdir(parents=True)
+        (d / "saved").write_text("x")
+    mgr.uninstall("beta")
+    expect(calls(), ["beta-stop-1.1.0", "beta-uninstall-1.1.0"], "hooks on uninstall")
+    expect((kit / "beta").exists(), False, "beta's folder after uninstall")
+    expect((modules.paths.data_dir("beta-data") / "saved").exists(), True, "data kept by default")
+    mgr.uninstall("alpha", delete_data=True)
+    expect(modules.paths.data_dir("alpha-data").exists(), False, "data deleted when asked")
+    expect((data / "previous" / "alpha").exists(), False, "previous version after uninstall")
+    expect(mgr.installed(), {}, "installed after both uninstalls")
+    expect(mgr.info("alpha")["auto"], True, "alpha's auto switch kept for a reinstall")
+    calls()
+
+
+def check_checkout():
+    root = TMP / "checkout"
+    (root / ".git").mkdir(parents=True)
+    alpha = root / "alpha"
+    with zipfile.ZipFile(io.BytesIO(module_zip("alpha", "1.0.0"))) as z:
+        z.extractall(root)
+    mgr = modules.Manager(kit_root=root, data=TMP / "co-data", api="http://127.0.0.1:9/none")
+    expect(sorted(mgr.installed()), ["alpha"], "a checkout's modules count as installed")
+    card = mgr.info("alpha")
+    expect((card["checkout"], card["can_update"], card["can_rollback"]), (True, False, False),
+           "a checkout's card")
+    raises(lambda: mgr.update("alpha"), "git pull", "update in a checkout")
+    mgr.uninstall("alpha", delete_data=False)
+    expect(calls(), ["alpha-stop-1.0.0", "alpha-uninstall-1.0.0"], "hooks on a checkout uninstall")
+    expect(((alpha / "tool.py").is_file(), mgr.installed()), (True, {}), "checkout uninstall")
+    expect(mgr.info("alpha")["can_install"], True, "a hidden checkout module can come back")
+    mgr.install("alpha")
+    expect(calls(), ["alpha-install-1.0.0"], "hooks on a checkout install")
+    expect(sorted(mgr.installed()), ["alpha"], "installed again")
+
+
+def main():
+    check_own_modules()
+    check_manager()
+    check_checkout()
+    shutil.rmtree(TMP, ignore_errors=True)
+    print("check_modules: all passed")
+
+
+if __name__ == "__main__":
+    main()

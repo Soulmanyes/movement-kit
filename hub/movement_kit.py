@@ -7,6 +7,9 @@
                                          review page, run the game)
     movement-kit.exe --collect           install the recorder, then collect and serve with no page
                                          opened (the hub's "Open review" starts this)
+    movement-kit.exe --run-script FILE [ARGS...]
+                                         run a module's Python script by path in this process, as
+                                         python would (movekit/modules.py runs module installers so)
     movement-kit.exe --check-sections F [KEY.NAME[:JSON] ...]
                                          write the sections found to the file F as JSON and exit,
                                          with the replies of the section functions named (the smoke
@@ -29,12 +32,25 @@ if not getattr(sys, "frozen", False):
 import strafe_review  # puts collector/ and viewer/ on the path
 
 CHECK_SECTIONS = "--check-sections"
+RUN_SCRIPT = "--run-script"
+
+
+def run_script(path, args):
+    """python FILE ARGS, inside the exe: the script's folder first on the path, as python puts it."""
+    import runpy
+
+    sys.argv = [path, *args]
+    sys.path.insert(0, str(Path(path).resolve().parent))
+    runpy.run_path(path, run_name="__main__")
+    return 0
 
 
 def main():
     from movekit import hub  # here, not at the top: ruff sorts it differently by folder
 
     args = sys.argv[1:]
+    if args[:1] == [RUN_SCRIPT] and len(args) >= 2:
+        return run_script(args[1], args[2:])
     if args[:1] == [CHECK_SECTIONS] and len(args) >= 2:
         hub.check_sections(args[1], calls=args[2:])
         return 0

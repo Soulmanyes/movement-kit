@@ -346,7 +346,7 @@ Left:
 4. Done 2026-11-02: `strafe-review/check_hub_section.py` passed on the branch. At the merge the temporary `branches: ["hub-release"]` push trigger came out of `hub-windows.yml`; test builds now go through Actions > hub-windows > Run workflow.
 5. The `hub-v1.0.0` release (ask the owner first). Nobody has tested the hub exe by hand on Windows yet.
 
-### Phase 3.7b: modules (planned 2026-11-02, waiting for the owner's OK)
+### Phase 3.7b: modules (planned and OK'd 2026-11-02; 3.7b.1 done on branch `modules`)
 
 The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates on its own, so someone who doesn't use a tool never downloads it; each tool can be uninstalled on its own; and each has its own auto-update switch. `hub-v1.0.0` stays untagged until 3.7b ships. This replaces 3.7's "one Windows exe with everything inside": the exe stays one program, but the tools become modules it downloads.
 
@@ -399,6 +399,16 @@ The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates o
 
 **Steps** (checks after each: the existing ones plus the new ones named):
 1. **3.7b.1 Manager.** `module.json` for the three tools, `module_hooks.py` that wrap what exists (`install.py`, Source Yaw's `install.sh`), and `movekit/modules.py`. New checks: `movekit/check_modules.py` (manifests, the import rule, install, update, roll back and uninstall against a fake GitHub in a temp data folder, the needs block, a core-too-old wait) and the launch pass-through with no modules or a broken one.
+   Done 2026-11-02 on branch `modules`. Found while building it:
+   - **One layout everywhere.** Modules sit in a folder named after their key next to `movekit`, as in the repo, so each tool keeps finding `movekit` the way it does now (`steam.py`'s "two folders up"). The kit root is the checkout itself in a git checkout, `<data>/kit` in the Windows exe, and the core's own folder in a Linux copy (3.7b.4). Previous versions sit in `<data>/previous/<key>`, downloads in `<data>/staging`.
+   - **Versions aren't copied into module.json.** `version_from` names the file with the tool's `VERSION = "x.y.z"` line. Gain Converter got one (`1.1.0`, its last tag).
+   - **`standalone`** (optional) lists files that never run in the core, such as Gain Converter's tkinter window, and the import rule skips them. The rule also skips imports inside `try/except ImportError`.
+   - Module lines are found by their `<key>-module.zip` asset, so tool releases from before 3.7b aren't offered as modules.
+   - Hooks run module scripts in a fresh process (`Context.script`): python from the repo, `movement-kit.exe --run-script FILE` in the exe (added to `hub/movement_kit.py`). In-process, `install.py` would leave bare `steam`/`install` modules behind, which `check_hub_section.py` forbids.
+   - Strafe Review's `install` hook fails when Momentum Mod isn't found, so the module doesn't install without its game. Source Yaw's `uninstall` runs `yawcore.py --remove-from-game` first, since `install.sh --uninstall` only asks about that in a terminal. Its settings (`~/.config/sourceyaw`) go only with "Also delete saved data". Strafe Review's data entry leaves `settings.json` alone (the HUD's, part of the core).
+   - The launch pass-through check moves to 3.7b.3, with the Windows dispatcher it checks. Linux already passes through (`movekit-run`, `check_launch.py`).
+   - For 3.7b.3: `strafe-review/install.py` takes `ROOT` from `sys._MEIPASS` in the exe. A module loaded from disk needs it from `__file__` (which PyInstaller also sets inside the bundle, so the old exe keeps working). The same applies to every `_MEIPASS` use in module code.
+   - For 3.7b.2: Strafe Review's own updater (`collector/updater.py`, including the hub line it follows in the exe) gives way to the module card. The core line moves to the manager's "core" entry.
 2. **3.7b.2 Hub page.** The Modules page and cards, `discover()` over installed modules, and Strafe Review's section losing its own update UI to its card. Then a screenshot check, and an owner click test.
 3. **3.7b.3 Windows core.** The `hub/build.py` split (core only, whole stdlib), the core dispatcher in `hub/movement_kit.py`, and `<tool>-module.zip` CI from one script reading `module.json`. Also the smoke test described above.
 4. **3.7b.4 Linux core.** The copy mode in `install-hub.sh`, the Source Yaw adoption and the shared auto state.

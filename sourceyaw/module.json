@@ -1,0 +1,11 @@
+{
+  "key": "sourceyaw",
+  "title": "Source Yaw",
+  "summary": "Yaw speed binds, the crosshair colour changer and the strafe trainer for Source games.",
+  "os": ["linux"],
+  "tag_prefix": "sourceyaw-v",
+  "version_from": "yawcore.py",
+  "needs_core": "1.0.0",
+  "needs": [],
+  "data": ["config:sourceyaw"]
+}
