@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery, Strafe Review's autoexec block, VPK reading and Source Yaw's bind parsing are in `movekit` (see "Progress").
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). Left: the marker decision, the GitHub repo and the bridge releases.
 
 ## Goal
 
