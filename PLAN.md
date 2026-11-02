@@ -135,10 +135,17 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - Source Yaw runs `sourceyaw/install.sh` from the release's source archive (it copies `movekit` from `$SRC/..`). Its User-Agent stays `sourceyaw`. `STRAFE_REVIEW_UPDATE_API` now points at a list endpoint; `smoke_test.py`'s fake GitHub lists another tool's newer release first.
 - Verified: the 41 part-1 cases, with tags and URLs mapped back, are identical except the intended changes (prefixed tags count as newer; archives with only a root `install.sh` now fail with "no sourceyaw/install.sh", nested ones install; `nightly` is no release; a `[1]` answer used to crash Strafe Review's check with AttributeError and is now a check error). 13 new cases: mixed lists (other tools, drafts, pre-releases, junk entries, 1.10 vs 1.9), empty and non-list answers, old cached state with a new list, prefixed `installed` marks on restart. Installed-layout copy imports `movekit.updater` and picks the right tag. Rebuilt exe bundles `movekit.updater`; `smoke_test.py` passes all 5 steps.
 
+### Phase 1.6: release CI (2026-11-02)
+
+- `ba124b6`: `.github/workflows/windows-release.yml` is the shared Windows build (`workflow_call`): PyInstaller build, smoke test, zip with the tool's files and the bundled Python's licence, workflow artifact, and on a tag the GitHub release. Every run step runs in the tool's folder. Inputs: `tool` (folder and tag prefix), `title`, `build`, `smoke`, `files`, optional `version`.
+- Callers: `strafe-review-windows.yml` (tags `strafe-review-v*`, VERSION check through `collector/updater.py`) and `gain-converter-windows.yml` (tags `gain-converter-v*`, no VERSION to check). Both can also be run by hand for a test zip.
+- The release refuses a tag without the tool's prefix and, for Strafe Review, a tag that isn't `strafe-review-v<VERSION>`. Release notes start at the tool's own previous tag (`--notes-start-tag`), not at whichever tool released last. Title: "Strafe Review 1.5.0".
+- Source Yaw has no Windows build and no workflow: its releases stay source archives, made by hand.
+- Verified locally only (no GitHub repo yet): YAML parses; the release step's bash run with a stub `gh` in a scratch clone (matching tag, wrong VERSION, another tool's tag, a tool's first tag, a later tag) does the right thing under `bash -e`. The Windows steps (PowerShell, `Compress-Archive`, the build) run on GitHub for the first time with the first push and a hand run.
+
 ### Notes for later steps
 
-- The tools' `.github/workflows` now sit in `strafe-review/.github` and `gain-converter/.github`, where GitHub ignores them. They move to the root in the release-CI step (with `working-directory` and `<tool>-v*` tag triggers).
-- Pushing the renamed old tags would trigger the new tag-based CI for every old version. Push the branch first and decide about tags then.
+- Pushing the renamed old tags triggers no CI: none of their commits has a workflow at the repo root (checked 2026-11-02, all 21 tags). They also make no releases, so the updaters don't see them.
 - `sourceyaw/install.sh`'s `curl | sh` branch has the same root-path problem (`sh "$tmp/install.sh"`), and on the monorepo `releases/latest` gives whichever tool released last. Fix in the bridge step: pick the newest `sourceyaw-v*` tag and run `sourceyaw/install.sh`.
 - `failed()` and Source Yaw's `installed()` compare tag strings. A `failed` or `installed` mark from an old unprefixed tag (`v1.5.0`) doesn't match the same version's new tag (`strafe-review-v1.5.0`), so auto mode would retry it once. No such release exists (both tools are on their newest old tag), so it stays as is.
 - Until a tool has its first `<tool>-v*` release, a copy running the new updater gets "No <tool>-v* release on GitHub yet": Source Yaw stays quiet, Strafe Review's page shows it as the check error. Only dev copies run that code before then.
