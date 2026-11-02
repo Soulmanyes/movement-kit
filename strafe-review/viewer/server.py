@@ -58,7 +58,8 @@ import collector
 import install
 import updater  # found through the path above
 
-from movekit import attempts as attempt_files  # collector set the path to movekit
+from hud import settings as hud_settings  # collector set the path to the repo root
+from movekit import attempts as attempt_files  # and so to movekit
 from movekit import session
 
 STATIC = collector.ROOT / "viewer" / "static"
@@ -371,9 +372,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise TypeError
             except (ValueError, TypeError, KeyError):
                 return self.fail(400, 'expected {"inGameLine": true or false}')
-            install.save_setting("inGameLine", line)
+            hud_settings.save("inGameLine", line)
             applied = bool(MOM_DIR) and install.apply_settings(MOM_DIR)
-            return self.send(200, json.dumps({**install.settings(), "applied": applied}).encode(), "application/json")
+            return self.send(200, json.dumps({**hud_settings.load(), "applied": applied}).encode(), "application/json")
         if parts == ["api", "stop"]:
             if not self.local_request():
                 return self.fail(403, "forbidden")
@@ -450,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parts == ["api", "events"]:
             return self.events()
         elif parts == ["api", "settings"]:
-            return self.send(200, json.dumps({"inGameLine": bool(install.settings().get("inGameLine"))}).encode(), "application/json")
+            return self.send(200, json.dumps({"inGameLine": hud_settings.get("inGameLine")}).encode(), "application/json")
         elif parts == ["api", "update"]:
             return self.send(200, json.dumps(UPDATES.info()).encode(), "application/json")
         elif parts == ["api", "status"]:

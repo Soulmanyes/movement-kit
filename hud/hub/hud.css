@@ -1,0 +1,5 @@
+.hud-item { display: flex; flex-direction: column; gap: 8px; }
+.hud-toggle { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
+.hud-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.hud-note:empty { display: none; }
+.hud-note { font-size: 13px; }

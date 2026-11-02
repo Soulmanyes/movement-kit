@@ -25,7 +25,8 @@ Imports inside a section: hub_section.py is loaded under its own module name, an
 folder is NOT put on sys.path, because tool folders share file names (updater.py is in sourceyaw/
 and movekit/). A section imports its own helper modules with
   helper = local_import(__file__, "helper")
-which loads <folder>/helper.py by path under a name of its own. `movekit` is importable as usual.
+which loads <folder>/helper.py by path under a name of its own. The kit root is on sys.path, so
+`movekit` and `hud` (packages with an __init__.py) are importable as usual.
 
 Pages are served from 127.0.0.1 on a free port: /web/... is movekit/web/ (shared CSS and JS),
 /s/<key>/... is the section page's folder. Live game events come from the session on 8766 over SSE,
@@ -46,6 +47,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 KIT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))  # repo root or exe root
+if str(KIT) not in sys.path:
+    sys.path.insert(1, str(KIT))  # run as movekit/hub.py: sections import movekit and hud from the kit root
 WEB = Path(__file__).resolve().parent / "web"
 TITLE = "Soulmanyes's Movement Kit"
 REQUIRED = ("key", "title", "os", "page", "api")

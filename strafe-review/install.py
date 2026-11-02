@@ -19,7 +19,6 @@ The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
 --uninstall removes the recorder, the autoexec block and the link.
 """
 import argparse
-import json
 import re
 import shutil
 import sys
@@ -27,10 +26,12 @@ from pathlib import Path
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "collector"))
+import recorder_settings
 import steam  # found through the path above; it also puts movekit on the path
+from recorder_settings import FOLDER
 
+from hud import settings as hud_settings  # the repo root is on the path too
 from movekit import cfgblock, vpk
-from movekit.files import write_atomic
 
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
@@ -38,41 +39,15 @@ BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0"]
 OLD_MARKERS = ("// strafe-review begin", "// strafe-review end")  # before 2026-11-02; replaced in place
 LINK = Path.home() / ".local" / "bin" / "strafe-review-run"  # the launch option before movekit-run
 HOOK_ORDER = 20  # before Source Yaw's (50): the trainer then finds the server's session
-FOLDER = "0-strafe-review"  # in custom/; sorts before other mods, so our timer.xml is the one loaded
 OLD_FOLDERS = ["strafe-review"]  # before 2026-10-28; removed on install
 TIMER = Path("panorama") / "layout" / "hud" / "timer.xml"
 INCLUDE = '<include type="module" src="file://{scripts}/hud/strafe-review.ts" />'
-RECORDER = Path("panorama") / "scripts" / "hud" / "strafe-review.ts"
-SETTINGS = steam.data_dir() / "settings.json"  # {"inGameLine": bool}, set on the review page
-SHOW_LINE = re.compile(r"^const SHOW_LINE = (true|false);", re.MULTILINE)
-
-
-def settings():
-    try:
-        got = json.loads(SETTINGS.read_text())
-        return got if isinstance(got, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def save_setting(key, value):
-    got = settings()
-    got[key] = value
-    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(SETTINGS, json.dumps(got, indent=2) + "\n")
 
 
 def apply_settings(game):
-    """Write the page's settings into the installed recorder; panorama_reload or a game restart applies them.
-    Returns False when the recorder isn't installed."""
-    ts = Path(game) / "custom" / FOLDER / RECORDER
-    try:
-        text = ts.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    show = "true" if settings().get("inGameLine") else "false"
-    write_atomic(ts, SHOW_LINE.sub(f"const SHOW_LINE = {show};", text))
-    return True
+    """Write the HUD settings (hud/settings.py) into the installed recorder; panorama_reload or a game
+    restart applies them. Returns False when the recorder isn't installed."""
+    return recorder_settings.apply(game, hud_settings.get("inGameLine"))
 
 
 def set_autoexec(game, add):
