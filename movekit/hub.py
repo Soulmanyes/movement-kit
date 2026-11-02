@@ -489,7 +489,7 @@ def main():
     ap.add_argument("--root", type=Path, default=KIT, help="folder whose subfolders hold the sections")
     ap.add_argument("--class", dest="app_class", help=f"window class / app id, default {APP_ID} (tests use *-test)")
     ap.add_argument("--debug", action="store_true", help="allow the web inspector")
-    ap.add_argument("--section", help="open on this section's page (screenshot checks)")
+    ap.add_argument("--section", help="open on this section's page, the home page if it isn't loaded (Source Yaw's launcher, screenshot checks)")
     ap.add_argument("--check-sections", metavar="FILE", type=Path,
                     help="write the sections found to FILE as JSON and exit, with no window")
     ap.add_argument("--call", action="append", default=[], metavar="KEY.NAME[:JSON]",
