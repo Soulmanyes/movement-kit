@@ -625,8 +625,10 @@ class Window(Adw.ApplicationWindow):
         group = Adw.PreferencesGroup(title="Updates")
         self.auto_update_row = SwitchRow(
             title="Install updates automatically",
-            subtitle="Off: the app tells you about a new version and waits for you to "
-                     "press Update. Checks GitHub once a day")
+            subtitle=("The same switch as on the Movement Kit's Modules page, which installs "
+                      "the updates" if self.updates.managed else
+                      "Off: the app tells you about a new version and waits for you to "
+                      "press Update. Checks GitHub once a day"))
         self.auto_update_row.set_active(self.updates.auto)
         self.auto_update_row.connect("notify::active", self.toggle_auto_update)
         group.add(self.auto_update_row)

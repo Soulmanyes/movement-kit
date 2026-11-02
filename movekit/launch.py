@@ -20,6 +20,11 @@ $XDG_CONFIG_HOME/movekit/settings.toml; a game it leaves out runs every register
 per hook to run, for movekit-run to read. <name> is the name the wrapper was called by: the old
 per-tool names (sourceyaw-run, strafe-review-run) run only their own tool, so launch options
 written before movekit-run keep doing exactly what they did.
+
+~/.local/bin/movekit-run points at the core copy ($XDG_DATA_HOME/movekit/kit, made by
+movekit/install-hub.sh) whenever there is one, and stays when the last tool goes, so the launch
+option starts the game with no modules installed. Without a core copy it points at the copy of
+the tool that registered last, and goes with the last tool.
 """
 import os
 import sys
@@ -53,6 +58,12 @@ def settings_file():
 
 def bin_link():
     return Path.home() / ".local" / "bin" / WRAPPER
+
+
+def core_wrapper():
+    """movekit-run in the Linux core copy, or None when there is none."""
+    wrapper = paths.data_dir("movekit") / "kit" / "movekit" / WRAPPER
+    return wrapper if wrapper.is_file() else None
 
 
 def game_from_args(args):
@@ -129,17 +140,22 @@ def register(tool, order, hook):
         if old.name.partition("-")[2] == tool:
             old.unlink()
     (folder / f"{int(order):02d}-{tool}").symlink_to(Path(hook).resolve())
-    link_wrapper(Path(__file__).resolve().with_name(WRAPPER))
+    link_wrapper(core_wrapper() or Path(__file__).resolve().with_name(WRAPPER))
 
 
 def unregister(tool):
-    """Remove a tool's hook. ~/.local/bin/movekit-run goes with the last tool; while others are
-    left, it is relinked to one of their copies if it pointed into this one (being removed)."""
+    """Remove a tool's hook. With a core copy, ~/.local/bin/movekit-run points at it and stays.
+    Without one, it goes with the last tool; while others are left, it is relinked to one of their
+    copies if it pointed into this one (being removed)."""
     folder = hooks_dir()
     if folder.is_dir():
         for old in folder.glob(f"*-{tool}"):
             if old.name.partition("-")[2] == tool:
                 old.unlink()
+    core = core_wrapper()
+    if core:
+        link_wrapper(core)
+        return
     link = bin_link()
     if not link.is_symlink():
         return

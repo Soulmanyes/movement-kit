@@ -89,25 +89,13 @@ def migrate(mgr, log=print):
     it's tried again on the next start; the game starts either way."""
     from movekit import paths
 
-    if mgr.checkout or mgr.state.get(MIGRATED):
-        return
     old = paths.data_dir("strafe-review")
-    if old.is_dir() and "strafe-review" not in mgr.installed():
-        try:
-            mgr.check(force=True)
-            mgr.install("strafe-review")
-        except Exception as e:  # noqa: BLE001 - retried next start; nothing may stop the hub or the game
-            log(f"movement kit: couldn't install the Strafe Review module yet: {e}")
-            return
-        auto = False
-        for name in ("updates.json", "hub-updates.json"):  # Strafe Review's and 3.7's hub line's
-            try:
-                auto = auto or bool(json.loads((old / name).read_text()).get("auto"))
-            except (OSError, ValueError, AttributeError):
-                pass
-        mgr.set_auto("strafe-review", auto)
-        log("movement kit: installed the Strafe Review module (moved over from strafe-review.exe)")
-    mgr.note(MIGRATED, True)
+    try:
+        # Strafe Review's own updater's state, and 3.7's hub line's
+        if mgr.adopt("strafe-review", old, [old / "updates.json", old / "hub-updates.json"], MIGRATED):
+            log("movement kit: installed the Strafe Review module (moved over from strafe-review.exe)")
+    except Exception as e:  # noqa: BLE001 - retried next start; nothing may stop the hub or the game
+        log(f"movement kit: couldn't install the Strafe Review module yet: {e}")
 
 
 def legacy(mgr, flag):
@@ -119,23 +107,9 @@ def legacy(mgr, flag):
 
 
 def modules_cli(out, cmd, rest):
-    mgr = manager()
-    key = next((a for a in rest if not a.startswith("--")), None)
-    reply = {"ok": True}
-    try:
-        if cmd == "check":
-            mgr.check(force=True)
-        elif cmd in ("install", "update", "rollback"):
-            getattr(mgr, cmd)(key)
-        elif cmd == "uninstall":
-            mgr.uninstall(key, delete_data="--delete-data" in rest)
-        elif cmd in ("auto-on", "auto-off"):
-            mgr.set_auto(key, cmd == "auto-on")
-        elif cmd != "cards":
-            raise ValueError(f"unknown command {cmd!r}")
-    except Exception as e:  # noqa: BLE001 - the reply carries it
-        reply = {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    reply["cards"] = mgr.cards()
+    from movekit import modules
+
+    reply = modules.cli([cmd, *rest], manager())
     Path(out).write_text(json.dumps(reply), encoding="utf-8")
     return 0 if reply["ok"] else 1
 

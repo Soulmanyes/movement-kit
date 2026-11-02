@@ -35,13 +35,20 @@ in the same layout as the repo, so a tool finds movekit the way it does in the r
     manager doesn't download; uninstall runs the uninstall hook and hides the module, and install
     runs the install hook and shows it again. The code stays.
   - Windows exe: %LOCALAPPDATA%\\movekit\\kit (the core is the exe, which bundles movekit).
-  - Linux copy: the core's own folder, ~/.local/share/movekit/kit (3.7b.4).
+  - Linux copy: the core's own folder, ~/.local/share/movekit/kit (3.7b.4, movekit/install-hub.sh
+    copies the core there; core_kit()).
 The previous version of each module is kept in <data>/previous/<key> for roll back.
 
 State, in <data>/modules.json: per key {"auto", "installed" (tag), "previous" (tag), "failed"
 (tag), "removed" (git checkout only)}, plus "checked" and "latest" (per key: tag, url, notes,
 asset) from the last look at GitHub. The core is the entry "core" (line hub-v*); how it installs
 an update is the caller's (see Manager.core_installer), since that differs by platform.
+Another program may change an auto switch in the same file while a Manager is open (Source Yaw's
+GTK window, through `python3 -m movekit.modules`): every save and every cards() takes the switches
+from the file, except the ones this Manager changed since its last save.
+
+Run as `python3 -m movekit.modules CMD [KEY] [--delete-data]` from a kit root, it does one call with
+no window and prints the reply as JSON (cli()).
 
 Standard library only.
 """
@@ -100,6 +107,11 @@ def default_kit_root():
     if os.environ.get("MOVEKIT_KIT_ROOT"):
         return Path(os.environ["MOVEKIT_KIT_ROOT"])
     return data_dir() / "kit" if frozen() else KIT
+
+
+def core_kit():
+    """Where movekit/install-hub.sh puts the Linux core copy (and the Windows exe its modules)."""
+    return data_dir() / "kit"
 
 
 def is_checkout(root):
@@ -229,6 +241,7 @@ class Manager:
         self.checkout = is_checkout(self.kit)
         self.state_file = self.data / "modules.json"
         self.state = self._load()
+        self._auto_changed = set()  # switches set here and not saved yet (see the top)
 
     # state
 
@@ -240,10 +253,21 @@ class Manager:
             return {}
 
     def _save(self):
+        self._merge_auto()
         self.data.mkdir(parents=True, exist_ok=True)
-        tmp = self.state_file.with_suffix(".tmp")
+        tmp = self.state_file.with_suffix(f".{os.getpid()}.tmp")
         tmp.write_text(json.dumps(self.state, indent=2) + "\n")
         tmp.replace(self.state_file)
+        self._auto_changed.clear()
+
+    def _merge_auto(self):
+        """Take the auto switches another program wrote to the file, except those set here."""
+        disk = self._load().get("modules")
+        if not isinstance(disk, dict):
+            return
+        for key, e in disk.items():
+            if key not in self._auto_changed and isinstance(e, dict) and isinstance(e.get("auto"), bool):
+                self._entry(key)["auto"] = e["auto"]
 
     def _entry(self, key):
         return self.state.setdefault("modules", {}).setdefault(key, {})
@@ -427,6 +451,7 @@ class Manager:
 
     def cards(self):
         """The core's card, then one per module the hub can offer."""
+        self._merge_auto()
         return [self.info(CORE)] + [self.info(k) for k in self.known()]
 
     def note(self, name, value):
@@ -440,7 +465,31 @@ class Manager:
         if not isinstance(value, bool):
             raise ValueError("auto must be true or false")  # noqa: TRY004 - the bridge reports ValueError
         self._entry(key)["auto"] = value
+        self._auto_changed.add(key)
         self._save()
+
+    def adopt(self, key, marker, auto_files, flag):
+        """Move a tool installed before the core onto its module, once: when the file or folder
+        marker exists and the module isn't installed, install it and take its auto switch from the
+        old updater's state files (on if any says on). The flag is kept in the state file when it
+        is done or not needed; a failure (offline, no module release yet) raises and leaves it unset,
+        so the next start tries again. Never in a git checkout. Returns True if it installed."""
+        if self.checkout or self.state.get(flag):
+            return False
+        installed = False
+        if Path(marker).exists() and key not in self.installed():
+            self.check(force=True)
+            self.install(key)
+            auto = False
+            for file in auto_files:
+                try:
+                    auto = auto or bool(json.loads(Path(file).read_text()).get("auto"))
+                except (OSError, ValueError, AttributeError):
+                    pass
+            self.set_auto(key, auto)
+            installed = True
+        self.note(flag, True)
+        return installed
 
     # hooks
 
@@ -602,6 +651,14 @@ class Manager:
 
     # internals
 
+    def linux_core_installer(self, latest):
+        """Install a core update on Linux: the release's source archive, whose movekit/install-hub.sh
+        copies the core over this one (not a git checkout, so copy mode). The new version runs from
+        the next start; the modules stay where they are."""
+        if not latest.get("source"):
+            raise RuntimeError(f"The {latest['tag']} release has no source archive")
+        updater.install_source(latest["source"], AGENT, script="movekit/install-hub.sh")
+
     def _check_needs(self, key, manifest):
         missing = [k for k in manifest["needs"] if k not in self.installed()]
         if missing:
@@ -713,3 +770,33 @@ class Manager:
             if running:
                 self._start(key)
         shutil.rmtree(hold, ignore_errors=True)
+
+
+def cli(argv, mgr=None):
+    """One manager call with no window: CMD [KEY] [--delete-data], CMD one of cards, check,
+    install, update, rollback, uninstall, auto-on, auto-off. Returns {"ok", "error"?, "cards"}."""
+    words = [a for a in argv if not a.startswith("--")]
+    cmd, key = (words + [None, None])[:2]
+    reply = {"ok": True}
+    try:
+        mgr = mgr or Manager()
+        if cmd == "check":
+            mgr.check(force=True)
+        elif cmd in ("install", "update", "rollback"):
+            getattr(mgr, cmd)(key)
+        elif cmd == "uninstall":
+            mgr.uninstall(key, delete_data="--delete-data" in argv)
+        elif cmd in ("auto-on", "auto-off"):
+            mgr.set_auto(key, cmd == "auto-on")
+        elif cmd != "cards":
+            raise ValueError(f"unknown command {cmd!r}")
+    except Exception as e:  # noqa: BLE001 - the reply carries it
+        reply = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    reply["cards"] = mgr.cards() if mgr else []
+    return reply
+
+
+if __name__ == "__main__":
+    out = cli(sys.argv[1:])
+    print(json.dumps(out))
+    sys.exit(0 if out["ok"] else 1)

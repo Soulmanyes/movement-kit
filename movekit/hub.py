@@ -222,8 +222,10 @@ class Bridge:
         with self._mlock:
             self._busy = "Checking for updates"
             try:
+                before = set(self._manager.installed())
+                adopt_old_installs(self._manager)
                 self._last = self._manager.auto_update()
-                if self._last:
+                if self._last or set(self._manager.installed()) != before:
                     self._refresh()
             finally:
                 self._busy = None
@@ -430,7 +432,26 @@ def make_manager(root=KIT, kit_root=None, data=None):
     from movekit import modules
 
     api = os.environ.get("MOVEKIT_MODULES_API", modules.API)  # tests point it at a fake GitHub
-    return modules.Manager(kit_root=kit_root or (root if root != KIT else None), data=data, api=api)
+    mgr = modules.Manager(kit_root=kit_root or (root if root != KIT else None), data=data, api=api)
+    if sys.platform.startswith("linux") and not mgr.checkout:
+        mgr.core_installer = mgr.linux_core_installer  # a Linux copy (install-hub.sh) updates itself
+    return mgr
+
+
+def adopt_old_installs(manager):
+    """Linux: a Source Yaw installed with its own install.sh before the core becomes the Source Yaw
+    module, once (Manager.adopt; the Windows exe does the same for Strafe Review in
+    hub/movement_kit.py). Offline, or before the first module release, it's tried again next start."""
+    from movekit import paths
+
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        if manager.adopt("sourceyaw", paths.data_dir("sourceyaw") / "yawcore.py",
+                         [paths.config_dir("sourceyaw") / "updates.json"], "adopted-sourceyaw"):
+            print("hub: installed the Source Yaw module over the Source Yaw installed before")
+    except Exception as e:  # noqa: BLE001 - retried next start; nothing may stop the hub
+        print(f"hub: couldn't move Source Yaw onto its module yet: {e}", file=sys.stderr)
 
 
 def run(root=KIT, app_class=None, debug=False, first=None, manager=None):
