@@ -61,7 +61,7 @@ Attempts are kept in `~/.local/share/strafe-review/attempts`.
 ## What it changes in the game folder
 
 - `custom/0-strafe-review`: the recorder script, plus a `timer.xml` that loads it. That file is a copy of the one the game would use otherwise (another HUD mod's in `custom/`, or the game's own) with one line added, made again on every start so other mods' updates carry over. The folder name sorts first because the game mounts `custom/` folders alphabetically and the first file found wins.
-- `cfg/autoexec.cfg`: a block between `// strafe-review begin` and `// strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to) and `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick). The first install keeps the original as `autoexec.cfg.bak-strafe-review`.
+- `cfg/autoexec.cfg`: a block between `// movekit:strafe-review begin` and `// movekit:strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to) and `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick). The first install keeps the original as `autoexec.cfg.bak-strafe-review`. A block from before 2026-11-02 (`// strafe-review begin`) is replaced where it stands.
 
 `python install.py --uninstall` (or deleting both by hand on Windows) takes them out again. If no attempts show up, the main page shows a **Setup check** box that says where it stops.
 

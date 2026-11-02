@@ -8,7 +8,8 @@ Usage: install.py [--game DIR] [--uninstall]
   HUD mod's in custom/, else the game's own) with one more script include. The game mounts custom/
   folders in alphabetical order and the first file found wins, so the folder name sorts first.
   Type panorama_reload in game after updating it.
-- Writes a marked block into cfg/autoexec.cfg: con_logfile yaw.log (the log the collector reads), and
+- Writes a block between "// movekit:strafe-review begin" and "end" into cfg/autoexec.cfg (replacing
+  the older "// strafe-review begin" block where it stands): con_logfile yaw.log (the log the collector reads), and
   engine_no_focus_sleep 0, so replays watched while tabbed out record every tick. The first install
   keeps the original as autoexec.cfg.bak-strafe-review. Restart the game after installing.
 - On Linux, links collector/strafe-review-run into ~/.local/bin for the Steam launch options.
@@ -30,10 +31,10 @@ import steam  # found through the path above; it also puts movekit on the path
 from movekit import cfgblock, vpk
 from movekit.files import write_atomic
 
-BEGIN = "// strafe-review begin"
-END = "// strafe-review end"
+TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
-BLOCK = [BEGIN, "con_logfile yaw.log", "engine_no_focus_sleep 0", END]
+BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0"]
+OLD_MARKERS = ("// strafe-review begin", "// strafe-review end")  # before 2026-11-02; replaced in place
 LINK = Path.home() / ".local" / "bin" / "strafe-review-run"
 FOLDER = "0-strafe-review"  # in custom/; sorts before other mods, so our timer.xml is the one loaded
 OLD_FOLDERS = ["strafe-review"]  # before 2026-10-28; removed on install
@@ -74,7 +75,10 @@ def apply_settings(game):
 
 def set_autoexec(game, add):
     autoexec = Path(game) / "cfg" / "autoexec.cfg"
-    if not cfgblock.set_block(autoexec, BLOCK, add, ".bak-strafe-review"):
+    def old_block(lines):
+        return cfgblock.spans(lines, *OLD_MARKERS)
+
+    if not cfgblock.set_block(autoexec, TOOL, BODY, add, ".bak-strafe-review", legacy=old_block):
         return
     print(f"{'updated' if add else 'removed the strafe-review block from'} {autoexec}")
 

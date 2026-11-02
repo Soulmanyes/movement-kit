@@ -23,7 +23,8 @@ What it changes in the game folder:
 - adds the folder custom\0-strafe-review (the HUD script that records attempts). Its name sorts
   first, so it works next to other HUD mods in custom\. It copies their timer.xml (or the game's)
   and adds one line, and does that again on every start, so their updates carry over.
-- adds a block between "// strafe-review begin" and "// strafe-review end" to cfg\autoexec.cfg
+- adds a block between "// movekit:strafe-review begin" and "// movekit:strafe-review end" to
+  cfg\autoexec.cfg
   (the original is kept as cfg\autoexec.cfg.bak-strafe-review)
 To undo: delete custom\0-strafe-review and that block.
 

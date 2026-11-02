@@ -38,7 +38,7 @@ from PIL import Image
 _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
-from movekit import binds, keyvalues, steam, vpk  # after the path above
+from movekit import binds, cfgblock, keyvalues, steam, vpk  # after the path above
 from movekit import games as kit_games
 
 VERSION = "1.5.1"
@@ -505,8 +505,10 @@ def yaws_cfg(data, unbind=(), game="css"):
 
 # a line that runs yaws.cfg, e.g. `exec yaws`, `exec "yaws.cfg"  // comment`
 _EXEC_YAWS = re.compile(r'^\s*exec\s+"?yaws(\.cfg)?"?\s*(//.*)?$', re.IGNORECASE)
-_AUTOEXEC_COMMENT = "// added by Source Yaw"
-_AUTOEXEC_COMMENTS = (_AUTOEXEC_COMMENT, "// added by CS:S Yaw")
+# autoexec.cfg runs yaws.cfg from a `// movekit:sourceyaw begin` ... `end` block (cfgblock). Before
+# 2026-11-02 it was this comment line with the exec line under it; set_autoexec replaces that in place.
+_AUTOEXEC_TOOL = "sourceyaw"
+_AUTOEXEC_COMMENTS = ("// added by Source Yaw", "// added by CS:S Yaw")
 
 
 def autoexec_runs_yaws(cstrike):
@@ -517,36 +519,33 @@ def autoexec_runs_yaws(cstrike):
     return any(_EXEC_YAWS.match(line) for line in lines)
 
 
+def _old_exec_lines(lines):
+    """[(start, stop)] of each exec line under one of the old comments, with the comment."""
+    return [(i - 1, i + 1) for i, line in enumerate(lines)
+            if i and _EXEC_YAWS.match(line) and lines[i - 1].strip() in _AUTOEXEC_COMMENTS]
+
+
+def _own_exec_lines(lines):
+    """Exec lines the user wrote: not in our block and not under one of the old comments."""
+    ours = {i for a, b in cfgblock.spans(lines, *cfgblock.markers(_AUTOEXEC_TOOL)) + _old_exec_lines(lines)
+            for i in range(a, b)}
+    return [(i, i + 1) for i, line in enumerate(lines) if i not in ours and _EXEC_YAWS.match(line)]
+
+
 def set_autoexec(cstrike, on):
-    """Adds or removes `exec yaws.cfg` in autoexec.cfg. Backs the file up the first time."""
+    """Adds or removes `exec yaws.cfg` in autoexec.cfg. Backs the file up the first time.
+    Turning it on leaves an exec line the user wrote alone (and adds none); turning it off
+    removes that one too."""
     path = cstrike / "cfg/autoexec.cfg"
-    try:
-        text = path.read_text(errors="replace")
-    except FileNotFoundError:
-        text = ""
-    backup = path.with_name("autoexec.cfg" + BACKUP)
-    if text and not any(path.with_name("autoexec.cfg" + b).exists() for b in BACKUPS):
-        shutil.copyfile(path, backup)
-    lines = text.splitlines()
     if on:
-        if any(_EXEC_YAWS.match(line) for line in lines):
+        lines, _ = cfgblock.read_cfg(path)
+        if _own_exec_lines(lines):
+            cfgblock.set_block(path, _AUTOEXEC_TOOL, [], False, BACKUPS, legacy=_old_exec_lines)
             return
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines += [_AUTOEXEC_COMMENT, "exec yaws.cfg"]
+        cfgblock.set_block(path, _AUTOEXEC_TOOL, ["exec yaws.cfg"], True, BACKUPS, legacy=_old_exec_lines)
     else:
-        keep = []
-        for line in lines:
-            if _EXEC_YAWS.match(line):
-                # drop our comment above it too
-                if keep and keep[-1].strip() in _AUTOEXEC_COMMENTS:
-                    keep.pop()
-                continue
-            keep.append(line)
-        while keep and not keep[-1].strip():
-            keep.pop()
-        lines = keep
-    write_text_atomic(path, "\n".join(lines) + "\n")
+        cfgblock.set_block(path, _AUTOEXEC_TOOL, [], False, BACKUPS,
+                           legacy=lambda lines: _old_exec_lines(lines) + _own_exec_lines(lines))
 
 
 # ---------------------------------------------------------------- Momentum crosshair colour

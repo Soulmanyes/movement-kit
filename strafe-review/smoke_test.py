@@ -205,7 +205,7 @@ def main():
         if "mod-panoDev" not in timer or timer.count("strafe-review.ts") != 1:
             fail(f"timer.xml isn't panoDev's with our include:\n{timer}")
         autoexec = (game / "cfg" / "autoexec.cfg").read_bytes()
-        want = b"exec something\r\n// strafe-review begin\r\ncon_logfile yaw.log\r\nengine_no_focus_sleep 0\r\n// strafe-review end\r\n"
+        want = b"exec something\r\n\r\n// movekit:strafe-review begin\r\ncon_logfile yaw.log\r\nengine_no_focus_sleep 0\r\n// movekit:strafe-review end\r\n"
         if autoexec != want:
             fail(f"autoexec.cfg is {autoexec!r}")
         time.sleep(2)

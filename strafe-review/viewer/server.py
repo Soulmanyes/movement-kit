@@ -478,7 +478,9 @@ def status(handler):
     game = MOM_DIR
     autoexec = game / "cfg" / "autoexec.cfg" if game else None
     try:
-        block = "// strafe-review begin" in autoexec.read_text(encoding="utf-8", errors="replace")
+        text = autoexec.read_text(encoding="utf-8", errors="replace")
+        # the install writes the movekit marker since 2026-11-02; an older install's block still counts
+        block = "// movekit:strafe-review begin" in text or "// strafe-review begin" in text
     except (OSError, AttributeError):
         block = False
     return {
