@@ -1,22 +1,8 @@
-/* Shared look of the hub's pages. The colour tokens match strafe-review/viewer/static/style.css
-   (:root) for now; the viewer moves onto this file in a later Phase 3 step (see PLAN.md). */
-:root {
-	color-scheme: dark;
-	scrollbar-color: #4a5468 #1c1f26;
-	--bg: #15171c;
-	--panel: #1c1f26;
-	--card: #2a2f3b;
-	--card-hi: #333a49;
-	--border: #4a5468;
-	--accent: #6c9cff;
-	--text: #e6e9ef;
-	--muted: #a3abba;
-	--good: #7bd88f;
-	--warn: #ffb454;
-	--track: #3a4150; /* empty part of bars and sliders: differs from --card */
-}
+/* Shared look of the hub's pages. The colour tokens are in tokens.css, shared with Strafe Review's viewer. */
+@import url("tokens.css");
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* a page's own display rule would show it anyway */
 
 body {
 	margin: 0;

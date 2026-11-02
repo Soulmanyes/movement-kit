@@ -38,6 +38,7 @@ def main():
         "--exclude-module", "_decimal", "--exclude-module", "_bz2", "--exclude-module", "_lzma",
         *data("viewer/static", "viewer/static"),
         *data("recorder/panorama", "recorder/panorama"),
+        *data("../movekit/web/tokens.css", "movekit/web"),  # style.css imports it (server.py TOKENS)
         str(ROOT / "strafe_review.py"),
     ]
     sys.exit(subprocess.call(cmd, cwd=ROOT))

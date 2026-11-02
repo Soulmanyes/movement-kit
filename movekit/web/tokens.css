@@ -1,0 +1,17 @@
+/* The kit's colour tokens, one copy for every page: the hub (hub.css imports it) and Strafe Review's
+   viewer (style.css imports it; viewer/server.py serves it at /web/tokens.css). */
+:root {
+	color-scheme: dark; /* dark form controls */
+	scrollbar-color: #4a5468 #1c1f26; /* thumb = --border, track = --panel */
+	--bg: #15171c;
+	--panel: #1c1f26;
+	--card: #2a2f3b;
+	--card-hi: #333a49;
+	--border: #4a5468;
+	--accent: #6c9cff;
+	--text: #e6e9ef;
+	--muted: #a3abba;
+	--good: #7bd88f;
+	--warn: #ffb454;
+	--track: #3a4150; /* empty part of bars and sliders: differs from --card */
+}

@@ -1,16 +1,7 @@
+@import url("/web/tokens.css"); /* the kit's colour tokens (movekit/web/tokens.css) */
 :root {
-	color-scheme: dark; /* dark form controls */
-	scrollbar-color: #4a5468 #1c1f26; /* thumb = --border, track = --panel */
-	--bg: #15171c;
-	--panel: #1c1f26;
-	--card: #2a2f3b;
-	--card-hi: #333a49;
-	--border: #4a5468;
-	--accent: #6c9cff;
-	--text: #e6e9ef;
-	--muted: #a3abba;
-	--own: #7bd88f;
-	--replay: #ffb454;
+	--own: var(--good);
+	--replay: var(--warn);
 }
 
 * { box-sizing: border-box; }

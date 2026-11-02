@@ -14,6 +14,7 @@ Routes:
   /drill                     the jump-1 drill page (viewer/static/drill.html)
   /compare                   the compare page, 2-4 recordings side by side (viewer/static/compare.html)
   /static/<file>             page files
+  /web/tokens.css            the kit's colour tokens (movekit/web/tokens.css), imported by style.css
   /api/attempts              every saved attempt's header (no rows, plus rowCount, dir,
                              j1Takeoff, the jump-1 takeoff speed, j1Land, its landing speed
                              (null if it didn't land before the run end), landed, jumps 1+ that
@@ -63,6 +64,8 @@ from movekit import attempts as attempt_files  # and so to movekit
 from movekit import session
 
 STATIC = collector.ROOT / "viewer" / "static"
+# the kit's shared colour tokens, one copy for the viewer and the hub (bundled at movekit/web/ in the exe)
+TOKENS = Path(session.__file__).resolve().parent / "web" / "tokens.css"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
 # Same characters collector.map_dir() keeps; a leading dot is refused so ".." never names a folder
 MAP = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*")
@@ -448,6 +451,8 @@ class Handler(BaseHTTPRequestHandler):
             if path.is_file():
                 ctype = TYPES[path.suffix] + "; charset=utf-8"
                 return self.send(200, path.read_bytes(), ctype)
+        elif parts == ["web", "tokens.css"] and TOKENS.is_file():
+            return self.send(200, TOKENS.read_bytes(), "text/css; charset=utf-8")
         elif parts == ["api", "events"]:
             return self.events()
         elif parts == ["api", "settings"]:
