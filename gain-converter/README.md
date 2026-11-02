@@ -15,21 +15,21 @@ It's an estimate. The two games score gain differently, so no exact conversion e
 - CS:S (SSJ) scores each tick by how far your angle is from the best one. Being off costs you linearly.
 - Momentum compares the speed you gained with the most you could have gained. Being off a little costs you very little.
 
-The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top replays on bhop_ambience that were measured both ways with [Strafe Review](https://github.com/Soulmanyes/strafe-review) (the white dots), and it matches them to within about 1 point. Jumps with very uneven strafes can land a few points off.
+The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top replays on bhop_ambience that were measured both ways with [Strafe Review](../strafe-review/) (the white dots), and it matches them to within about 1 point. Jumps with very uneven strafes can land a few points off.
 
 ## Install
 
 ### Windows
 
-Download `gain-converter-windows.zip` from the [latest release](https://github.com/Soulmanyes/gain-converter/releases/latest), unzip it and double-click `gain-converter.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed.
+Download `gain-converter-windows.zip` from the [latest Gain Converter release](https://github.com/Soulmanyes/movement-kit/releases?q=gain-converter-v&expanded=true), unzip it and double-click `gain-converter.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed.
 
 ### Linux (or Windows with Python)
 
 Needs Python 3 with tkinter (Arch/CachyOS: `pacman -S tk`; Debian/Ubuntu: `apt install python3-tk`). No other packages.
 
 ```
-git clone https://github.com/Soulmanyes/gain-converter
-python gain-converter/gain_converter.py
+git clone https://github.com/Soulmanyes/movement-kit
+python movement-kit/gain-converter/gain_converter.py
 ```
 
 ## Licence

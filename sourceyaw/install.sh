@@ -5,7 +5,7 @@
 #   - the colour changer runs from the Steam launch option movekit-run, see the app
 # Run ./install.sh --uninstall to remove it again.
 # Without cloning the repo:
-#   curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh
 # The whole script is one { } block, so a download cut off midway runs nothing.
 {
 set -eu
@@ -29,13 +29,14 @@ if [ ! -f "$SRC/yawcore.py" ]; then
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT
     say "Downloading Source Yaw"
-    # the latest release; main if there is none yet. releases/latest redirects to .../tag/<tag>
-    tag=$(curl -fsSLo /dev/null -w '%{url_effective}' \
-        https://github.com/Soulmanyes/sourceyaw/releases/latest | sed -n 's|.*/tag/||p')
+    # the newest sourceyaw-v* tag; main if there is none yet. The Movement Kit repo holds every
+    # tool, so releases/latest could be another tool's release.
+    tag=$(curl -fsSL https://api.github.com/repos/Soulmanyes/movement-kit/git/matching-refs/tags/sourceyaw-v 2>/dev/null |
+        sed -n 's|.*"ref": *"refs/tags/\(sourceyaw-v[0-9.]*\)".*|\1|p' | sort -V | tail -n 1) || tag=
     ref=${tag:+tags/$tag}
-    curl -fsSL "https://github.com/Soulmanyes/sourceyaw/archive/refs/${ref:-heads/main}.tar.gz" |
+    curl -fsSL "https://github.com/Soulmanyes/movement-kit/archive/refs/${ref:-heads/main}.tar.gz" |
         tar -xz -C "$tmp" --strip-components=1
-    sh "$tmp/install.sh" "$@" < /dev/tty
+    sh "$tmp/sourceyaw/install.sh" "$@" < /dev/tty
     exit
 fi
 
@@ -59,7 +60,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     say "Done. Your settings stay in ~/.config/$NAME."
     if [ -e /etc/systemd/system/sourceyaw-inputd.socket ]; then
         echo "The strafe trainer's input service is still installed. Remove it with:"
-        echo "    curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/inputd/install-inputd.sh | sudo sh -s remove"
+        echo "    curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/inputd/install-inputd.sh | sudo sh -s remove"
     fi
     echo "Remove $NAME-run (or $OLD_NAME-run) from the launch options, or the game will not start."
     echo "movekit-run can stay if another movement tool still uses it."

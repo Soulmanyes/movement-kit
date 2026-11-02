@@ -42,7 +42,7 @@ Version 1.1.0 changes how recordings are read, so numbers on attempts you alread
 
 ## Install on Windows
 
-1. Download `strafe-review-windows.zip` from the [latest release](https://github.com/Soulmanyes/strafe-review/releases/latest) and unzip it to a folder you keep (the Steam launch option points at it).
+1. Download `strafe-review-windows.zip` from the [latest Strafe Review release](https://github.com/Soulmanyes/movement-kit/releases?q=strafe-review-v&expanded=true) and unzip it to a folder you keep (the Steam launch option points at it).
 2. Double-click `strafe-review.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed. It finds Momentum, installs the recorder and the `autoexec.cfg` block (see below), then opens the review page. Keep its console window open while playing, or click **Stop** on the page to end it.
 3. Restart Momentum once, so it reads the new `autoexec.cfg` lines.
 4. Or let Steam start it with the game: Momentum Mod > Properties > Launch options: `"C:\path\to\strafe-review.exe" %command%`. It then runs in the background, opens the page as the game starts, and keeps running for review until you click **Stop**.
@@ -51,8 +51,8 @@ Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts`, and everything it 
 
 ## Install on Linux
 
-1. Clone this repo and keep it where it is; the launcher runs from it.
-2. `python install.py` finds Momentum (or pass `--game DIR`, or set `MOMENTUM_DIR`), installs the recorder and the `autoexec.cfg` block, registers its launch hook with `movekit-run` and links `movekit-run` into `~/.local/bin`.
+1. Clone [Movement Kit](https://github.com/Soulmanyes/movement-kit) and keep it where it is; the launcher runs from its `strafe-review` folder.
+2. In `strafe-review`, `python install.py` finds Momentum (or pass `--game DIR`, or set `MOMENTUM_DIR`), installs the recorder and the `autoexec.cfg` block, registers its launch hook with `movekit-run` and links `movekit-run` into `~/.local/bin`.
 3. Set Momentum Mod's Steam launch options to `movekit-run %command%`, the launch option the movement tools share (it also starts Source Yaw if that is installed; see the repository's README). The older `strafe-review-run %command%` still works and starts only Strafe Review. The game start then starts the server as the systemd user unit `strafe-review`, which keeps running after the game quits; the page opens as the game starts. **Stop** on the page or `systemctl --user stop strafe-review` ends it.
 4. Restart Momentum once. Or start the server by hand: `python viewer/server.py` (`--port`, `--no-collect` to only serve, `--no-browser`).
 

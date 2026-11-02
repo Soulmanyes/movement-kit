@@ -42,7 +42,7 @@ install the dependencies yourself.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh
 ```
 
 It installs the latest release. Or clone the repository and run `./install.sh` from it. Run the
@@ -72,7 +72,7 @@ To remove the app, run the install command with `--uninstall` and take `movekit-
 out of the launch options, unless another movement tool still uses it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh -s -- --uninstall
 # or, from a clone:
 ./install.sh --uninstall
 ```

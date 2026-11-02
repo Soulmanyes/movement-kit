@@ -2,7 +2,7 @@
 """Gain Converter: turns a CS:S (SSJ) gain % into a Momentum Mod gain % and back, with a graph.
 
 The two don't measure the same thing, so this is an estimate. The curve momentum = 1 - (1 - css) ** K
-is fitted to measured pairs from Strafe Review (https://github.com/Soulmanyes/strafe-review).
+is fitted to measured pairs from Strafe Review (https://github.com/Soulmanyes/movement-kit/tree/main/strafe-review).
 Runs on Linux and Windows with the standard library only.
 """
 import sys
