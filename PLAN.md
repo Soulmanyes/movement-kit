@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery, Strafe Review's autoexec block and VPK reading are in `movekit` (see "Progress").
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery, Strafe Review's autoexec block, VPK reading and Source Yaw's bind parsing are in `movekit` (see "Progress").
 
 ## Goal
 
@@ -113,9 +113,17 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - Two edge cases change for Source Yaw, neither reachable today: a file at a VPK's root is found at `name.ext` (was `" /name.ext"`), and a VPK whose version isn't 1 or 2 raises ValueError, which `sound_file` already skips. Sounds always sit under `sound/`, and Valve's VPKs are v1 or v2.
 - Verified: synthetic VPKs (v1, v2, v3, preload bytes, data in the `_dir.vpk` and in `_000.vpk`, root file, bad signature, cut short, missing) and all 8 VPKs of the CS:S and Momentum installs on this PC (listing hash), plus every offered sound read from each game's sound VPKs: identical before and after apart from the two edge cases. A copy laid out like the installed app finds the same sounds. Rebuilt exe bundles `movekit.vpk`; `smoke_test.py` passes.
 
+### Phase 1.4: binds and aliases (2026-11-02)
+
+- `movekit/binds.py`: `BIND` / `ALIAS` regexes, `cfg_text` (text or "" on a read error), `parse_bind` (raw key and rest), `keys_bound_to` (the strict `bind "KEY" "CMD"` form the game writes), `aliases(cfg_dir)`, `commands`, `resolve(command, wanted, alias_map)` (alias depth 6).
+- Source Yaw: `trainer.read_binds`, `yawcore.keys_bound_to_cycle` and `key_conflicts` keep their names and signatures and call movekit. Each keeps its own pre-processing: `key_conflicts` cuts at `//` and strips quotes, `read_binds` doesn't. ROLES, SOURCE_KEYS, `forwarded()` and Source Yaw's own alias names stay in Source Yaw.
+- Strafe Review's `game_mouse` stays in `viewer/server.py`. It reads cvars, not binds, and is the only cvar reader in the kit. It moves when a second tool needs cvars.
+- Verified unchanged: `read_binds` (real, no and partial input-service config), `keys_bound_to_cycle` (both commands) and `key_conflicts` (16 keys) on 10 fixture game dirs (LF, CRLF, missing files, aliases in subfolders and loops, non-UTF-8 bytes, strict vs loose bind forms, unquoted, upper case, tabs, `//` inside quotes) and the real CS:S and Momentum cfgs: identical JSON. Source Yaw `apply` in a sandbox on LF, CRLF and a copy of the real CS:S cfgs writes identical files. A copy laid out like the installed app imports `movekit.binds`.
+
 ### Notes for later steps
 
 - The tools' `.github/workflows` now sit in `strafe-review/.github` and `gain-converter/.github`, where GitHub ignores them. They move to the root in the release-CI step (with `working-directory` and `<tool>-v*` tag triggers).
 - Pushing the renamed old tags would trigger the new tag-based CI for every old version. Push the branch first and decide about tags then.
 - Source Yaw's updater installs from the release's source archive by running `install.sh` at the archive root; in the monorepo it is `sourceyaw/install.sh`. Fix in the updater step, before any monorepo release of Source Yaw.
 - Found in Phase 1.2, unchanged so far, candidate fixes for the owner: Strafe Review's install crashes (UnicodeEncodeError) on an autoexec.cfg with a non-UTF-8 byte, because it reads with `surrogateescape` but writes strict UTF-8. `write_atomic` leaves files it writes at mode 0600 (`mkstemp`). Source Yaw turns a CRLF autoexec.cfg into LF and replaces non-UTF-8 bytes when it adds or removes its line.
+- Found in Phase 1.4, unchanged, candidate fixes for the owner: `read_binds` matches the raw line, so a bind with a trailing `// comment` gets a command ending in `"` and its role is missed (`bind o "+moveleft" // x`). `key_conflicts` cuts at the first `//` even inside quotes, so `bind "h" "say http://x"` reports `say http:`.
