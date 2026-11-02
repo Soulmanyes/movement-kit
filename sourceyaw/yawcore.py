@@ -383,7 +383,8 @@ def main_color(png):
             counts[(r, g, b)] = counts.get((r, g, b), 0) + 1
     if not counts:
         return "#ffffff"
-    return "#%02x%02x%02x" % max(counts, key=counts.get)
+    r, g, b = max(counts, key=counts.get)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def recolor(png, color):
@@ -578,7 +579,7 @@ def rgba_to_hex(rgba):
         r, g, b = (max(0, min(255, int(float(v)))) for v in rgba.split()[:3])
     except ValueError:
         return "#00ff00"
-    return "#%02x%02x%02x" % (r, g, b)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 
 def hex_to_rgba(color, alpha="255"):
