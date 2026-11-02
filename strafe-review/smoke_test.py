@@ -7,15 +7,16 @@ Run by the monorepo's .github/workflows/strafe-review-windows.yml on the Windows
 Linux too. Checks:
 1. Double-click: installs the recorder and the autoexec.cfg block, serves every page, opens the page,
    timer.xml is based on another HUD mod's copy that would win otherwise, /api/status sees the setup, and an attempt written into yaw.log the way the game writes it (file
-   kept open, CRLF, chunks in separate writes) is collected and listed.
+   kept open, CRLF, chunks in separate writes) is collected and listed,
+   and announced as attempt_saved on the movekit session it hosts.
 2. A second double-click while it runs only opens the page and exits; a second server on the busy port
    exits with an error (the SO_REUSEADDR check on Windows).
 3. Launch option: runs the "game", hands back its exit code, leaves the server running, opens the page.
-4. The page's Stop button (POST /api/stop) ends that background server.
+4. The page's Stop button (POST /api/stop) ends that background server and frees the session port.
 5. Update: a fake GitHub lists strafe-review-v99.0.0 (behind another tool's release) and a zip of
    this exe; a copy of the program in its own folder downloads it, swaps the exe and starts again.
    The new copy is the same build, so it must mark strafe-review-v99.0.0 as failed, which keeps
-   auto mode from looping.
+   auto mode from looping. The new copy hosts the session again (the old one freed its port).
 The browser is a stand-in that writes the URL to a file.
 """
 import http.server
@@ -35,6 +36,8 @@ from pathlib import Path
 
 PORT = 8790
 URL = f"http://127.0.0.1:{PORT}/"
+SESSION_PORT = 8791  # not the live 8766
+SESSION = f"http://127.0.0.1:{SESSION_PORT}"
 ROOT = Path(__file__).resolve().parent
 WIN = sys.platform == "win32"
 
@@ -49,6 +52,40 @@ def get(path):
             return r.status, r.read()
     except OSError:
         return None, b""
+
+
+def session_status():
+    try:
+        with urllib.request.urlopen(SESSION + "/status", timeout=2) as r:
+            return json.loads(r.read())
+    except OSError:
+        return None
+
+
+def wait_session(timeout=30):
+    end = time.time() + timeout
+    while time.time() < end:
+        if session_status() is not None:
+            return
+        time.sleep(0.5)
+    fail(f"no movekit session on {SESSION} after {timeout} s")
+
+
+def session_events(kind, timeout=10):
+    """The data of the first kept session event of type `kind` ([] if none comes within `timeout` s)."""
+    end = time.time() + timeout
+    try:
+        with urllib.request.urlopen(SESSION + "/events?after=0", timeout=2) as r:
+            event = None
+            while time.time() < end:
+                line = r.readline().decode().rstrip("\r\n")
+                if line.startswith("event: "):
+                    event = line[7:]
+                elif line.startswith("data: ") and event == kind:
+                    return [json.loads(line[6:])["data"]]
+    except OSError:  # the read timed out: nothing more kept
+        pass
+    return []
 
 
 def wait_serving(timeout=30):
@@ -160,6 +197,7 @@ def main():
         **os.environ,
         "MOMENTUM_DIR": str(game),
         "STRAFE_REVIEW_PORT": str(PORT),
+        "MOVEKIT_SESSION_PORT": str(SESSION_PORT),
         "LOCALAPPDATA": str(tmp / "data"),
         "XDG_DATA_HOME": str(tmp / "data"),
         "HOME": str(tmp / "home"),  # install.py links strafe-review-run under it on Linux (not when frozen)
@@ -192,6 +230,11 @@ def main():
         st = json.loads(get("/api/status")[1])
         if st["saved"] != 1 or st["collector"]["recorder"] != 4:
             fail(f"status after collecting: {st}")
+        if not st.get("session") or session_status() is None:
+            fail(f"no movekit session hosted: /api/status session {st.get('session')}")
+        saved = session_events("attempt_saved")
+        if saved != [{"dir": "bhop_smoke", "id": SMOKE_ID}]:
+            fail(f"attempt_saved events on the session: {saved}")
         ours = game / "custom" / "0-strafe-review" / "panorama"
         if not (ours / "scripts" / "hud" / "strafe-review.ts").is_file():
             fail("recorder not installed")
@@ -211,7 +254,8 @@ def main():
         time.sleep(2)
         if opened(tmp) != [URL]:
             fail(f"browser calls: {opened(tmp)}")
-        print("   ok: pages, recorder, CRLF autoexec block, browser, status, attempt collected from a live log")
+        print("   ok: pages, recorder, CRLF autoexec block, browser, status, attempt collected from a live log"
+              " and announced on the session")
 
         print("2. second copy while running")
         r = subprocess.run([exe], env=env, timeout=60, capture_output=True, text=True, check=False)
@@ -250,7 +294,9 @@ def main():
         time.sleep(3)
         if get("/")[0] is not None:
             fail("server still answers after /api/stop")
-        print("   ok: the background server ended")
+        if session_status() is not None:
+            fail("the session still answers after /api/stop")
+        print("   ok: the background server and its session ended")
 
         print("5. update")
         app = tmp / "app"
@@ -281,8 +327,10 @@ def main():
             time.sleep(1)
         if (app / (exe.name + ".old")).exists():
             fail("the old exe wasn't cleaned up on the new start")
+        wait_session()
         stop_all(copy)
-        print("   ok: downloaded, swapped the exe, started again, marked the same-version release failed")
+        print("   ok: downloaded, swapped the exe, started again with its session, marked the same-version"
+              " release failed")
     finally:
         stop_all(exe)
         shutil.rmtree(tmp, ignore_errors=True)

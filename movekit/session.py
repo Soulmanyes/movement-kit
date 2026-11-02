@@ -10,7 +10,8 @@ events on its Bus:
 Tools add their own with Bus.publish(): the Strafe Review collector sends attempt_saved {dir, id}
 and the launch wrapper game_exit.
 
-serve(session) offers the events on http://127.0.0.1:8766 (localhost only):
+serve(session) offers the events on http://127.0.0.1:8766 (localhost only; MOVEKIT_SESSION_PORT
+changes the port, for tests):
   GET /events   server-sent events: "id: <n>", "event: <type>", "data: <json>". A client that
                 reconnects with Last-Event-ID (or ?after=<n>) gets the ones it missed, if still kept.
   GET /status   {log, inMap, map, lastId, listeners}
@@ -22,6 +23,7 @@ Stdlib only; works on Linux and Windows.
 """
 import argparse
 import json
+import os
 import queue
 import re
 import sys
@@ -38,7 +40,7 @@ if __package__ in (None, ""):  # run as a script: python movekit/session.py
 from movekit import logtail  # after the path above
 
 HOST = "127.0.0.1"
-PORT = 8766
+PORT = int(os.environ.get("MOVEKIT_SESSION_PORT", "8766"))  # the variable is for tests
 URL = f"http://{HOST}:{PORT}"
 POLL = 0.05  # seconds between log reads; tokens should show within a frame or so
 HISTORY = 500  # events kept for clients that reconnect

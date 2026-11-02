@@ -64,7 +64,9 @@ def save(store, attempt):
     return path
 
 
-def run(log, store, once):
+def run(log, store, once, on_saved=None):
+    """Collect from `log` into `store`. on_saved(path, attempt) is called for each attempt written
+    (not for one already on disk); the viewer server uses it to announce attempts on the session."""
     known = known_ids(store)
     asm = Assembler()
     print(f"collector: reading {log}, saving to {store} ({len(known)} attempts already there)", flush=True)
@@ -98,6 +100,8 @@ def run(log, store, once):
                 STATS["saved"] += 1
                 STATS["lastSaved"] = time.time()
                 print(f"collector: saved {path}", flush=True)
+                if on_saved:
+                    on_saved(path, value)
     for b in asm.leftover():
         print(f"collector: unfinished {b}", flush=True)
 

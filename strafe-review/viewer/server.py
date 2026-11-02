@@ -6,6 +6,8 @@
 It also runs the collector (collector/collector.py) in a thread, tailing Momentum's yaw.log, so one
 process records and serves. If the port is taken, another copy is already doing both and this one exits.
 Once it serves, it opens the page in the default browser.
+While collecting it also hosts the movekit game session (movekit/session.py, port 8766) unless another
+process already does, and announces every saved attempt there as attempt_saved {dir, id}.
 
 Routes:
   /                          the page (viewer/static/index.html)
@@ -22,7 +24,8 @@ Routes:
                              recorded before the recorder stamped them (null if unreadable)
   /api/status                what the setup looks like, for the page's status box: game folder,
                              recorder and autoexec.cfg block in place, the log (exists, size,
-                             last change), what the collector has seen, its last error
+                             last change), what the collector has seen, its last error, and
+                             the movekit session's status if this process hosts it (else null)
   /api/events                server-sent events: "attempt" with {dir, id} when a new attempt is saved
   GET /api/update            this version, a newer release if there is one, auto mode, whether this
                              copy can install it (the Windows exe) or only reports it (the repo)
@@ -52,10 +55,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
-import updater  # found through the path above
-
 import collector
 import install
+import updater  # found through the path above
+
+from movekit import session  # collector set the path to movekit
 
 STATIC = collector.ROOT / "viewer" / "static"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
@@ -83,6 +87,7 @@ SPECTATE_MIN_AIR = 20  # same as static/data.js
 POLL = 0.5  # seconds between store scans for /api/events
 COLLECT_RETRY = 5  # seconds before the collector thread starts over after an error
 collect_error = None  # {"time", "text"} of the collector thread's last error, for /api/status
+hosted = None  # (session, its HTTP server) when this process hosts the movekit session
 UPDATES = None  # updater.Updater, made in main()
 UPDATE_LOOP = 3600  # seconds between looks at updates (GitHub itself is asked every updater.CHECK_EVERY)
 QUIET_FOR = 600  # auto mode installs only when the game log has been still this long (no game being played)
@@ -489,6 +494,8 @@ def status(handler):
         "autoexecBlock": block,
         "log": file_info(handler.log) if handler.log else None,
         "collecting": handler.log is not None,
+        # the movekit session: hosted here ({log, inMap, map, lastId, listeners}), or null
+        "session": hosted[0].status() if hosted else None,
         "collector": collector.STATS,
         "error": collect_error,
         "store": str(handler.store),
@@ -528,12 +535,43 @@ def update_loop(server):
         time.sleep(UPDATE_LOOP if not latest else 300)  # a waiting update is retried once the game is quiet
 
 
-def collect(log, store):
+def announce(bus):
+    """collector.run's on_saved: tell the session's listeners about a new attempt (dir as in /api/attempt)."""
+    def on_saved(path, attempt):
+        bus.publish("attempt_saved", dir=path.parent.name, id=attempt["id"])
+    return on_saved
+
+
+def host_session(log):
+    """Host the movekit session for `log`, unless another process already serves one on its port.
+    Returns collector.run's on_saved callback, or None when the session is elsewhere."""
+    global hosted
+    hosted = session.start(log)
+    if hosted is None:
+        print(f"Strafe Review: a movekit session already runs on port {session.PORT}; "
+              "new attempts aren't announced on it", flush=True)
+        return None
+    print(f"Strafe Review: movekit session on {session.URL}/events", flush=True)
+    return announce(hosted[0].bus)
+
+
+def stop_session():
+    """Free the session's port before a new copy (an update, a restart) wants it."""
+    global hosted
+    if hosted:
+        sess, srv = hosted
+        sess.stop.set()
+        srv.shutdown()
+        srv.server_close()
+        hosted = None
+
+
+def collect(log, store, on_saved=None):
     """Run the collector for good; an error is printed and the collector starts over, so the page never
     keeps showing while nothing is saved. Starting over is safe: attempts already on disk are skipped."""
     while True:
         try:
-            collector.run(log, store, once=False)
+            collector.run(log, store, once=False, on_saved=on_saved)
         except Exception as e:  # noqa: BLE001 - any error, the thread must live on
             global collect_error
             collect_error = {"time": time.time(), "text": f"{type(e).__name__}: {e}"}
@@ -573,7 +611,8 @@ def main(argv=None):
         sys.exit(f"Strafe Review: port {args.port} is in use ({e.strerror}); is it already running?")
     if not args.no_collect:
         Handler.log = Path(args.log)
-        threading.Thread(target=collect, args=(args.log, Handler.store), daemon=True).start()
+        on_saved = host_session(args.log)  # after the port above, so a second copy never gets this far
+        threading.Thread(target=collect, args=(args.log, Handler.store, on_saved), daemon=True).start()
     url = f"http://127.0.0.1:{args.port}/"
     print(f"Strafe Review {updater.VERSION} viewer on {url} (attempts from {args.store})", flush=True)
     threading.Thread(target=update_loop, args=(server,), daemon=True).start()
@@ -585,6 +624,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     server.server_close()  # free the port before a new copy takes it
+    stop_session()
     if restart_after and RESTART:
         RESTART()
 
