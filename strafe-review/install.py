@@ -20,7 +20,6 @@ import argparse
 import json
 import re
 import shutil
-import struct
 import sys
 from pathlib import Path
 
@@ -28,7 +27,7 @@ ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "collector"))
 import steam  # found through the path above; it also puts movekit on the path
 
-from movekit import cfgblock
+from movekit import cfgblock, vpk
 from movekit.files import write_atomic
 
 BEGIN = "// strafe-review begin"
@@ -80,33 +79,6 @@ def set_autoexec(game, add):
     print(f"{'updated' if add else 'removed the strafe-review block from'} {autoexec}")
 
 
-def vpk_files(path):
-    """The file paths listed in a VPK's directory (v1 or v2), lower case; empty if it can't be read."""
-    try:
-        data = path.read_bytes()
-        sig, version, tree = struct.unpack_from("<III", data)
-        if sig != 0x55AA1234 or version not in (1, 2):
-            return set()
-        pos, end = (12 if version == 1 else 28), (12 if version == 1 else 28) + tree
-
-        def string():
-            nonlocal pos
-            stop = data.index(b"\0", pos)
-            s, pos = data[pos:stop].decode("utf-8", "replace"), stop + 1
-            return s
-
-        out = set()
-        while pos < end and (ext := string()):
-            while (folder := string()):
-                while (name := string()):
-                    preload = struct.unpack_from("<H", data, pos + 4)[0]
-                    pos += 18 + preload
-                    out.add(f"{'' if folder == ' ' else folder + '/'}{name}.{ext}".lower())
-        return out
-    except (OSError, struct.error, ValueError):
-        return set()
-
-
 def base_timer(game):
     """The timer.xml the game would load without us: the first custom/ folder in mount order that has
     one, else the game's own. A VPK with one in front of it can't be copied from; that gets a warning."""
@@ -118,7 +90,7 @@ def base_timer(game):
             continue
         if entry.is_dir() and (entry / TIMER).is_file():
             return entry / TIMER
-        if entry.suffix.lower() == ".vpk" and TIMER.as_posix().lower() in vpk_files(entry):
+        if entry.suffix.lower() == ".vpk" and TIMER.as_posix().lower() in vpk.files(entry):
             print(f"warning: {entry} has its own timer.xml, which ours replaces; that mod's timer may look "
                   "different", file=sys.stderr)
     return Path(game) / TIMER

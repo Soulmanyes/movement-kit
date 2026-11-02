@@ -24,7 +24,6 @@ import platform
 import re
 import shlex
 import shutil
-import struct
 import subprocess
 import sys
 import tarfile
@@ -39,7 +38,8 @@ from PIL import Image
 _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
-from movekit import games as kit_games, keyvalues, steam  # after the path above
+from movekit import games as kit_games  # after the path above
+from movekit import keyvalues, steam, vpk
 
 VERSION = "1.5.1"
 
@@ -683,58 +683,6 @@ def remove_from_game(cstrike, game="css"):
 # ---------------------------------------------------------------- sound preview
 
 SOUND_CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sourceyaw/sounds"
-_vpk_trees = {}
-
-
-def _vpk_tree(dir_vpk):
-    """{path: (archive_index, offset, length, preload_bytes, data_start)} of a _dir.vpk."""
-    if dir_vpk in _vpk_trees:
-        return _vpk_trees[dir_vpk]
-    tree = {}
-    with open(dir_vpk, "rb") as f:
-        sig, version, tree_size = struct.unpack("<III", f.read(12))
-        if sig != 0x55AA1234:
-            raise ValueError(f"{dir_vpk} is not a VPK")
-        header = 12 if version == 1 else 28
-        f.seek(header)
-        blob = f.read(tree_size)
-    pos = 0
-
-    def string():
-        nonlocal pos
-        end = blob.index(b"\0", pos)
-        text = blob[pos:end].decode("utf-8", "replace")
-        pos = end + 1
-        return text
-
-    while (ext := string()):
-        while (folder := string()):
-            while (name := string()):
-                _crc, preload, archive, offset, length, _end = struct.unpack_from(
-                    "<IHHIIH", blob, pos)
-                pos += 18
-                tree[f"{folder}/{name}.{ext}".lower()] = (archive, offset, length,
-                                                          blob[pos:pos + preload])
-                pos += preload
-    _vpk_trees[dir_vpk] = (tree, header + tree_size)
-    return _vpk_trees[dir_vpk]
-
-
-def _read_from_vpk(dir_vpk, path):
-    tree, data_start = _vpk_tree(dir_vpk)
-    hit = tree.get(path.lower())
-    if not hit:
-        return None
-    archive, offset, length, preload = hit
-    if archive == 0x7FFF:  # stored in the _dir.vpk itself, after the tree
-        source, offset = dir_vpk, data_start + offset
-    else:
-        source = str(dir_vpk).replace("_dir.vpk", f"_{archive:03d}.vpk")
-    with open(source, "rb") as f:
-        f.seek(offset)
-        return preload + f.read(length)
-
-
 def sound_file(cstrike, sound, game="css"):
     """Local file for a `play` sound name like buttons/blip1, extracting it if needed.
     `cstrike` is the game's mod folder; sound_vpks are where the game looks, in order."""
@@ -747,9 +695,9 @@ def sound_file(cstrike, sound, game="css"):
         cached = SOUND_CACHE / game / f"{sound}{ext}"
         if cached.is_file():
             return cached
-        for vpk in GAMES[game]["sound_vpks"]:
+        for vpk_name in GAMES[game]["sound_vpks"]:
             try:
-                data = _read_from_vpk(install / vpk, rel)
+                data = vpk.read_file(install / vpk_name, rel)
             except (OSError, ValueError):
                 continue
             if data:

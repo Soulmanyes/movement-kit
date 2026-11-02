@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery and Strafe Review's autoexec block are in `movekit` (see "Progress").
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery, Strafe Review's autoexec block and VPK reading are in `movekit` (see "Progress").
 
 ## Goal
 
@@ -105,6 +105,13 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - Source Yaw's `exec yaws.cfg` line stays in `yawcore` for now. It works differently (one line, not a marked block; turns CRLF into LF; reads with `errors="replace"`; skips the backup for an empty file; checks legacy backup names) and would be its only user, so sharing it would change behaviour.
 - Markers unchanged (`// strafe-review begin/end`). Moving to `// movekit:<tool>` is a behaviour change and waits for a release step with the owner.
 - Verified unchanged: 36 fixture cases (missing, empty, LF, CRLF without a final newline, block in the middle, block only, stray end marker, non-UTF-8 byte, existing backup; add, add twice, add then remove, remove), comparing bytes, file mode and backup, identical before and after. Rebuilt exe bundles `movekit.cfgblock` and `movekit.files`; `smoke_test.py` passes all 5 steps.
+
+### Phase 1.3: VPK reading (2026-11-02)
+
+- `movekit/vpk.py`: `read_tree` (Strafe Review's parser: root-folder files, v1/v2 only), `files` (Strafe Review's `vpk_files`: empty set on any error) and `read_file` (Source Yaw's `_read_from_vpk`, tree cached per `_dir.vpk`). Reads only the header and tree, not the whole file.
+- Strafe Review `install.base_timer` uses `vpk.files`; Source Yaw `sound_file` uses `vpk.read_file`.
+- Two edge cases change for Source Yaw, neither reachable today: a file at a VPK's root is found at `name.ext` (was `" /name.ext"`), and a VPK whose version isn't 1 or 2 raises ValueError, which `sound_file` already skips. Sounds always sit under `sound/`, and Valve's VPKs are v1 or v2.
+- Verified: synthetic VPKs (v1, v2, v3, preload bytes, data in the `_dir.vpk` and in `_000.vpk`, root file, bad signature, cut short, missing) and all 8 VPKs of the CS:S and Momentum installs on this PC (listing hash), plus every offered sound read from each game's sound VPKs: identical before and after apart from the two edge cases. A copy laid out like the installed app finds the same sounds. Rebuilt exe bundles `movekit.vpk`; `smoke_test.py` passes.
 
 ### Notes for later steps
 
