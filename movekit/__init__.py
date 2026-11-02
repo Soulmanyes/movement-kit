@@ -12,4 +12,8 @@ installed copy or a PyInstaller exe. Each module covers one concern:
   vpk        which files a VPK holds, and reading one out of it
   binds      binds and aliases in a game's cfg files
   updater    updates from a tool's GitHub releases (state file, source install, exe swap)
+  hub        the settings window with a section per tool (web/ holds its shared pages)
+
+hub is the one exception to "standard library only": its window needs pywebview, imported only when
+the window opens. Its section discovery, bridge and page server are stdlib like the rest.
 """

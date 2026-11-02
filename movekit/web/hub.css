@@ -1,0 +1,93 @@
+/* Shared look of the hub's pages. The colour tokens match strafe-review/viewer/static/style.css
+   (:root) for now; the viewer moves onto this file in a later Phase 3 step (see PLAN.md). */
+:root {
+	color-scheme: dark;
+	scrollbar-color: #4a5468 #1c1f26;
+	--bg: #15171c;
+	--panel: #1c1f26;
+	--card: #2a2f3b;
+	--card-hi: #333a49;
+	--border: #4a5468;
+	--accent: #6c9cff;
+	--text: #e6e9ef;
+	--muted: #a3abba;
+	--good: #7bd88f;
+	--warn: #ffb454;
+	--track: #3a4150; /* empty part of bars and sliders: differs from --card */
+}
+
+* { box-sizing: border-box; }
+
+body {
+	margin: 0;
+	display: flex;
+	height: 100vh;
+	background: var(--bg);
+	color: var(--text);
+	font: 14px/1.4 system-ui, sans-serif;
+}
+
+#hub-side {
+	width: 220px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 10px;
+	background: var(--panel);
+	border-right: 1px solid var(--border);
+	overflow-y: auto;
+}
+#hub-side .hub-title { font-size: 15px; font-weight: 600; margin: 0 6px 10px; }
+#hub-side a {
+	display: block;
+	padding: 7px 10px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	color: var(--text);
+	text-decoration: none;
+}
+#hub-side a:hover { background: var(--card); border-color: var(--border); }
+#hub-side a.active { background: var(--card-hi); border-color: var(--accent); }
+#hub-side .hub-problems { margin-top: auto; font-size: 12px; color: var(--warn); padding: 6px; }
+
+#hub-main { flex: 1; overflow-y: auto; padding: 22px 26px; }
+h1 { font-size: 20px; margin: 0 0 14px; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.muted { color: var(--muted); }
+
+.card {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 14px 16px;
+	margin-bottom: 14px;
+}
+
+button {
+	background: var(--card-hi);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 5px 12px;
+	font: inherit;
+	cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+
+/* typeable numbers and text always sit in a visible box */
+input[type="number"], input[type="text"], select {
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 5px 8px;
+	font: inherit;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent); }
+
+.bar { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+
+.error { color: var(--warn); }

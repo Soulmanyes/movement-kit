@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Soulmanyes's Movement Kit</title>
+<link rel="stylesheet" href="/web/hub.css">
+<script src="/web/hub.js"></script>
+</head>
+<body>
+<nav id="hub-side"></nav>
+<main id="hub-main">
+	<h1>Soulmanyes's Movement Kit</h1>
+	<div class="card" id="home-list"><span class="muted">Loading…</span></div>
+	<div class="card error" id="home-problems" hidden></div>
+</main>
+<script>
+"use strict";
+hub.info.then((info) => {
+	const list = document.getElementById("home-list");
+	list.replaceChildren();
+	if (!info.sections.length) {
+		list.innerHTML = '<h2>No sections yet</h2><p class="muted">Each tool adds its settings here as it moves into the hub.</p>';
+	} else {
+		const h = document.createElement("h2");
+		h.textContent = "Sections";
+		list.append(h);
+		for (const s of info.sections) {
+			const p = document.createElement("p");
+			const a = document.createElement("a");
+			a.href = s.url;
+			a.textContent = s.title;
+			a.style.color = "var(--accent)";
+			p.append(a);
+			list.append(p);
+		}
+	}
+	const probs = document.getElementById("home-problems");
+	if (info.problems.length) {
+		probs.hidden = false;
+		probs.replaceChildren();
+		const h = document.createElement("h2");
+		h.textContent = "Sections that didn't load";
+		probs.append(h);
+		for (const x of info.problems) {
+			const p = document.createElement("p");
+			p.textContent = `${x.folder}/hub_section.py: ${x.error}`;
+			probs.append(p);
+		}
+	}
+});
+</script>
+</body>
+</html>

@@ -26,6 +26,8 @@ gain-converter/   Gain Converter
 
 `movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. It also has the game session (`session.py`), the launch wrapper (`movekit-run`) and a reader for Strafe Review's saved attempts (`attempts.py`, format in [strafe-review/FORMAT.md](strafe-review/FORMAT.md)). A tool imports it from the repo root; an installed or built copy carries its own `movekit` next to it.
 
+`movekit/hub.py` is the start of the hub, one settings window with a section per tool. It has no sections yet. It is the one part of `movekit` that needs a package outside the standard library: [pywebview](https://pywebview.flowrl.com/) (`python-pywebview` on Arch).
+
 ## Launch option (Linux)
 
 One Steam launch option starts every tool that needs to run beside the game: put `movekit-run` right before `%command%`, for example

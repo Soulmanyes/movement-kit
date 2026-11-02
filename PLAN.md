@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). Left: archiving the old repos once a real install has moved. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd, no code yet.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). Left: archiving the old repos once a real install has moved. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd; 3.1 (shell) started 2026-11-02.
 
 ## Goal
 
@@ -92,7 +92,7 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 
 ## Phase 3: hub app
 
-Toolkit and split decided by the owner 2026-11-02; steps drafted, waiting for the owner's OK. Release line of its own, tag prefix `hub-v*`.
+Toolkit and split decided by the owner 2026-11-02; steps 3.1–3.8 OK'd the same day. Release line of its own, tag prefix `hub-v*`.
 
 **Split (owner).** The hub is a real app window for **settings**. Strafe Review's review page stays in the browser, as now. Sections:
 - **Source Yaw**: everything its GTK window does.
@@ -113,7 +113,7 @@ Toolkit and split decided by the owner 2026-11-02; steps drafted, waiting for th
 - **Lifetime.** The hub is only the settings window, opened and closed by hand. The Strafe Review server keeps its current lifetime (launch hook on Linux, the exe on Windows), so collecting doesn't change.
 - **HUD home.** A new top-level `hud/` folder owns in-game display settings. The jump-1 setting's code (`install.save_setting("inGameLine")`, `/api/settings` in `viewer/server.py`) moves there. The recorder install stays in Strafe Review, and `hud/` asks it to rewrite the setting.
 
-**Prerequisite:** the Phase 1 bridge releases. No `<tool>-v*` release exists yet, and the old repos are still live. The Windows hub exe replacing the Strafe Review exe is a second migration for installed copies, so it waits until the first one has shipped.
+**Prerequisite:** the Phase 1 bridge releases, shipped 2026-11-02 (see Phase 1.7). Archiving the old repos doesn't block the hub; the owner started 3.1 before it (2026-11-02). The Windows hub exe replacing the Strafe Review exe is a second migration for installed copies, so it waits until the first one has shipped.
 
 **Steps** (the old windows keep working throughout; checks: the existing ones plus a screenshot check of each new section):
 1. **3.1 Shell.** `movekit/hub.py`, section discovery, the `call` bridge, shared CSS, and `movekit/check_hub.py` (discovery, bridge and OS filter, run without a window). Install `python-pywebview`.
@@ -267,6 +267,15 @@ The first behaviour changes, one commit each:
 - `movekit/attempts.py`: `FORMAT`, `store()`, `files()`, `attempt_id()`, `load()` (raises `UnsupportedFormat`, a `ValueError`, for another number), `columns()` by name (NaN for a missing column), `problems()`. The collector takes its store path from it, and the server's `head()` loads through it, so a file with an unknown format is skipped with a note on stderr.
 - Checked: new `movekit/check_attempts.py` (full, minimal, missing optional, unknown field, unknown appended column, format 2, broken rows) and `--store` over the real store: 1344 files, no problems. Other movekit checks, the viewer's node checks, `check_recorder.py` on the real log (1344 attempts, 0 broken) and the rebuilt exe's `smoke_test.py` 5/5 pass.
 
+### Phase 3.1: hub shell (2026-11-02)
+
+- `movekit/hub.py`: `discover(root, platform)` finds `<folder>/hub_section.py` files, checks `SECTION` (key, title, os, page, api, optional order) and filters by `sys.platform` prefix. A broken section is skipped and listed in the problems, not fatal. Two folders with one key are both refused, so the clash shows instead of whichever folder sorts first.
+- Imports: each `hub_section.py` loads under its own module name, and its folder is not put on `sys.path` (tool folders share file names, e.g. `updater.py`). A section loads its own helpers with `hub.local_import(__file__, "name")`.
+- `Bridge` is the pywebview `js_api`: `sections()` and `call(key, name, args)`, replying `{ok, result}` or `{ok, error}`. pywebview runs calls on worker threads, so each section has a lock and its functions never overlap.
+- Pages: no iframes, since pywebview injects `window.pywebview.api` per page and doesn't promise it inside frames. Each section is its own page at `/s/<key>/`, served with `movekit/web/` (`hub.css`, `hub.js`, `home.html`) by a stdlib server on 127.0.0.1 and a free port. The Host header is checked, and paths can't leave their folder. `hub.js` draws the sidebar and gives pages `hub.call(name, args)`.
+- `python movekit/hub.py [--root DIR] [--class NAME] [--debug]`. pywebview is imported only there, so the rest of `movekit` stays stdlib.
+- Checked: new `movekit/check_hub.py` (43 checks: discovery, OS filter, every kind of broken section, same-named helpers kept apart, the bridge's errors, calls not overlapping, the page server's paths and Host check).
+
 ### Notes for later steps
 
 - Releases: tag `<tool>-v<VERSION>` (a plain `v1.5.0` starts no CI and the updaters ignore it). The `release-repo` skill has a Movement Kit section for this since 2026-11-02.
@@ -276,3 +285,6 @@ The first behaviour changes, one commit each:
 - Until a tool has its first `<tool>-v*` release, a copy running the new updater gets "No <tool>-v* release on GitHub yet": Source Yaw stays quiet, Strafe Review's page shows it as the check error. Only dev copies run that code before then.
 - Fixed 2026-11-02 (see "Markers and candidate fixes"), found in Phase 1.2: Strafe Review's install crashes (UnicodeEncodeError) on an autoexec.cfg with a non-UTF-8 byte, because it reads with `surrogateescape` but writes strict UTF-8. `write_atomic` leaves files it writes at mode 0600 (`mkstemp`). Source Yaw turns a CRLF autoexec.cfg into LF and replaces non-UTF-8 bytes when it adds or removes its line.
 - Fixed 2026-11-02, found in Phase 1.4: `read_binds` matches the raw line, so a bind with a trailing `// comment` gets a command ending in `"` and its role is missed (`bind o "+moveleft" // x`). `key_conflicts` cuts at the first `//` even inside quotes, so `bind "h" "say http://x"` reports `say http:`.
+- Hub (3.1): `movekit/web/hub.css` copies the colour tokens of `strafe-review/viewer/static/style.css` for now. Move the viewer onto `/web/hub.css`'s tokens in a later 3.x step (3.4 at the latest), so there's one copy.
+- Hub (3.1): hub pages come from their own localhost port. The session on 8766 already sends `Access-Control-Allow-Origin` for localhost origins, so SSE from a section page works as is.
+- Hub (3.1): `local_import` loads one file by path. A helper that imports a sibling with a plain `import x` still fails, so 3.5's `settings_api.py` must load its siblings the same way (or through `movekit`).
