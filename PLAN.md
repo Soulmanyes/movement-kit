@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) done; 2.4 (the trainer and the crosshair watcher on the session) is live, waiting on in-game checks.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) done; 2.4 (the trainer and the crosshair watcher on the session) is live, waiting on in-game checks. 2.5 (`movekit-run`) is on branch `phase-2.5`, not installed yet.
 
 ## Goal
 
@@ -33,6 +33,8 @@ movement-kit/
     vpk.py              read files out of VPKs
     binds.py            config.cfg binds and aliases
     logtail.py          follow con_logfile (yaw.log), CRLF, rotation, map load / tickrate lines
+    launch.py           movekit-run's plan: the game, the registered launch hooks, settings.toml
+    movekit-run         the one Steam launch option (bash), sources each tool's launch hook
     gain.py             CS:S SSJ <-> Momentum gain formula
     updater.py          GitHub releases filtered by tag prefix; source-install and frozen-exe modes
     paths.py            data/config dirs per OS, PyInstaller resource root
@@ -202,6 +204,17 @@ The first behaviour changes, one commit each:
 - Live (game closed): reran `sourceyaw/install.sh`; the installed copy has `crosshair_watch.py` and `movekit/session.py`, and its modules import the installed movekit. The Strafe Review unit runs from the repo, so it picks this up on the next launch.
 - Waiting on the owner, in the game: (1) Momentum: the offsets toggle key hides and shows the number, and `~/.config/sourceyaw/run.log` says `trainer: session events (listen)` with Strafe Review running. (2) CS:S: the cycle key swaps the crosshair colour (`crosshair: ... (private)` or `(host)` in run.log). 2.4 counts as done once both work.
 - Open: a listener reconnecting after its host left re-checks nothing; if a session for another log takes the port in that moment, it would listen to the wrong log. Not seen in practice; fix if it shows up.
+
+### Phase 2.5: one launch option (2026-11-02)
+
+- Design (Claude's call; the owner left the internals to Claude): `movekit/movekit-run` is the wrapper, bash as before (it has to strip and restore `LD_PRELOAD`/`LD_LIBRARY_PATH` and exec the game). `movekit/launch.py plan` works out the game from Steam's `AppId=` (`games.py`, no hardcoded id) and which hooks to run; the wrapper sources each tool's **launch hook** (`sourceyaw/launch-hook.sh`, `strafe-review/collector/launch-hook.sh`, the old wrappers' bodies) inside a function, so a hook keeps its variables `local`, exports reach the game, and every helper pid lands in one `HELPERS` list with one stop trap.
+- Registration: each installer runs `launch.py register <tool> <order> <hook>`, which links the hook as `$XDG_DATA_HOME/movekit/hooks/<order>-<tool>` and `~/.local/bin/movekit-run` to its own movekit copy (the installed Source Yaw carries one; Strafe Review runs from the repo). Order: Strafe Review 20, Source Yaw 50 (today's order: the trainer then finds the server's session). `unregister` removes the hook; `movekit-run` goes with the last tool, or is relinked to a remaining tool's copy if it pointed into the one being removed.
+- One settings file: `$XDG_CONFIG_HOME/movekit/settings.toml`, `[launch]` with a list of tools per game. Missing file or game = every registered hook, which gives today's behaviour (Strafe Review's hook skips anything but Momentum). A broken file is reported and ignored. Source Yaw's own settings and `watch.env` stay where they are.
+- Old names: `sourceyaw-run`, `css-yaw-run`, `yaw-run` (the full-path form) and `strafe-review-run` are links to `movekit-run`, which then runs only that tool, so old launch options do exactly what they did. `MOVEKIT_RAN` (exported to the command) stops a tool running twice in a chain (`strafe-review-run sourceyaw-run`, `movekit-run sourceyaw-run`).
+- Changed on the way: Strafe Review's hook now only starts the server for Momentum (the old wrapper started it for any game). Source Yaw's app suggests `movekit-run` and counts any of the old names as set up (`check_launch_option.py`). Windows is unchanged: the Strafe Review exe stays its own launch option.
+- Not done: `game_exit` from the wrapper (listeners can't publish, the 2.3 gap).
+- Checked: new `movekit/check_launch.py` (plan, settings, old names, `MOVEKIT_RAN`, register/unregister, and `movekit-run` with fake hooks and a fake game: arguments verbatim, `LD_*` back for the game only, exports, helpers stopped, exit code kept, failing hook skipped, chains run each tool once), `sourceyaw/check_launch_option.py`, the existing session/logtail/steam checks, the rebuilt exe's `smoke_test.py` 5/5, and a sandbox `sourceyaw/install.sh` plus both real hooks through `movekit-run` with stubbed `systemd-run` (Momentum: the unit and the page; CS:S: KROSSHAIR exported, log emptied, the crosshair watcher running for the game and stopped after).
+- Cutover, with the games closed: back up `~/.local/bin` links and `~/.local/share/sourceyaw`, merge, rerun `sourceyaw/install.sh` and `strafe-review/install.py`. The current launch options keep working unchanged; then switch both games to `... movekit-run %command%` and play once.
 
 ### Notes for later steps
 

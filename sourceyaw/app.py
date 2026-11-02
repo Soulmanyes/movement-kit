@@ -592,11 +592,11 @@ class Window(Adw.ApplicationWindow):
     def add_steam_group(self, page):
         steam = Adw.PreferencesGroup(
             title="Steam launch options",
-            description="CS:S Properties → Launch Options. sourceyaw-run applies these "
+            description="CS:S Properties → Launch Options. movekit-run applies these "
                         "settings and runs the colour changer and strafe trainer while "
                         "the game is open." if self.uses_krosshair else
                         f"{self.info['short']} Properties → Launch Options. Only needed for "
-                        "the strafe trainer: sourceyaw-run starts it while the game is open.")
+                        "the strafe trainer: movekit-run starts it while the game is open.")
         refresh = Gtk.Button(icon_name="view-refresh-symbolic", valign=Gtk.Align.CENTER,
                              tooltip_text="Read the launch options from Steam again")
         refresh.add_css_class("flat")
@@ -942,7 +942,7 @@ class Window(Adw.ApplicationWindow):
         return cfg
 
     def preview_overlay(self):
-        """Shows a sample number in a game started through sourceyaw-run."""
+        """Shows a sample number in a game started through movekit-run."""
         cfg = self.trainer_value()
         if self.overlay is None:
             self.overlay = trainer.Overlay()
@@ -974,7 +974,7 @@ class Window(Adw.ApplicationWindow):
     def check_setup(self):
         problem = None
         if not self.cstrike and core.flatpak_steam_only(self.game):
-            problem = ("Flatpak Steam isn't supported: sourceyaw-run can't run inside "
+            problem = ("Flatpak Steam isn't supported: movekit-run can't run inside "
                        "its sandbox. Use Steam from your distro's packages")
         elif not self.cstrike:
             problem = f"{self.info['name']} not found in your Steam libraries"
@@ -1223,15 +1223,15 @@ class Window(Adw.ApplicationWindow):
         self.launch_option, already = core.launch_option(current, run)
         self.launch_row.set_title(GLib.markup_escape_text(self.launch_option))
         if current is None:
-            note = "Couldn't read your Steam launch options. Put sourceyaw-run before %command%"
+            note = "Couldn't read your Steam launch options. Put movekit-run before %command%"
         elif already:
             note = "Already set up"
         elif current:
-            note = "Your current launch options with sourceyaw-run added. Replace them with this"
+            note = "Your current launch options with movekit-run added. Replace them with this"
         else:
             note = "You have no launch options yet. Paste this in"
         if run != core.RUNNER:
-            note += ". Steam can't find sourceyaw-run by name here, so this uses the full path"
+            note += ". Steam can't find movekit-run by name here, so this uses the full path"
         self.launch_row.set_subtitle(note)
 
     def copy(self, text):

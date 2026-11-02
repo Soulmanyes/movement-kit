@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strafe trainer: runs beside the game (started by sourceyaw-run).
+"""Strafe trainer: runs beside the game (started by launch-hook.sh through movekit-run).
 
 Reads the strafe, turn and jump keys plus mouse movement from the Source Yaw
 input service (/run/sourceyaw-inputd.sock), and while a jump key is held:
@@ -14,7 +14,7 @@ Keys come from the game's own binds (config.cfg plus aliases from every cfg),
 so rebinding in the game just works as long as the input service forwards
 that key (see /etc/sourceyaw-inputd.conf).
 
-  trainer.py GAME            run until the game exits (sourceyaw-run does this)
+  trainer.py GAME            run until the game exits (launch-hook.sh does this)
   trainer.py GAME --binds    print which keys do what, then exit
 """
 

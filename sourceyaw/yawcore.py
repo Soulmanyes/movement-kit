@@ -13,7 +13,7 @@ For CS:S the pieces fit together like this:
     ~/.config/sourceyaw/current.png. The game runs with KROSSHAIR_IMG pointing at
     that file, and the KROSSHAIR Vulkan layer reloads it inside the game's own
     frames (no compositor overlay, so no stutter).
-  - yaw-run is the Steam launch option wrapper: it runs `yawcore.py --apply`,
+  - launch-hook.sh, run by the Steam launch option movekit-run, runs `yawcore.py --apply`,
     sets KROSSHAIR=1 and KROSSHAIR_IMG for the game, and runs crosshair_watch.py for
     as long as the game runs. The app only edits settings.
 """
@@ -54,13 +54,15 @@ CONFIG_DIR = XDG_CONFIG / "sourceyaw"
 OLD_CONFIG_DIR = XDG_CONFIG / "css-yaw"
 SETTINGS = CONFIG_DIR / "settings.json"
 CROSSHAIRS = CONFIG_DIR / "crosshairs"
-# what the game shows: yaw-run passes it to KROSSHAIR as KROSSHAIR_IMG
+# what the game shows: launch-hook.sh passes it to KROSSHAIR as KROSSHAIR_IMG
 CURRENT = CONFIG_DIR / "current.png"
 BUILTIN = CONFIG_DIR / "plain-cross.png"
 WATCH_ENV = CONFIG_DIR / "watch.env"
-# install.sh links yaw-run into ~/.local/bin under this name
-RUNNER = "sourceyaw-run"
-OLD_RUNNER = "css-yaw-run"  # install.sh keeps it as an alias, so old launch options work
+# the launch option: movekit-run (movekit/launch.py), which install.sh links into ~/.local/bin
+RUNNER = "movekit-run"
+# names from before movekit-run that run Source Yaw too (install.sh keeps them as links, so old
+# launch options work): sourceyaw-run, css-yaw-run (before 1.2.0), yaw-run (the full-path form)
+OLD_RUNNERS = ("sourceyaw-run", "css-yaw-run", "yaw-run")
 BIN_DIR = HOME / ".local/bin"
 
 CM_DIR = XDG_CONFIG / "crosshair-maker"
@@ -147,7 +149,7 @@ def token(value):
 
 def find_game(game):
     """The game's mod folder (cstrike, momentum), or None. Flatpak Steam is left out:
-    sourceyaw-run can't run inside its sandbox (see flatpak_steam_only)."""
+    movekit-run can't run inside its sandbox (see flatpak_steam_only)."""
     return steam.game_dir(kit_games.GAMES[game], steam.steam_roots(flatpak=False))
 
 
@@ -632,7 +634,7 @@ def apply(data, cstrike, reset_current=False, game="css"):
         notes.append(f"Your old yaws.cfg was saved as {backup.name}")
     write_text_atomic(target, yaws_cfg(data, unbind, game))
     krosshair = GAMES[game]["colors"] == "krosshair"
-    # read by yaw-run (shell), so quote the path: it has spaces
+    # read by launch-hook.sh (shell), so quote the path: it has spaces
     write_text_atomic(WATCH_ENV, f"LOG={shlex.quote(str(cstrike / 'yaw.log'))}\n"
                                  f"COLORS={1 if krosshair and data['crosshair'] else 0}\n"
                                  f"TRAINER={1 if trainer_on(data) else 0}\n")
@@ -757,19 +759,20 @@ def runner():
     find it in ~/.local/bin, otherwise the full path."""
     if str(BIN_DIR) in steam_path().split(":"):
         return RUNNER
-    return shlex.quote(str(Path(__file__).resolve().with_name("yaw-run")))
+    return shlex.quote(str(Path(kit_games.__file__).resolve().with_name(RUNNER)))
 
 
 def launch_option(current=None, run=None):
     """The full launch options with the wrapper added, and whether it was there already."""
     run = run or runner()
     current = (current or "").strip()
-    wrapper = r"(?<!\S)\S*(sourceyaw-run|css-yaw-run|/yaw-run)(?=\s|$)"
+    names = "|".join(re.escape(n) for n in (RUNNER, *OLD_RUNNERS))
+    wrapper = rf"(?<![^\s/])(?:\S*/)?(?:{names})(?=\s|$)"
     found = re.search(wrapper, current)
     if found:
-        # already there. The old name still works (install.sh keeps it as an alias);
+        # already there. A short old name still works (install.sh keeps them as links);
         # otherwise make it the form that works here (short name or full path)
-        if found.group(0) == OLD_RUNNER and run == RUNNER:
+        if "/" not in found.group(0) and run == RUNNER:
             return current, True
         fixed = re.sub(wrapper, lambda _: run, current)
         return fixed, fixed == current
@@ -781,7 +784,7 @@ def launch_option(current=None, run=None):
 
 if __name__ == "__main__":
     # `python3 yawcore.py --apply [game]`: rewrite a game's files from its saved settings
-    #   (yaw-run passes the game it is starting; without one: every game that has saved
+    #   (launch-hook.sh passes the game it is starting; without one: every game that has saved
     #   settings, or CS:S on a fresh install, so a game is never set up behind your back)
     # `python3 yawcore.py --remove-from-game`: undo the game side (install.sh --uninstall)
     import sys

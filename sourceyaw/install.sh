@@ -2,7 +2,7 @@
 # Installs Source Yaw for the current user.
 #   - installs Python/GTK 4/libadwaita/Pillow if missing (asks for your password)
 #   - copies the app to ~/.local/share/sourceyaw and adds a launcher
-#   - the colour changer runs from a Steam launch option (yaw-run), see the app
+#   - the colour changer runs from the Steam launch option movekit-run, see the app
 # Run ./install.sh --uninstall to remove it again.
 # Without cloning the repo:
 #   curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh
@@ -48,6 +48,8 @@ if [ "${1:-}" = "--uninstall" ]; then
             [yY]*) python3 "$DEST/yawcore.py" --remove-from-game && echo "Removed from your games." ;;
         esac
     fi
+    # the launch hook; movekit-run in ~/.local/bin goes too unless another tool's copy is left
+    [ -f "$DEST/movekit/launch.py" ] && python3 "$DEST/movekit/launch.py" unregister "$NAME"
     # $DEST also holds KROSSHAIR if the app installed it; drop its layer manifest too,
     # or the Vulkan loader is left pointing at a missing library
     rm -rf "$DEST" "$APPS/$NAME.desktop" "$APPS/$APP_ID.desktop" "$ICONS/$APP_ID.svg" \
@@ -60,6 +62,7 @@ if [ "${1:-}" = "--uninstall" ]; then
         echo "    curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/inputd/install-inputd.sh | sudo sh -s remove"
     fi
     echo "Remove $NAME-run (or $OLD_NAME-run) from the launch options, or the game will not start."
+    echo "movekit-run can stay if another movement tool still uses it."
     exit 0
 fi
 
@@ -131,25 +134,33 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$SRC/crosshair_watch.py" "$DEST/"
+install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$SRC/crosshair_watch.py" \
+    "$SRC/launch-hook.sh" "$DEST/"
 # movekit: the code the movement tools share, one folder up in the repo; yawcore finds it next to itself.
 # Replaced whole, so a module dropped from movekit doesn't linger in the installed copy.
 rm -rf "$DEST/movekit"
 mkdir -p "$DEST/movekit"
 install -m 644 "$SRC"/../movekit/*.py "$DEST/movekit/"
 rm -f "$DEST/movekit/check_"*.py
+install -m 755 "$SRC/../movekit/movekit-run" "$DEST/movekit/"
 # the input service's files; its installer (run with sudo) copies them to root-owned places
 mkdir -p "$DEST/inputd"
 install -m 644 "$SRC"/inputd/sourceyaw-inputd.* "$SRC/inputd/install-inputd.sh" "$DEST/inputd/"
-install -m 755 "$SRC/app.py" "$SRC/yaw-run" "$DEST/"
+install -m 755 "$SRC/app.py" "$DEST/"
+# yaw-run: the full-path launch option for a Steam that can't find ~/.local/bin; before Phase 2.5
+# a script of its own, now movekit-run under its old name (which runs only Source Yaw)
+rm -f "$DEST/yaw-run"
+ln -s movekit/movekit-run "$DEST/yaw-run"
 rm -f "$DEST/yaw-watch.sh"  # replaced by crosshair_watch.py (movekit session) in Phase 2.4
 cp -r "$SRC/icons" "$DEST/"
 install -m 644 "$SRC/icons/hicolor/scalable/apps/$APP_ID.svg" "$ICONS/"
 ln -sf "$DEST/app.py" "$BIN/$NAME"
-# the launch option command; Steam has ~/.local/bin in its PATH
-ln -sf "$DEST/yaw-run" "$BIN/$NAME-run"
-# its name before 1.2.0, so launch options that still say css-yaw-run keep working
-ln -sf "$DEST/yaw-run" "$BIN/$OLD_NAME-run"
+# the launch option: movekit-run (Steam has ~/.local/bin in its PATH) runs this hook and those
+# of the other movement tools; register links ~/.local/bin/movekit-run to this copy
+python3 "$DEST/movekit/launch.py" register "$NAME" 50 "$DEST/launch-hook.sh"
+# the names before movekit-run (css-yaw-run: before 1.2.0), so old launch options keep working
+ln -sf "$DEST/movekit/movekit-run" "$BIN/$NAME-run"
+ln -sf "$DEST/movekit/movekit-run" "$BIN/$OLD_NAME-run"
 
 # named after the app ID so docks and taskbars match the window to this launcher
 rm -f "$APPS/$NAME.desktop"
@@ -180,6 +191,6 @@ say "Writing yaws.cfg and crosshair colours from your settings"
 python3 "$DEST/yawcore.py" --apply || echo "Skipped. Open the app and press Apply."
 
 say "Done. Open \"Source Yaw\" from your app menu, or run: $NAME"
-echo "Add this to the CS:S launch options, right before %command%:"
-echo "    $NAME-run"
+echo "Add this to the game's launch options, right before %command%:"
+echo "    movekit-run"
 }

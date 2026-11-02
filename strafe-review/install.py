@@ -12,7 +12,8 @@ Usage: install.py [--game DIR] [--uninstall]
   the older "// strafe-review begin" block where it stands): con_logfile yaw.log (the log the collector reads), and
   engine_no_focus_sleep 0, so replays watched while tabbed out record every tick. The first install
   keeps the original as autoexec.cfg.bak-strafe-review. Restart the game after installing.
-- On Linux, links collector/strafe-review-run into ~/.local/bin for the Steam launch options.
+- On Linux, registers collector/launch-hook.sh with movekit-run (movekit/launch.py) and links
+  movekit-run and the old name strafe-review-run into ~/.local/bin for the Steam launch options.
 
 The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
 --uninstall removes the recorder, the autoexec block and the link.
@@ -28,14 +29,15 @@ ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "collector"))
 import steam  # found through the path above; it also puts movekit on the path
 
-from movekit import cfgblock, vpk
+from movekit import cfgblock, launch, vpk
 from movekit.files import write_atomic
 
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
 BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0"]
 OLD_MARKERS = ("// strafe-review begin", "// strafe-review end")  # before 2026-11-02; replaced in place
-LINK = Path.home() / ".local" / "bin" / "strafe-review-run"
+LINK = Path.home() / ".local" / "bin" / "strafe-review-run"  # the launch option before movekit-run
+HOOK_ORDER = 20  # before Source Yaw's (50): the trainer then finds the server's session
 FOLDER = "0-strafe-review"  # in custom/; sorts before other mods, so our timer.xml is the one loaded
 OLD_FOLDERS = ["strafe-review"]  # before 2026-10-28; removed on install
 TIMER = Path("panorama") / "layout" / "hud" / "timer.xml"
@@ -113,18 +115,23 @@ def timer_with_recorder(text):
 
 
 def link_launcher(add):
-    """Linux only: the Steam launch option wrapper, run from the repo (so keep the repo where it is)."""
+    """Linux only: the Steam launch option, run from the repo (so keep the repo where it is).
+    The hook goes to movekit-run; strafe-review-run, the name before it, runs only this tool."""
     if sys.platform == "win32" or getattr(sys, "frozen", False):
         return
     if add:
+        launch.register(TOOL, HOOK_ORDER, ROOT / "collector" / "launch-hook.sh")
         LINK.parent.mkdir(parents=True, exist_ok=True)
         if LINK.is_symlink() or LINK.exists():
             LINK.unlink()
         LINK.symlink_to(ROOT / "collector" / "strafe-review-run")
-        print(f"linked {LINK}; Steam launch options: strafe-review-run %command%")
-    elif LINK.is_symlink():
-        LINK.unlink()
-        print(f"removed {LINK}; take strafe-review-run out of the launch options too")
+        print(f"linked {launch.bin_link()} and {LINK}; Steam launch options: movekit-run %command%")
+    else:
+        launch.unregister(TOOL)
+        if LINK.is_symlink():
+            LINK.unlink()
+        print("removed the launch hook; take strafe-review-run out of the launch options too "
+              "(movekit-run %command% is fine if another tool still uses it)")
 
 
 def install(game):

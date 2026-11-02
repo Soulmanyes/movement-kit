@@ -22,6 +22,24 @@ gain-converter/   Gain Converter
 
 `movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. A tool imports it from the repo root; an installed or built copy carries its own `movekit` next to it.
 
+## Launch option (Linux)
+
+One Steam launch option starts every tool that needs to run beside the game: put `movekit-run` right before `%command%`, for example
+
+```
+movekit-run %command%
+```
+
+Each tool's installer registers its part with it (a launch hook, linked into `~/.local/share/movekit/hooks`) and links `movekit-run` into `~/.local/bin`. Tools that don't fit the game skip themselves: Strafe Review only runs for Momentum Mod. To turn a tool off for one game, list the ones you want in `~/.config/movekit/settings.toml`; a game it leaves out runs every installed tool:
+
+```toml
+[launch]
+momentum = ["strafe-review", "sourceyaw"]
+css = ["sourceyaw"]
+```
+
+The older per-tool options still work and start only their own tool: `sourceyaw-run %command%`, `strafe-review-run sourceyaw-run %command%`. On Windows, Strafe Review's exe is its own launch option, as before.
+
 ## Releases
 
 Each tool keeps its own version and its own tags: `sourceyaw-v1.6.0`, `strafe-review-v1.5.0`, `gain-converter-v1.1.0`. A tool's updater only looks at releases with its own prefix. A pushed `strafe-review-v*` or `gain-converter-v*` tag builds the Windows exe on GitHub and attaches it to that release. Source Yaw releases are source archives.

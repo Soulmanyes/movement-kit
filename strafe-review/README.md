@@ -52,8 +52,8 @@ Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts`, and everything it 
 ## Install on Linux
 
 1. Clone this repo and keep it where it is; the launcher runs from it.
-2. `python install.py` finds Momentum (or pass `--game DIR`, or set `MOMENTUM_DIR`), installs the recorder and the `autoexec.cfg` block, and links `strafe-review-run` into `~/.local/bin`.
-3. Set Momentum Mod's Steam launch options to `strafe-review-run %command%` (it chains with other wrappers, e.g. `strafe-review-run sourceyaw-run %command%`). The game start then starts the server as the systemd user unit `strafe-review`, which keeps running after the game quits; the page opens as the game starts. **Stop** on the page or `systemctl --user stop strafe-review` ends it.
+2. `python install.py` finds Momentum (or pass `--game DIR`, or set `MOMENTUM_DIR`), installs the recorder and the `autoexec.cfg` block, registers its launch hook with `movekit-run` and links `movekit-run` into `~/.local/bin`.
+3. Set Momentum Mod's Steam launch options to `movekit-run %command%`, the launch option the movement tools share (it also starts Source Yaw if that is installed; see the repository's README). The older `strafe-review-run %command%` still works and starts only Strafe Review. The game start then starts the server as the systemd user unit `strafe-review`, which keeps running after the game quits; the page opens as the game starts. **Stop** on the page or `systemctl --user stop strafe-review` ends it.
 4. Restart Momentum once. Or start the server by hand: `python viewer/server.py` (`--port`, `--no-collect` to only serve, `--no-browser`).
 
 Attempts are kept in `~/.local/share/strafe-review/attempts`.

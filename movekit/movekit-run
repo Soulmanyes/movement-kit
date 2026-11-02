@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Steam launch option for the movement tools (Linux). Put it right before %command%:
+#   movekit-run %command%
+# Starts every installed tool that is turned on for the game (launch.py has the rules and the
+# settings file), then the game. Called by an old name (sourceyaw-run, css-yaw-run, yaw-run,
+# strafe-review-run, links to this file) it runs only that tool, as those wrappers did.
+#
+# A tool's launch hook is a bash snippet sourced here, inside a function, before the game
+# starts. It gets $GAME (games.py key) and $HOOK_DIR (its own folder, links resolved). It may
+#   - declare its own variables with `local`,
+#   - export variables for the game (they reach the game; LD_PRELOAD and LD_LIBRARY_PATH
+#     are put back for the game only, so helpers run without Steam's runtime and overlay),
+#   - start helpers in the background and add their pids to $HELPERS: they are stopped
+#     when the game exits.
+# It must not start the game or exit. A hook that returns non-zero is reported and skipped.
+
+# keep Steam's runtime libraries and overlay out of our own helpers; the game gets them back
+GAME_PRELOAD=${LD_PRELOAD-}
+GAME_LIBS=${LD_LIBRARY_PATH-}
+unset LD_PRELOAD LD_LIBRARY_PATH
+
+DIR="$(dirname "$(readlink -f "$0")")"
+GAME=css
+HOOKS=()
+TOOLS=()
+while IFS= read -r line; do
+    case $line in
+        "game "*) GAME=${line#game } ;;
+        "hook "*)
+            line=${line#hook }
+            TOOLS+=("${line%% *}")
+            HOOKS+=("${line#* }")
+            ;;
+    esac
+done < <(python3 "$DIR/launch.py" plan "$(basename "$0")" "$@")
+
+HELPERS=""
+run_hook() {
+    local HOOK_DIR
+    HOOK_DIR="$(dirname "$(readlink -f "$1")")"
+    # shellcheck source=/dev/null
+    . "$1"
+}
+for i in "${!HOOKS[@]}"; do
+    run_hook "${HOOKS[$i]}" || echo "movekit-run: the ${TOOLS[$i]} hook failed" >&2
+    MOVEKIT_RAN="${MOVEKIT_RAN:+$MOVEKIT_RAN }${TOOLS[$i]}"
+done
+# an old name chained after this one (strafe-review-run sourceyaw-run %command%) must not run
+# a tool twice
+export MOVEKIT_RAN
+
+if [ -n "$HELPERS" ]; then
+    # shellcheck disable=SC2086  # word splitting wanted: a list of pids
+    trap 'kill $HELPERS 2>/dev/null; wait $HELPERS 2>/dev/null' EXIT
+    trap 'exit 143' TERM INT HUP
+fi
+
+LD_PRELOAD=$GAME_PRELOAD LD_LIBRARY_PATH=$GAME_LIBS "$@"

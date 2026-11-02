@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/40f99c9d-ba8a-4a52-8c9c-d5cf06575f16
 ## What you need
 
 - Linux, and the native Linux version of CS:S or Momentum Mod on Steam. Steam from your
-  distro's packages works. Flatpak Steam doesn't, because `sourceyaw-run` can't run inside
+  distro's packages works. Flatpak Steam doesn't, because `movekit-run` can't run inside
   its sandbox.
 - Python 3, GTK 4.6 or newer, libadwaita 1.1 or newer, PyGObject and Pillow.
   `install.sh` installs them with pacman, apt or dnf if they are missing.
@@ -56,18 +56,20 @@ Then:
 
 That's all Momentum Mod needs. For CS:S's crosshair colours, also:
 
-3. Add `sourceyaw-run` right before `%command%` in the CS:S launch options. The app shows
+3. Add `movekit-run` right before `%command%` in the CS:S launch options. The app shows
    your current launch options with it added, ready to copy. With no other options:
 
    ```
-   sourceyaw-run %command%
+   movekit-run %command%
    ```
 
-   If Steam can't find `sourceyaw-run` (it lives in `~/.local/bin`), the app shows the full
-   path instead.
+   If Steam can't find `movekit-run` (it lives in `~/.local/bin`), the app shows the full
+   path instead. `movekit-run` is the launch option all of the movement tools share: it
+   starts each one that is installed (see the repository's README to turn one off per game).
+   `sourceyaw-run`, its name before, still works and starts only Source Yaw.
 
-To remove the app, run the install command with `--uninstall` and take `sourceyaw-run` out of
-the launch options:
+To remove the app, run the install command with `--uninstall` and take `movekit-run` (or `sourceyaw-run`)
+out of the launch options, unless another movement tool still uses it:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Soulmanyes/sourceyaw/main/install.sh | sh -s -- --uninstall
@@ -134,7 +136,7 @@ Setup:
    ```
 
 2. Turn on **Strafe trainer** in the app and press **Apply**.
-3. Add `sourceyaw-run` before `%command%` in the game's launch options (Momentum Mod needs
+3. Add `movekit-run` before `%command%` in the game's launch options (Momentum Mod needs
    it too for the trainer).
 
 **About the input service.** Under Wayland a game holds the pointer, so the trainer reads
@@ -156,13 +158,13 @@ ticks, so they can differ from a server's offset display by about one tick.
 - **Momentum Mod:** each press also runs a small cfg in `cfg/yaws_colors/` that sets
   `cl_crosshair_color` to that yawspeed's colour.
 - **CS:S:** each press also runs `echo YAW_<speed>`, and `con_logfile yaw.log` copies the
-  console to a file. `sourceyaw-run` wraps the game. It rebuilds `yaws.cfg` and the coloured crosshairs from
+  console to a file. `movekit-run` wraps the game. It rebuilds `yaws.cfg` and the coloured crosshairs from
   your settings, then starts the game with `KROSSHAIR=1` and
   `KROSSHAIR_IMG=~/.config/sourceyaw/current.png`. While the game runs, it watches
   `yaw.log` and copies the matching colour over that file on each `YAW_<speed>` line.
   KROSSHAIR reloads the file whenever it changes.
 
-- **Strafe trainer:** `sourceyaw-run` starts `trainer.py` beside the game and turns on the
+- **Strafe trainer:** `movekit-run` starts `trainer.py` beside the game and turns on the
   Source Yaw overlay, a small Vulkan layer (in `overlay/`, a fork of KROSSHAIR) that draws
   the offset. The trainer passes the number through a tiny shared file the layer reads each
   frame, so nothing is reloaded while you play, and the layer does no work while the number

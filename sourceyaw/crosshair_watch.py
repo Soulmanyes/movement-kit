@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Swaps the CS:S crosshair when the yaw_cycle bind echoes "YAW_<speed>" (started by sourceyaw-run).
+"""Swaps the CS:S crosshair when the yaw_cycle bind echoes "YAW_<speed>" (started by launch-hook.sh through movekit-run).
 
   crosshair_watch.py LOG
 
 The tokens come from the movekit session for LOG (movekit/session.py), which applies the rules the
 old yaw-watch.sh had: a token counts as soon as something follows it, without waiting for the line
-break; chat is ignored. sourceyaw-run starts the game with KROSSHAIR_IMG pointing at current.png,
-and KROSSHAIR reloads that file whenever its mtime changes. sourceyaw-run also empties LOG first,
+break; chat is ignored. launch-hook.sh starts the game with KROSSHAIR_IMG pointing at current.png,
+and KROSSHAIR reloads that file whenever its mtime changes. It also empties LOG first,
 since con_logfile appends forever.
 """
 import os  # noqa: I001 - yawcore must come before movekit: it puts movekit on the path
@@ -57,7 +57,7 @@ def main():
     log = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LOG")
     if not log:
         sys.exit("crosshair: no log given; open Source Yaw and press Apply")
-    # sourceyaw-run stops its helpers with SIGTERM: leave through finally, freeing the session's port
+    # movekit-run stops its helpers with SIGTERM: leave through finally, freeing the session's port
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         run(log)

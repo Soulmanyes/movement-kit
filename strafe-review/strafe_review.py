@@ -10,7 +10,7 @@
 Everything it prints also goes to strafe-review.log in %LOCALAPPDATA%\\strafe-review (the background
 copy's only output). If a copy is already serving, a double-click only opens the page. The server
 reads yaw.log from the start and skips attempts already saved, so attempts played while it wasn't
-running are picked up on the next start. On Linux, collector/strafe-review-run stays the launch option wrapper.
+running are picked up on the next start. On Linux, movekit-run (collector/launch-hook.sh) stays the launch option.
 """
 import os
 import socket
