@@ -72,6 +72,8 @@ class Bus:
         """A queue of every event from now on, plus the kept ones after id `after` if given."""
         q = queue.SimpleQueue()
         with self._lock:
+            if after is not None and after > self.last_id:
+                after = 0  # an id from before the session restarted: everything kept is new
             if after is not None:
                 for event in self._history:
                     if event["id"] > after:
