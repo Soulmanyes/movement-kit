@@ -285,6 +285,15 @@ def _side_buttons(window):
     GLib.idle_add(hook)
 
 
+def check_sections(out, root=KIT, platform=sys.platform):
+    """Write {"sections": [keys], "problems": [[folder, text]]} to the file out, with no window.
+    For the hub exe's smoke test, which has no console to print to. Returns the dict."""
+    sections, problems = discover(root, platform)
+    report = {"sections": [s.key for s in sections], "problems": [list(p) for p in problems]}
+    Path(out).write_text(json.dumps(report), encoding="utf-8")
+    return report
+
+
 def run(root=KIT, app_class=None, debug=False, first=None):
     """Open the hub window, on section `first` if given; returns when it closes."""
     try:
@@ -316,7 +325,12 @@ def main():
     ap.add_argument("--class", dest="app_class", help=f"window class / app id, default {APP_ID} (tests use *-test)")
     ap.add_argument("--debug", action="store_true", help="allow the web inspector")
     ap.add_argument("--section", help="open on this section's page (screenshot checks)")
+    ap.add_argument("--check-sections", metavar="FILE", type=Path,
+                    help="write the sections found to FILE as JSON and exit, with no window")
     args = ap.parse_args()
+    if args.check_sections:
+        check_sections(args.check_sections, args.root)
+        return
     run(args.root, args.app_class, args.debug, args.section)
 
 

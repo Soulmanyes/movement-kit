@@ -31,6 +31,20 @@ on:
         description: Command that prints the tool's VERSION; the tag must match it. Empty skips the check
         type: string
         default: ""
+      exe:
+        description: The exe's name without .exe when it isn't the tool's, "movement-kit" for the hub
+        type: string
+        default: ""
+      packages:
+        description: Space-separated pip packages the build bundles, installed next to PyInstaller
+        type: string
+        default: ""
+      licenses_of:
+        description: >-
+          Space-separated packages whose licence files (and their requirements') go in licenses/ in
+          the zip, read from the installed metadata (.github/scripts/collect_licenses.py)
+        type: string
+        default: ""
 jobs:
   build:
     runs-on: windows-latest
@@ -47,6 +61,9 @@ jobs:
       SMOKE: ${{ inputs.smoke }}
       FILES: ${{ inputs.files }}
       VERSION_CMD: ${{ inputs.version }}
+      EXE: ${{ inputs.exe || inputs.tool }}
+      PACKAGES: ${{ inputs.packages }}
+      LICENSES_OF: ${{ inputs.licenses_of }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,7 +71,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install pyinstaller
+      - run: python -m pip install pyinstaller $env:PACKAGES.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+      - name: Licences of the bundled packages
+        if: inputs.licenses_of != ''
+        run: python ../.github/scripts/collect_licenses.py third-party-licenses $env:LICENSES_OF.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
       - name: Build
         run: Invoke-Expression $env:BUILD; if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Smoke test
@@ -63,7 +83,8 @@ jobs:
       - name: Zip
         run: |
           python -c "import shutil, sys, pathlib; shutil.copy(pathlib.Path(sys.base_prefix) / 'LICENSE.txt', 'PYTHON-LICENSE.txt')"
-          $paths = @("dist/$env:TOOL.exe", "PYTHON-LICENSE.txt") + ($env:FILES -split ',' | ForEach-Object { $_.Trim() })
+          $paths = @("dist/$env:EXE.exe", "PYTHON-LICENSE.txt") + ($env:FILES -split ',' | ForEach-Object { $_.Trim() })
+          if ($env:LICENSES_OF) { $paths += "third-party-licenses" }
           Compress-Archive -Path $paths -DestinationPath "$env:TOOL-windows.zip"
       - uses: actions/upload-artifact@v4
         with:

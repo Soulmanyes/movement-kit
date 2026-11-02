@@ -14,6 +14,7 @@ that raises, a result JSON can't hold, one section's calls never overlapping), a
 sections refused, a foreign Host header refused), and the kit's own sections loading on both OSes.
 """
 import http.client
+import json
 import sys
 import tempfile
 import threading
@@ -125,6 +126,10 @@ def main():
         for folder, text in expect.items():
             check(text in bad.get(folder, ""), f"{folder} skipped: {bad.get(folder)}")
         check(set(bad) == set(expect), "nothing else listed as broken (plainfolder ignored)")
+        report = hub.check_sections(root / "report.json", root, platform="win32")
+        check(json.loads((root / "report.json").read_text()) == report
+              and report["sections"] == ["alpha", "gain", "winonly"] and len(report["problems"]) == len(expect),
+              "check_sections writes the keys and problems as JSON")
 
         bridge = hub.Bridge(sections, problems)
         info = bridge.sections()

@@ -6,6 +6,8 @@
                                       playing; closing it stops collecting)
     strafe-review.exe %command%       as a Steam launch option: install, start the server in the
                                       background, open the page, run the game
+    strafe-review.exe --collect       install, then collect and serve without opening the page (the
+                                      hub's "Open review" starts the hub exe this way, 3.7 in PLAN.md)
 
 Everything it prints also goes to strafe-review.log in %LOCALAPPDATA%\\strafe-review (the background
 copy's only output). If a copy is already serving, a double-click only opens the page. The server
@@ -32,6 +34,7 @@ import updater
 PORT = int(os.environ.get("STRAFE_REVIEW_PORT", "8765"))  # the variable is for tests
 URL = f"http://127.0.0.1:{PORT}/"
 SERVE = "--serve"  # internal: the background copy the launch option starts
+COLLECT = "--collect"  # install, then serve with no page opened (the hub starts this)
 RESTARTED = "--restarted"  # internal: a double-click copy started again after an update (no new tab)
 LOG = steam.data_dir() / "strafe-review.log"
 LOG_MAX = 1 << 20  # bytes; a longer log is started over
@@ -178,6 +181,11 @@ def main():
     if args[:1] == [SERVE]:
         # no install here, even after an update: the game may be starting and mounting custom/; the
         # launch wrapper (the new exe after an update) installs at every game start
+        server.RESTART = lambda: start_background(RESTARTED)
+        return server.main(["--port", str(PORT), "--no-browser"])
+    if args == [COLLECT]:
+        # installing here is safe: the hub starts this by hand, as a double-click would
+        try_install()
         server.RESTART = lambda: start_background(RESTARTED)
         return server.main(["--port", str(PORT), "--no-browser"])
     if args == [RESTARTED]:

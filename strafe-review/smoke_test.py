@@ -2,6 +2,12 @@
 """Smoke test of the built program against a fake Momentum folder, no game or Steam needed.
 
 Usage: python smoke_test.py dist/strafe-review(.exe)
+       python smoke_test.py dist/movement-kit(.exe) --hub
+
+--hub tests the hub exe (hub/build.py), which is this program with the hub in front: a double-click
+opens the hub window instead, so the test starts it with --collect, leaves out the second
+double-click, checks the bundled hub sections first (step 0) and updates along the hub's release line
+(hub/hub_release.py) into a copy named strafe-review(.exe), as an install from Strafe Review's line is.
 
 Run by the monorepo's .github/workflows/strafe-review-windows.yml on the Windows build; it runs on
 Linux too. Checks:
@@ -40,6 +46,21 @@ SESSION_PORT = 8791  # not the live 8766
 SESSION = f"http://127.0.0.1:{SESSION_PORT}"
 ROOT = Path(__file__).resolve().parent
 WIN = sys.platform == "win32"
+HUB = "--hub" in sys.argv[2:]
+HUB_SECTIONS = ["strafe-review", "hud", "gain-converter"]  # what hub/build.py bundles, in sidebar order
+
+
+def release_line():
+    """The update the fake GitHub offers and how it's stored, for Strafe Review's line or the hub's."""
+    if not HUB:
+        return {"tag": "strafe-review-v99.0.0", "asset": "strafe-review-windows.zip", "exe": "strafe-review.exe",
+                "state": "updates.json"}
+    ns = {}
+    exec((ROOT.parent / "hub" / "hub_release.py").read_text(), ns)  # noqa: S102 - the repo's own file
+    return {"tag": ns["TAG_PREFIX"] + "99.0.0", "asset": ns["ASSET"], "exe": ns["EXE"], "state": ns["STATE"]}
+
+
+LINE = release_line()
 
 
 def fail(msg):
@@ -150,8 +171,8 @@ def fake_github(zip_path):
             if self.path == "/releases":
                 body = json.dumps([
                     {"tag_name": "sourceyaw-v100.0.0", "html_url": "", "assets": []},
-                    {"tag_name": "strafe-review-v99.0.0", "html_url": "", "assets": [
-                        {"name": "strafe-review-windows.zip", "browser_download_url": f"http://127.0.0.1:{port}/asset"}]},
+                    {"tag_name": LINE["tag"], "html_url": "", "assets": [
+                        {"name": LINE["asset"], "browser_download_url": f"http://127.0.0.1:{port}/asset"}]},
                 ]).encode()
             else:
                 body = zip_path.read_bytes()
@@ -206,8 +227,17 @@ def main():
     }
     stop_all(exe)
     try:
-        print("1. double-click")
-        first = subprocess.Popen([exe], env=env)
+        if HUB:
+            print("0. hub sections")
+            r = subprocess.run([exe, "--check-sections", str(tmp / "sections.json")], env=env, timeout=60,
+                               capture_output=True, text=True, check=False)
+            found = json.loads((tmp / "sections.json").read_text()) if (tmp / "sections.json").is_file() else None
+            if r.returncode != 0 or found != {"sections": HUB_SECTIONS, "problems": []}:
+                fail(f"--check-sections: exit {r.returncode}, found {found}, stderr {r.stderr[-400:]!r}")
+            print(f"   ok: {', '.join(HUB_SECTIONS)} load in the exe")
+
+        print("1. --collect (the hub's Open review)" if HUB else "1. double-click")
+        first = subprocess.Popen([exe, "--collect"] if HUB else [exe], env=env)
         wait_serving()
         for path in ("/", "/drill", "/compare", "/static/app.js", "/static/style.css"):
             code, _ = get(path)
@@ -252,15 +282,16 @@ def main():
         if autoexec != want:
             fail(f"autoexec.cfg is {autoexec!r}")
         time.sleep(2)
-        if opened(tmp) != [URL]:
+        if opened(tmp) != ([] if HUB else [URL]):  # the hub opens the page itself, once it answers
             fail(f"browser calls: {opened(tmp)}")
         print("   ok: pages, recorder, CRLF autoexec block, browser, status, attempt collected from a live log"
               " and announced on the session")
 
         print("2. second copy while running")
-        r = subprocess.run([exe], env=env, timeout=60, capture_output=True, text=True, check=False)
-        if r.returncode != 0 or opened(tmp) != [URL, URL]:
-            fail(f"second double-click: exit {r.returncode}, browser calls {opened(tmp)}")
+        if not HUB:  # the hub's double-click opens a window, not the page
+            r = subprocess.run([exe], env=env, timeout=60, capture_output=True, text=True, check=False)
+            if r.returncode != 0 or opened(tmp) != [URL, URL]:
+                fail(f"second double-click: exit {r.returncode}, browser calls {opened(tmp)}")
         r = subprocess.run([exe, "--serve"], env=env, timeout=60, capture_output=True, text=True, check=False)
         if r.returncode == 0 or "in use" not in r.stderr:
             fail(f"second server on the busy port: exit {r.returncode}, stderr {r.stderr!r}")
@@ -272,13 +303,14 @@ def main():
             fail("server still answers after stopping it")
 
         print("3. launch option")
+        calls = len(opened(tmp))
         r = subprocess.run([exe, sys.executable, "-c", "import sys; sys.exit(3)"],
                            env=env, timeout=120, capture_output=True, text=True, check=False)
         if r.returncode != 3:
             fail(f"game exit code came back as {r.returncode}; stderr {r.stderr!r}")
         wait_serving()
         time.sleep(2)
-        if opened(tmp)[-1:] != [URL] or len(opened(tmp)) != 3:
+        if opened(tmp)[-1:] != [URL] or len(opened(tmp)) != calls + 1:
             fail(f"browser calls: {opened(tmp)}")
         log = tmp / "data" / "strafe-review" / "strafe-review.log"
         if "viewer on http" not in (log.read_text(errors="replace") if log.exists() else ""):
@@ -301,10 +333,11 @@ def main():
         print("5. update")
         app = tmp / "app"
         app.mkdir()
-        copy = app / exe.name
+        # the hub's update goes into a copy that keeps Strafe Review's name, as Steam's launch option needs
+        copy = app / ("strafe-review" + exe.suffix if HUB else exe.name)
         shutil.copy2(exe, copy)
         with zipfile.ZipFile(tmp / "release.zip", "w") as z:
-            z.write(exe, "strafe-review.exe")
+            z.write(exe, LINE["exe"])
         api = fake_github(tmp / "release.zip")
         env2 = {**env, "STRAFE_REVIEW_UPDATE_API": f"http://127.0.0.1:{api}/releases"}
         before = copy.stat().st_mtime_ns
@@ -312,20 +345,20 @@ def main():
         wait_serving()
         post("/api/update/check")
         info = json.loads(get("/api/update")[1])
-        if not (info.get("latest") and info["latest"]["tag"] == "strafe-review-v99.0.0" and info.get("canInstall")):
+        if not (info.get("latest") and info["latest"]["tag"] == LINE["tag"] and info.get("canInstall")):
             fail(f"/api/update after the check: {info}")
         code, body = post("/api/update/install")
         if code != 200:
             fail(f"install answered {code} {body!r}")
         time.sleep(3)
         wait_serving()
-        state = json.loads((tmp / "data" / "strafe-review" / "updates.json").read_text())
-        if state.get("failed") != "strafe-review-v99.0.0" or copy.stat().st_mtime_ns == before:
+        state = json.loads((tmp / "data" / "strafe-review" / LINE["state"]).read_text())
+        if state.get("failed") != LINE["tag"] or copy.stat().st_mtime_ns == before:
             fail(f"after the update: exe swapped {copy.stat().st_mtime_ns != before}, state {state}")
         end = time.time() + 30
-        while (app / (exe.name + ".old")).exists() and time.time() < end:
+        while (app / (copy.name + ".old")).exists() and time.time() < end:
             time.sleep(1)
-        if (app / (exe.name + ".old")).exists():
+        if (app / (copy.name + ".old")).exists():
             fail("the old exe wasn't cleaned up on the new start")
         wait_session()
         stop_all(copy)
