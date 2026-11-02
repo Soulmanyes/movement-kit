@@ -32,6 +32,7 @@ def main():
         sys.executable, "-m", "PyInstaller", "--onefile", "--noconfirm", "--clean",
         "--name", "strafe-review",
         "--paths", str(ROOT / "collector"), "--paths", str(ROOT / "viewer"),
+        "--paths", str(ROOT.parent),  # the monorepo root, which holds movekit/
         # unused, and each would ship one more third-party library and licence (decimal falls back to
         # _pydecimal; zipfile only needs them for bzip2/lzma zips)
         "--exclude-module", "_decimal", "--exclude-module", "_bz2", "--exclude-module", "_lzma",

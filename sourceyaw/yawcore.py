@@ -26,12 +26,20 @@ import shlex
 import shutil
 import struct
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
 
 from PIL import Image
+
+# movekit (code shared by the movement tools): next to this file in an installed copy (install.sh
+# copies it), one folder up in the repo. Only that folder goes on the path, never ~/.local/share.
+_HERE = Path(__file__).resolve().parent
+if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
+    sys.path.insert(1, str(_HERE.parent))
+from movekit import games as kit_games, keyvalues, steam  # after the path above
 
 VERSION = "1.5.1"
 
@@ -70,17 +78,13 @@ KROSSHAIR_JSON = XDG_DATA / "vulkan/implicit_layer.d/sourceyaw-krosshair.json"
 # without a weapon); "cvar" = the game's own cl_crosshair_color, set from yaws.cfg.
 # sound_vpks are relative to the game's install folder.
 GAMES = {
-    "css": {"name": "Counter-Strike: Source", "short": "CS:S", "appids": ["240"], "mod": "cstrike",
-            "folders": ["Counter-Strike Source"], "colors": "krosshair",
+    "css": {"name": "Counter-Strike: Source", "short": "CS:S", "colors": "krosshair",
             "process": "cstrike_linux64",
             "sound_vpks": ["cstrike/cstrike_pak_dir.vpk", "hl2/hl2_sound_misc_dir.vpk",
                            "hl2/hl2_misc_dir.vpk"]},
-    "momentum": {"name": "Momentum Mod", "short": "Momentum Mod", "appids": ["1802710"], "mod": "momentum",
-                 "folders": ["Momentum Mod Playtest", "Momentum Mod"], "colors": "cvar",
+    "momentum": {"name": "Momentum Mod", "short": "Momentum Mod", "colors": "cvar",
                  "process": "momentum", "sound_vpks": ["mount/hl2_dir.vpk"]},
 }
-# Flatpak Steam keeps its libraries here; sourceyaw-run can't run inside its sandbox
-FLATPAK_STEAM = HOME / ".var/app/com.valvesoftware.Steam"
 # first line of every yaws.cfg the app writes; anything else is the user's own file
 YAWS_HEADER = "// Written by Source Yaw."
 YAWS_HEADERS = (YAWS_HEADER, "// Written by CS:S Yaw.")
@@ -140,28 +144,10 @@ def token(value):
 
 # ---------------------------------------------------------------- locations
 
-def _game_dir_in(libraries, game):
-    """The game's mod folder (cstrike, momentum) in the first library that has it,
-    found from Steam's app manifest, or the usual install folder names."""
-    info = GAMES[game]
-    for lib in libraries:
-        folders = []
-        for appid in info["appids"]:
-            try:
-                acf = (lib / f"steamapps/appmanifest_{appid}.acf").read_text(errors="replace")
-                folders += re.findall(r'"installdir"\s+"([^"]+)"', acf)
-            except OSError:
-                pass
-        for folder in folders + info["folders"]:
-            mod = lib / "steamapps/common" / folder / info["mod"]
-            if (mod / "cfg").is_dir():
-                return mod
-    return None
-
-
 def find_game(game):
-    libraries = _steam_libraries(HOME / ".local/share/Steam") + [HOME / ".steam/steam"]
-    return _game_dir_in(libraries, game)
+    """The game's mod folder (cstrike, momentum), or None. Flatpak Steam is left out:
+    sourceyaw-run can't run inside its sandbox (see flatpak_steam_only)."""
+    return steam.game_dir(kit_games.GAMES[game], steam.steam_roots(flatpak=False))
 
 
 def find_cstrike():
@@ -183,21 +169,11 @@ def game_running(game):
     return False
 
 
-def _steam_libraries(steam):
-    libraries = [steam]
-    try:
-        vdf = (steam / "steamapps/libraryfolders.vdf").read_text()
-        libraries += [Path(p) for p in re.findall(r'"path"\s+"([^"]+)"', vdf)]
-    except OSError:
-        pass
-    return libraries
-
-
 def flatpak_steam_only(game="css"):
     """True when the game is only found in a Flatpak Steam, which isn't supported."""
     if find_game(game):
         return False
-    return _game_dir_in(_steam_libraries(FLATPAK_STEAM / ".local/share/Steam"), game) is not None
+    return steam.game_dir(kit_games.GAMES[game], steam.flatpak_roots()) is not None
 
 
 def crosshair_maker_png():
@@ -802,46 +778,19 @@ def play_sound(cstrike, sound, game="css"):
 
 # ---------------------------------------------------------------- launch option
 
-def _parse_vdf(text):
-    """Steam's text KeyValues format -> nested dicts (keys lower-cased)."""
-    tokens = re.findall(r'"((?:[^"\\]|\\.)*)"|([{}])', text)
-    pos = 0
-
-    def block():
-        nonlocal pos
-        out = {}
-        while pos < len(tokens):
-            text, brace = tokens[pos]
-            pos += 1
-            if brace == "}":
-                return out
-            if brace == "{":
-                continue  # stray brace; skip
-            key = text.lower()
-            nxt_text, nxt_brace = tokens[pos] if pos < len(tokens) else ("", "")
-            pos += 1
-            if nxt_brace == "{":
-                out[key] = block()
-            else:
-                out[key] = nxt_text.replace('\\"', '"').replace("\\\\", "\\")
-        return out
-
-    return block()
-
-
 def current_launch_options(game="css"):
     """The game's launch options in the most recently used Steam account, or None."""
     files = sorted((HOME / ".local/share/Steam/userdata").glob("*/config/localconfig.vdf"),
                    key=lambda p: p.stat().st_mtime, reverse=True)
     for vdf in files:
         try:
-            tree = _parse_vdf(vdf.read_text(errors="replace"))
+            tree = keyvalues.parse(vdf.read_text(errors="replace"))
         except OSError:
             continue
         node = tree.get("userlocalconfigstore", {})
         for key in ("software", "valve", "steam", "apps"):
             node = node.get(key, {}) if isinstance(node, dict) else {}
-        for appid in GAMES[game]["appids"]:
+        for appid in kit_games.GAMES[game].appids:
             app = node.get(appid) if isinstance(node, dict) else None
             if isinstance(app, dict):
                 return app.get("launchoptions", "")

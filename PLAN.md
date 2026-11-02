@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status: planning (2026-11-02). Nothing is built yet, and there's no GitHub repo yet.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 started: Steam/game discovery is in `movekit` (see "Progress").
 
 ## Goal
 
@@ -23,8 +23,10 @@ One home for every standalone surf, bhop and movement tool: Source Yaw, Strafe R
 ```
 movement-kit/
   movekit/              shared Python package, stdlib only
-    games/              one adapter per game: momentum.py, css.py
+    games.py            the supported games as data (app ids, mod folder, install folder names)
+    keyvalues.py        Valve KeyValues reader (flat pairs and nested)
     steam.py            Steam roots, libraryfolders.vdf, appmanifests (Linux, Flatpak, Windows registry)
+    check_*.py          fixture checks, no game or Steam needed
     cfgblock.py         named autoexec blocks: // movekit:<module> begin/end, CRLF-safe, backup, uninstall
     vpk.py              read files out of VPKs
     binds.py            config.cfg binds and aliases
@@ -64,7 +66,7 @@ Strafe Review's version is usually the better tested one (CRLF, Windows, HUD-mod
 ## Phase 1: `movekit` core, no change in behaviour
 
 1. Extract one concern at a time into `movekit/`, in the order of the table. After each one, both tools still pass their checks (`strafe-review/smoke_test.py`, `viewer/check_*.js`, `recorder/check_recorder.py`, Source Yaw sandbox apply with HOME/XDG_CONFIG_HOME pointed at a sandbox).
-2. **Game adapters.** `games/momentum.py` and `games/css.py`, each with the same small interface: app id, game folder, cfg dir, log path, tickrate for a map name, whether it has Panorama. Tools ask the adapter and never hard-code a game.
+2. **Game adapters.** `movekit/games.py` holds each game as data (`Game`: key, name, app ids, mod folder, install folder names, name hint, env override). It grows the rest (cfg dir, log path, tickrate for a map name, Panorama or not) as each concern moves in; it becomes a `games/` package only if a game needs code of its own. Tools ask it and never hard-code a game.
 3. **cfg blocks.** Every tool writes its own `// movekit:<tool> begin/end` block. Migrate the old `// strafe-review begin` block and Source Yaw's `exec yaws.cfg` line on the next install.
 4. **Updater.** One class, two install modes (source + install script on Linux, exe swap on Windows). It lists releases and picks the newest tag with its own prefix, not `releases/latest`. It keeps the state file, auto flag and `failed` loop guard from Strafe Review.
 5. **Release CI.** One reusable workflow (PyInstaller one-file, smoke test on the Windows runner, licence zip), triggered by `<tool>-v*` tags. The current Strafe Review and Gain Converter workflows are the base.
@@ -84,3 +86,20 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 - **Panorama module kit.** One installer for `custom/0-*` folders and `timer.xml` includes, shared by the recorder, `mmod-trainer-height` and a future JHUD.
 - **Gain math in one language.** Either Python serves it over the API, or one shared JS module serves both the viewer and Gain Converter.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
+
+## Progress
+
+### Phase 1.1: Steam and game discovery (2026-11-02)
+
+- `movekit/steam.py`, `keyvalues.py`, `games.py`, `paths.py`; `movekit/check_steam.py` covers the edge cases on fake Steam folders (Windows-style vdf, app id vs name match, folder fallback, symlinked roots, Flatpak on/off, env override).
+- Source Yaw: `yawcore.find_game` / `flatpak_steam_only` / launch-option parsing call movekit; its own `_game_dir_in`, `_steam_libraries`, `_parse_vdf` and `FLATPAK_STEAM` are gone. Flatpak Steam stays excluded (`steam_roots(flatpak=False)`). The import is `games as kit_games`, because `yawcore`'s `__main__` block has a module-level `games` list.
+- Strafe Review: `collector/steam.py` is now a thin wrapper (`find_game()`, `data_dir()`); every module imports it first, so it sets the path to movekit once. `build.py` adds `--paths` for the monorepo root; the exe bundles `movekit.*` (checked with `pyi-archive_viewer`).
+- `sourceyaw/install.sh` copies `movekit/*.py` (not `check_*`) to `~/.local/share/sourceyaw/movekit/`; `yawcore` puts the repo root on `sys.path` only when `movekit/` sits next to it there, never `~/.local/share`.
+- Small widenings, both only find more: Source Yaw now also reads `~/.steam/steam`'s own libraryfolders.vdf and matches Momentum builds by name; Strafe Review also tries the usual install folder names and `~/.local/share/Steam` when `XDG_DATA_HOME` points elsewhere.
+- Verified unchanged: both tools find the same folders and launch options on this PC (probe script, before vs after), Source Yaw `--apply` in a sandbox writes byte-identical files, `install.sh` into a sandbox home works and the installed copy imports movekit, Strafe Review `smoke_test.py` on a rebuilt exe passes all 5 steps, `check_recorder.py` 1305 attempts 0 broken, viewer `check_*.js` pass (`check_css_ssj.js` needs a demo recording, not run).
+
+### Notes for later steps
+
+- The tools' `.github/workflows` now sit in `strafe-review/.github` and `gain-converter/.github`, where GitHub ignores them. They move to the root in the release-CI step (with `working-directory` and `<tool>-v*` tag triggers).
+- Pushing the renamed old tags would trigger the new tag-based CI for every old version. Push the branch first and decide about tags then.
+- Source Yaw's updater installs from the release's source archive by running `install.sh` at the archive root; in the monorepo it is `sourceyaw/install.sh`. Fix in the updater step, before any monorepo release of Source Yaw.

@@ -132,6 +132,12 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
 install -m 644 "$SRC/yawcore.py" "$SRC/trainer.py" "$SRC/updater.py" "$DEST/"
+# movekit: the code the movement tools share, one folder up in the repo; yawcore finds it next to itself.
+# Replaced whole, so a module dropped from movekit doesn't linger in the installed copy.
+rm -rf "$DEST/movekit"
+mkdir -p "$DEST/movekit"
+install -m 644 "$SRC"/../movekit/*.py "$DEST/movekit/"
+rm -f "$DEST/movekit/check_"*.py
 # the input service's files; its installer (run with sudo) copies them to root-owned places
 mkdir -p "$DEST/inputd"
 install -m 644 "$SRC"/inputd/sourceyaw-inputd.* "$SRC/inputd/install-inputd.sh" "$DEST/inputd/"
