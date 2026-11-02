@@ -61,8 +61,10 @@ class Updater:
 
     @property
     def dev_checkout(self):
-        """Running from a git clone: installing over it would clobber local work."""
-        return (self.app_dir / ".git").exists()
+        """Running from a git clone: installing over it would clobber local work. In the
+        monorepo the app sits one folder below the clone's root, so both are checked; no
+        further up, where a dotfiles repo in the home folder would count too."""
+        return any((d / ".git").exists() for d in (self.app_dir, self.app_dir.parent))
 
     def installed(self, latest):
         """Already installed by an earlier update: waiting for a restart."""
