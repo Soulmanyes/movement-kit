@@ -147,6 +147,7 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 ### GitHub repo (2026-11-02)
 
 - `Soulmanyes/movement-kit` created private, `main` and all 21 `<tool>-v*` tags pushed. As expected, the tags started no runs and made no releases. The repo goes public through `/go-public`.
+- Sandbox test (2026-11-02, owner): all three tools run from the monorepo with a fake HOME holding copies of the real cfg/ and custom/ folders, and symlinked VPKs and yaw.log. Strafe Review installed into the copy, served on 8799 and collected 1305 attempts from the live yaw.log. No real file changed. Owner: "looks good". Source Yaw was light mode only because the fake HOME has no dconf (`color-scheme` reads `default` there). Not tested yet: the game running the kit versions (needs the real install swap with the game closed).
 
 ### Notes for later steps
 
