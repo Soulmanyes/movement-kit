@@ -20,7 +20,6 @@ that key (see /etc/sourceyaw-inputd.conf).
 
 import array
 import fcntl
-from fractions import Fraction
 import glob
 import math
 import mmap
@@ -34,9 +33,11 @@ import subprocess
 import sys
 import threading
 import time
+from fractions import Fraction
 from pathlib import Path
 
 import yawcore
+
 from movekit import binds  # after yawcore, which puts movekit on the path
 
 SOCKET = "/run/sourceyaw-inputd.sock"
@@ -173,7 +174,7 @@ class Overlay:
         OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
         if not STATE.exists() or STATE.stat().st_size < self.FMT.size:
             STATE.write_bytes(b"\0" * self.FMT.size)
-        self.file = open(STATE, "r+b")
+        self.file = open(STATE, "r+b")  # noqa: SIM115 - mapped for the overlay's whole life
         self.map = mmap.mmap(self.file.fileno(), self.FMT.size)
         self.seq = struct.unpack_from("<I", self.map, 4)[0] & ~1
 
@@ -564,7 +565,7 @@ def run(game):
     trainer = Trainer(cfg, roles, cfg["tickrate"].get(game, 66), offset, wrong, wrong_state)
     focus = FocusWatch(yawcore.GAMES[game]["process"])
     log_path = game_dir / "yaw.log"
-    log = open(log_path, errors="replace") if log_path.exists() else None
+    log = open(log_path, errors="replace") if log_path.exists() else None  # noqa: SIM115 - followed until exit
     if log:
         log.seek(0, os.SEEK_END)
     buf = b""
@@ -604,7 +605,7 @@ def run(game):
                     trainer.tickrate = rate
                     print(f"trainer: {line.strip()} -> {rate} tick", flush=True)
         elif log_path.exists():
-            log = open(log_path, errors="replace")
+            log = open(log_path, errors="replace")  # noqa: SIM115 - followed until exit
             in_map = False  # the game just started logging: it's in its menu
 
 
