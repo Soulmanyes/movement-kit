@@ -42,7 +42,7 @@ if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
 from movekit import binds, cfgblock, keyvalues, steam, vpk  # after the path above
 from movekit import games as kit_games
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)

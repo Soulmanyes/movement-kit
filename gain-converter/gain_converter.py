@@ -8,7 +8,7 @@ Runs on Linux and Windows with the standard library only.
 import sys
 import tkinter as tk
 
-VERSION = "1.1.0"  # bump in the same commit as the gain-converter-v* tag
+VERSION = "1.2.0"  # bump in the same commit as the gain-converter-v* tag
 
 K = 1.45  # fitted to the measured pairs below (each one gives K between 1.41 and 1.54)
 # (CS:S %, Momentum %) ends of the measured ranges: finished bhop_ambience runs, top replays
