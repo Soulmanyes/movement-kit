@@ -80,8 +80,8 @@ def install_update():
 
 def _command():
     """The command that runs the server in the background."""
-    if getattr(sys, "frozen", False):  # the Windows exe (3.7): its own --serve mode
-        return [sys.executable, "--serve"]
+    if getattr(sys, "frozen", False):  # the hub exe (3.7): install, then serve (strafe_review.py --collect)
+        return [sys.executable, "--collect"]
     return [sys.executable, str(SERVER), "--port", str(port()), "--no-browser"]
 
 

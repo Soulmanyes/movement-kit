@@ -1,0 +1,28 @@
+Third-party software in movement-kit.exe
+========================================
+
+Soulmanyes's Movement Kit's own code is CC0 1.0 (see LICENSE). The Windows exe also contains:
+
+- Python 3.13 (the CPython runtime and standard library), with libffi and the Microsoft Visual C++
+  runtime (Microsoft Distributable Code). Licence: the Python Software Foundation License, with the
+  notices of those parts; the full text is in PYTHON-LICENSE.txt next to this file.
+
+- OpenSSL 3 (libssl and libcrypto, for HTTPS when looking for updates). Licence: Apache License 2.0,
+  in OpenSSL-LICENSE.txt next to this file. https://www.openssl.org/
+
+- The PyInstaller bootloader, which unpacks and starts the program. Licence: GNU GPL 2.0 or later
+  with the PyInstaller bootloader exception, which allows shipping programs built with it under
+  any licence. https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt
+
+- pywebview, which shows the hub's window, and the packages it needs on Windows: bottle (MIT),
+  proxy_tools (BSD), typing_extensions (PSF), pythonnet (MIT), clr_loader (MIT), cffi (MIT-0) and
+  pycparser (BSD-3). pywebview itself is BSD-3 and includes its WebBrowserInterop DLLs. Their
+  licence files are in the third-party-licenses folder next to this file; the build lists each
+  package with its version. https://pywebview.flowrl.com/
+
+- The Microsoft Edge WebView2 SDK files that come with pywebview (WebView2Loader.dll and the
+  Microsoft.Web.WebView2 .NET wrappers). Licence: BSD-3-Clause, in WebView2-LICENSE.txt next to this
+  file, with the SDK's own notices in WebView2-NOTICE.txt.
+  https://www.nuget.org/packages/Microsoft.Web.WebView2/
+  The window itself is drawn by the WebView2 Runtime that is part of Windows 10 and 11; it isn't
+  in the exe.
