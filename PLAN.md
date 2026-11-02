@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1, yaw.log reading in `movekit/logtail.py`, done.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub as a private repo since 2026-11-02. The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Left: the bridge releases. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) and 2.2 (session core, `movekit/session.py`, not used by a tool yet) done.
 
 ## Goal
 
@@ -78,7 +78,11 @@ Done when: both tools are released from the monorepo, with no duplicated code fr
 
 ## Phase 2: one session, one launch option
 
-- **Session daemon.** One process per game session tails `yaw.log` once, reads `sourceyaw-inputd` when the trainer is on, and publishes events over a local socket/SSE: `map_loaded`, `tickrate`, `attempt_saved`, `jump`, `game_exit`. The trainer, the crosshair watcher and the Strafe Review collector become subscribers.
+- **Session daemon.** One reader of `yaw.log` per game session publishes events, and the trainer, the crosshair watcher and the Strafe Review collector listen instead of each tailing the log. Design (owner, 2026-11-02):
+  - `movekit/session.py`: `Session` reads the log through `logtail` and publishes on a `Bus`; served as server-sent events on `http://127.0.0.1:8766/events` (plus `/status`), localhost only, stdlib only, so it also runs in the Windows exe. Browsers (the future hub page), Python and Windows can all listen.
+  - Hosted inside the Strafe Review server when that runs (it already runs the whole session and is the only process on Windows); otherwise `python -m movekit.session` runs it alone. Whoever binds port 8766 first serves; the rest listen. The owner left this choice to Claude: it changes nothing in play, only how much packaging the Windows exe needs.
+  - Events (`{"id", "type", "time", "data"}`): `map_loaded {name}`, `map_left`, `token {name}` (YAW_<speed>, SY_OFFSETS; sent before the line break arrives, chat ignored), `attempt_saved {dir, id}` from the collector, `game_exit` from the launch wrapper. Tickrate stays each tool's own setting, worked out from the map name.
+  - Changed from the first plan: key presses from `sourceyaw-inputd` stay a direct socket to the trainer. Routing them through the daemon only adds delay to strafe timing, and the trainer is their only user. `jump` events wait until a tool needs them.
 - **`movekit-run %command%`.** One Steam launch option that starts whichever tools are turned on (one settings file), instead of chained `strafe-review-run sourceyaw-run`. The old wrapper names stay as links for a while.
 - **Attempt format.** Version the srrec attempt format as a documented schema, so new tools (histograms, progress over time, JHUD) read attempts without touching the collector.
 
@@ -171,6 +175,13 @@ The first behaviour changes, one commit each:
 - The collector uses `logtail.follow`; the trainer uses `logtail.map_state` and `map_name` (its per-map tickrate table stays a trainer setting). The trainer still reads yaw.log with its own `readlines()` loop, and `yaw-watch.sh` is left as is (the daemon step replaces it).
 - Checked: `movekit/check_logtail.py` (missing file, appends, half lines, CRLF, bad bytes, `start="end"`, truncation, replacement, removal, long lines, `follow` once and idle ticks, Momentum and CS:S map lines). Old and new `follow(once=True)` give the same lines on the live Momentum log (208005 lines), the CS:S log and a random-byte file; old and new map parsers agree on all 445705 lines. Rebuilt exe passes `smoke_test.py` 5/5; viewer and recorder checks pass.
 - Candidate change, not made: move the trainer onto `LogTail(start="end")`. That changes three things. (1) The trainer would notice yaw-watch.sh truncating the log on launch; today, with the log open past its new end, it misses lines until the file grows back past where it was. (2) It would see only complete lines; today `readlines()` also hands over a half line, so an offsets-toggle echo without its line break counts at once (with `LogTail` it waits for the break), while a map line split across two reads is missed. (3) Text mode turns CRLF into LF; `LogTail` keeps the `\r` (the parsers don't mind). Needs an in-game check of the offsets toggle. The daemon (Phase 2.2) reads the log for the trainer anyway, so this may fold into that step.
+
+### Phase 2.2: session core (2026-11-02)
+
+- `movekit/session.py` as designed above: `Bus` (ids, the last 500 events kept for reconnects, a queue per listener), `TokenScanner` (yaw-watch.sh's rules: a token counts once something follows it or its line ends; chat cut at " : "; each token once per line, also while the line is half written), `Session` (log to events, `start="end"` by default; an emptied or replaced log starts over), `serve`/`start` (HTTP on 8766, `None` when the port is taken; Host header must be 127.0.0.1/localhost; CORS only for localhost pages), `listen()` (a client generator that reconnects with Last-Event-ID and yields `None` while there is no session), and `python -m movekit.session [--game] [--log] [--port]`.
+- `LogTail` gained `pending` (the half-written line) and `opened` (counts files opened, so the session can tell the log started over).
+- No tool uses it yet. Checked: `movekit/check_session.py` (bus, tokens, Momentum and CS:S map lines, emptied log, HTTP status/events/reconnect/Host/CORS/taken port). Replaying the live Momentum log gives 59 `map_loaded`, 58 `map_left`, 115 YAW tokens and 16 SY_OFFSETS, the same 16 the trainer's `in line` test finds. A short standalone run served `/status`, and a second copy reported the port taken.
+- Next (2.3): the Strafe Review server hosts the session and the collector publishes `attempt_saved`; then the trainer and yaw-watch.sh listen (2.4; this is where the trainer's candidate change above is settled, with an in-game check of the offsets toggle and the CS:S crosshair swap).
 
 ### Notes for later steps
 
