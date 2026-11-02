@@ -1,4 +1,4 @@
-"""Reads SRREC wire format 1 (see PLAN.md) from Momentum's console log.
+"""Reads SRREC wire format 1 (see FORMAT.md) from Momentum's console log.
 
 Every recorder line is `[panorama] SRREC <id> <i>/<n> <text>` (a chunk) or
 `[panorama] SRREC <id> end n=<n> chars=<c>` (the last line of an attempt).

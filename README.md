@@ -20,7 +20,7 @@ gain-converter/   Gain Converter
 .github/          the Windows build and release, shared by the tools that ship an exe
 ```
 
-`movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. A tool imports it from the repo root; an installed or built copy carries its own `movekit` next to it.
+`movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. It also has the game session (`session.py`), the launch wrapper (`movekit-run`) and a reader for Strafe Review's saved attempts (`attempts.py`, format in [strafe-review/FORMAT.md](strafe-review/FORMAT.md)). A tool imports it from the repo root; an installed or built copy carries its own `movekit` next to it.
 
 ## Launch option (Linux)
 

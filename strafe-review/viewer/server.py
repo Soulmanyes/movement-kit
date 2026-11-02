@@ -41,7 +41,6 @@ Routes:
                              with what was stored. Kept in <store>/meta.json, not in the attempt file.
 """
 import argparse
-import gzip
 import json
 import math
 import os
@@ -59,7 +58,8 @@ import collector
 import install
 import updater  # found through the path above
 
-from movekit import session  # collector set the path to movekit
+from movekit import attempts as attempt_files  # collector set the path to movekit
+from movekit import session
 
 STATIC = collector.ROOT / "viewer" / "static"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
@@ -215,8 +215,7 @@ def head(path):
     got = _heads.get(path)
     if got and got[:2] == (st.st_mtime_ns, st.st_size):
         return got[2]
-    with gzip.open(path, "rt") as f:
-        data = json.load(f)
+    data = attempt_files.load(path)  # another format number raises, and attempts() skips the file
     data["j1Takeoff"], data["j1Land"], data["landed"] = jump1_takeoff(data)
     data["runGaps"] = run_gaps(data)
     replay_finished(data)

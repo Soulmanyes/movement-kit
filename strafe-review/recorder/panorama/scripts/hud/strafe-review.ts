@@ -7,7 +7,7 @@
 //   <id> <i>/<n> <text>        chunk i of n; joined in order they form one JSON object
 //   <id> end n=<n> chars=<c>   the last line of an attempt
 // The JSON object holds head fields, "cols" (names of the comma-separated row fields),
-// "rows" (rows joined by ';'), "events" and the end fields. See PLAN.md "Recording rules".
+// "rows" (rows joined by ';'), "events" and the end fields. FORMAT.md is the reference; keep it in step.
 
 const TAG = 'SRREC';
 const FORMAT = 1;
