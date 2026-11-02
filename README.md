@@ -16,8 +16,6 @@ The kit is one program, the hub, and the tools are modules it installs. A fresh 
 
 ## Install
 
-The first hub release (`hub-v1.0.0`) isn't out yet. Until it is, the Linux line below installs the hub from `main`, and on Windows only Gain Converter's own exe and Strafe Review 1.5.0's are released.
-
 **Windows:** download `hub-windows.zip` from the [latest hub release](https://github.com/Soulmanyes/movement-kit/releases?q=hub-v&expanded=true), unzip it to a folder you keep and double-click `movement-kit.exe`. Windows Defender or SmartScreen may warn, because the exe isn't signed. `WINDOWS.txt` in the zip has the steps.
 
 **Linux:** needs Python 3.10 or newer and [pywebview](https://pywebview.flowrl.com/) (`python-pywebview` on Arch).
