@@ -346,7 +346,7 @@ Left:
 4. Done 2026-11-02: `strafe-review/check_hub_section.py` passed on the branch. At the merge the temporary `branches: ["hub-release"]` push trigger came out of `hub-windows.yml`; test builds now go through Actions > hub-windows > Run workflow.
 5. The `hub-v1.0.0` release (ask the owner first). Nobody has tested the hub exe by hand on Windows yet.
 
-### Phase 3.7b: modules (planned and OK'd 2026-11-02; 3.7b.1 done on branch `modules`)
+### Phase 3.7b: modules (planned and OK'd 2026-11-02; 3.7b.1 and 3.7b.2 done on branch `modules`)
 
 The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates on its own, so someone who doesn't use a tool never downloads it; each tool can be uninstalled on its own; and each has its own auto-update switch. `hub-v1.0.0` stays untagged until 3.7b ships. This replaces 3.7's "one Windows exe with everything inside": the exe stays one program, but the tools become modules it downloads.
 
@@ -413,7 +413,7 @@ The owner asked for this on 2026-11-02, before `hub-v1.0.0`: each tool updates o
    - For 3.7b.3: `strafe-review/install.py` takes `ROOT` from `sys._MEIPASS` in the exe. A module loaded from disk needs it from `__file__` (which PyInstaller also sets inside the bundle, so the old exe keeps working). The same applies to every `_MEIPASS` use in module code.
    - For 3.7b.2: Strafe Review's own updater (`collector/updater.py`, including the hub line it follows in the exe) gives way to the module card. The core line moves to the manager's "core" entry.
 2. **3.7b.2 Hub page.** The Modules page and cards, `discover()` over installed modules, and Strafe Review's section losing its own update UI to its card. Then a screenshot check, and an owner click test.
-   Built 2026-11-02 on branch `modules` (owner click test pending):
+   Done 2026-11-02 on branch `modules`; the owner click-tested the demo window (notes, auto switch, update, roll back, install, uninstall):
    - The home page is the Modules page (`movekit/web/home.html` + `modules.js`), with a "Modules" entry at the top of the sidebar. Pages reach the manager through `Bridge.modules(name, args)`. Every reply carries the cards as they are afterwards, also after an error, so the page always redraws from Python's state. One call at a time; a second one while busy gets "<what it's doing>; try again". The auto update runs in a thread once the window shows, and the page polls while it works.
    - Sections follow what is installed: `hub.kit_sections()` = the core's folders (no `module.json`) plus `Manager.roots()`. An install, update, roll back or uninstall rediscovers them, and the page server reads the same dict. New optional `SECTION["show_with"]`: the HUD shows only with `strafe-review` installed.
    - Each module release also carries `<key>-module.json`, a copy of its manifest. `check()` reads it, so a card can name a module that isn't installed and see that a release needs a newer core before downloading. CI must upload it in 3.7b.3. A "waiting for core" mark counts only for the release that set it.
