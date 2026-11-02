@@ -20,6 +20,9 @@ GAME_LIBS=${LD_LIBRARY_PATH-}
 unset LD_PRELOAD LD_LIBRARY_PATH
 
 DIR="$(dirname "$(readlink -f "$0")")"
+# what launch.py has to say (a settings file it ignored, a crash), from the last launch
+LOGDIR="${XDG_STATE_HOME:-$HOME/.local/state}/movekit"
+mkdir -p "$LOGDIR"
 GAME=css
 HOOKS=()
 TOOLS=()
@@ -32,7 +35,7 @@ while IFS= read -r line; do
             HOOKS+=("${line#* }")
             ;;
     esac
-done < <(python3 "$DIR/launch.py" plan "$(basename "$0")" "$@")
+done < <(python3 "$DIR/launch.py" plan "$(basename "$0")" "$@" 2> "$LOGDIR/launch.log")
 
 HELPERS=""
 run_hook() {

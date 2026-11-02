@@ -6,7 +6,7 @@ Usage: python movekit/check_launch.py   (exits 1 on the first failure)
 
 Covers: the game from Steam's AppId= argument, hook order, the settings file (a game listed,
 a game left out, a broken file), the old names running only their own tool, MOVEKIT_RAN,
-register/unregister (the ~/.local/bin link, relinked to another tool's copy, removed with the
+no tomllib (Python 3.10), register/unregister (the ~/.local/bin link, relinked to another tool's copy, removed with the
 last one), and movekit-run itself: arguments passed on as they are, LD_PRELOAD and
 LD_LIBRARY_PATH kept from the helpers and given back to the game, exports reaching the game,
 helpers stopped when the game exits, the game's exit code kept, a failing hook skipped, and
@@ -164,6 +164,14 @@ def main():
         settings.write_text('[launch]\nmomentum = "sourceyaw"\n')
         check("settings: not a list runs all", tools_of("movekit-run", MOMENTUM),
               ("momentum", ["strafe-review", "sourceyaw"]))
+        # Python 3.10 has no tomllib: the settings are ignored with a note, every tool runs
+        no_toml = subprocess.run(
+            [sys.executable, "-c", ("import sys; sys.modules['tomllib'] = None; "
+             f"sys.path.insert(0, {str(HERE.parent)!r}); from movekit import launch; "
+             "print([t for t, _ in launch.plan('movekit-run', sys.argv[1:], {})[1]])"), *MOMENTUM],
+            env=os.environ, capture_output=True, text=True, check=False)
+        check("no tomllib: every tool runs", no_toml.stdout.strip(), "['strafe-review', 'sourceyaw']")
+        check("no tomllib: says why", "needs Python 3.11" in no_toml.stderr, True)
         settings.unlink()
 
         # -- movekit-run itself
@@ -207,6 +215,13 @@ def main():
         code, out = run_wrapper(["movekit-run"], args, home, {"FAIL_SR": "1"})
         check("failing hook: the others still run", [r.split()[0] for r in ran(home)], ["sourceyaw"])
         check("failing hook: game still runs", (code, "FROM_SR=unset" in out), (7, True))
+
+        settings.write_text("[launch\n")
+        run_wrapper(["movekit-run"], args, home)
+        ran(home)
+        check("launch.py's notes go to launch.log",
+              "ignoring" in (home / ".local" / "state" / "movekit" / "launch.log").read_text(), True)
+        settings.unlink()
 
         (home / "nohooks").mkdir()
         code, out = run_wrapper(["movekit-run"], args, home,

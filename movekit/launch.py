@@ -23,8 +23,12 @@ written before movekit-run keep doing exactly what they did.
 """
 import os
 import sys
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ImportError:  # Python 3.10: no settings file, every tool runs
+    tomllib = None
 
 if __package__ in (None, ""):  # run as a script (movekit-run does): import movekit next to us
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -78,6 +82,10 @@ def registered():
 def enabled(game, settings=None):
     """The tools turned on for a game, or None when the settings don't say (then: all)."""
     path = settings or settings_file()
+    if tomllib is None:
+        if path.exists():
+            print(f"{WRAPPER}: ignoring {path}: reading it needs Python 3.11 or newer", file=sys.stderr)
+        return None
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:

@@ -29,7 +29,7 @@ ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "collector"))
 import steam  # found through the path above; it also puts movekit on the path
 
-from movekit import cfgblock, launch, vpk
+from movekit import cfgblock, vpk
 from movekit.files import write_atomic
 
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
@@ -119,6 +119,7 @@ def link_launcher(add):
     The hook goes to movekit-run; strafe-review-run, the name before it, runs only this tool."""
     if sys.platform == "win32" or getattr(sys, "frozen", False):
         return
+    from movekit import launch  # Linux only, so the exe doesn't carry it
     if add:
         launch.register(TOOL, HOOK_ORDER, ROOT / "collector" / "launch-hook.sh")
         LINK.parent.mkdir(parents=True, exist_ok=True)
