@@ -17,7 +17,7 @@ import steam
 
 from movekit import updater as kit  # after steam, which puts movekit on the path
 
-VERSION = "1.4.0"  # bump in the same commit as the release tag
+VERSION = "1.5.0"  # bump in the same commit as the release tag
 REPO = "Soulmanyes/movement-kit"
 ASSET = "strafe-review-windows.zip"
 EXE = "strafe-review.exe"
