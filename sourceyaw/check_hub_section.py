@@ -6,11 +6,12 @@ Usage: python sourceyaw/check_hub_section.py   (exits 1 on the first failure)
 Covers: discovery finding the section on Linux and leaving it out on Windows without a problem
 (hub_section.py loads on every OS); no bare yawcore, trainer or settings_api left behind, also after
 a call that loads the trainer; load() for both games; the key maps giving only bind names CS:S
-knows; the key, offset-key and launch-option notes as app.py words them; previews as 33x33 PNG data
+knows; the key, offset-key and launch-option notes in the retired GTK window's words; previews as 33x33 PNG data
 URLs; the form's numbers kept in the window's ranges and a blank box or a bad colour refused;
 new_entry; set_autoexec; sounds, the tone, Show in game, KROSSHAIR's install and the file dialog
 with their side effects stubbed; and Apply writing byte-identical files to the GTK window's way
-(settings_api.collect + yawcore.apply with app.py's own rounding), for both games.
+(settings_api.collect + yawcore.apply with its rounding; the window retired in 3.8, the files must
+not change), for both games.
 Everything runs in a temp folder: HOME and the XDG folders point there, the games are fake folders.
 """
 import base64

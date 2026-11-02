@@ -141,7 +141,7 @@ def main():
                "collect keys")
         expect(core.validate(data), [], "collected settings validate")
 
-        bare = [m for m in ("yawcore", "trainer", "settings_api", "updater") if m in sys.modules]
+        bare = [m for m in ("yawcore", "trainer", "settings_api") if m in sys.modules]
         expect(bare, [], "bare modules after loading the hub's way")
 
     out = subprocess.run([sys.executable, "-c", APP_WAY], capture_output=True, text=True, check=False,

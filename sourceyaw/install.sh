@@ -1,8 +1,9 @@
 #!/bin/sh
 # Installs Source Yaw for the current user.
-#   - installs Python/GTK 4/libadwaita/Pillow if missing (asks for your password)
-#   - copies the app to ~/.local/share/sourceyaw and adds a launcher
-#   - the colour changer runs from the Steam launch option movekit-run, see the app
+#   - installs Python and Pillow if missing (asks for your password)
+#   - copies Source Yaw to ~/.local/share/sourceyaw and adds a launcher that opens its settings
+#     in Soulmanyes's Movement Kit (the hub; its own GTK window retired in Phase 3.8)
+#   - the colour changer runs from the Steam launch option movekit-run, see the settings
 # Run ./install.sh --uninstall to remove it again.
 # Without cloning the repo:
 #   curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/install.sh | sh
@@ -67,34 +68,26 @@ if [ "${1:-}" = "--uninstall" ]; then
     exit 0
 fi
 
+# Pillow: the colour changer recolours the crosshair with it. The settings window is the hub's,
+# which installs its own packages (movekit/install-hub.sh).
 have_deps() {
-    python3 - <<'PY' 2>/dev/null
-import gi
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw
-from gi.repository import Gtk
-import PIL
-assert (Adw.get_major_version(), Adw.get_minor_version()) >= (1, 1)
-assert (Gtk.get_major_version(), Gtk.get_minor_version()) >= (4, 6)
-PY
+    python3 -c 'import PIL' 2>/dev/null
 }
 
 if ! have_deps; then
-    say "Installing Python, GTK 4, libadwaita and Pillow"
+    say "Installing Python and Pillow"
     if command -v pacman >/dev/null; then
-        sudo pacman -S --needed --noconfirm python python-gobject gtk4 libadwaita python-pillow
+        sudo pacman -S --needed --noconfirm python python-pillow
     elif command -v apt-get >/dev/null; then
         sudo apt-get update
-        sudo apt-get install -y python3 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-pil
+        sudo apt-get install -y python3 python3-pil
     elif command -v dnf >/dev/null; then
-        sudo dnf install -y python3 python3-gobject gtk4 libadwaita python3-pillow
+        sudo dnf install -y python3 python3-pillow
     else
-        echo "Unknown package manager. Install Python 3, PyGObject, GTK 4," >&2
-        echo "libadwaita 1.1 or newer and Pillow yourself, then run this again." >&2
+        echo "Unknown package manager. Install Python 3 and Pillow yourself, then run this again." >&2
         exit 1
     fi
-    have_deps || { echo "GTK 4.6 and libadwaita 1.1 or newer are needed." >&2; exit 1; }
+    have_deps || { echo "Pillow is needed." >&2; exit 1; }
 fi
 
 # older versions ran the colour changer as an always-on systemd service;
@@ -135,8 +128,11 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/trainer.py" "$SRC/updater.py" "$SRC/crosshair_watch.py" \
+install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/trainer.py" "$SRC/crosshair_watch.py" \
     "$SRC/launch-hook.sh" "$DEST/"
+# the GTK window's updater, gone with the window in 3.8 (the hub's Modules page updates Source Yaw);
+# app.py stays, as the launcher that opens the hub
+rm -f "$DEST/updater.py"
 # movekit: the code the movement tools share, one folder up in the repo; yawcore finds it next to itself.
 # Replaced whole, so a module dropped from movekit doesn't linger in the installed copy.
 rm -rf "$DEST/movekit"
@@ -153,7 +149,7 @@ install -m 755 "$SRC/app.py" "$DEST/"
 rm -f "$DEST/yaw-run"
 ln -s movekit/movekit-run "$DEST/yaw-run"
 rm -f "$DEST/yaw-watch.sh"  # replaced by crosshair_watch.py (movekit session) in Phase 2.4
-cp -r "$SRC/icons" "$DEST/"
+rm -rf "$DEST/icons"  # the GTK window's icons, before 3.8
 install -m 644 "$SRC/icons/hicolor/scalable/apps/$APP_ID.svg" "$ICONS/"
 ln -sf "$DEST/app.py" "$BIN/$NAME"
 # the launch option: movekit-run (Steam has ~/.local/bin in its PATH) runs this hook and those
@@ -163,7 +159,8 @@ python3 "$DEST/movekit/launch.py" register "$NAME" 50 "$DEST/launch-hook.sh"
 ln -sf "$DEST/movekit/movekit-run" "$BIN/$NAME-run"
 ln -sf "$DEST/movekit/movekit-run" "$BIN/$OLD_NAME-run"
 
-# named after the app ID so docks and taskbars match the window to this launcher
+# named after the app ID, as before 3.8. app.py now opens the hub on Source Yaw's section, so the
+# window that shows is the hub's (it has its own entry, from movekit/install-hub.sh)
 rm -f "$APPS/$NAME.desktop"
 cat > "$APPS/$APP_ID.desktop" <<DESKTOP
 [Desktop Entry]
@@ -189,9 +186,11 @@ else
 fi
 
 say "Writing yaws.cfg and crosshair colours from your settings"
-python3 "$DEST/yawcore.py" --apply || echo "Skipped. Open the app and press Apply."
+python3 "$DEST/yawcore.py" --apply || echo "Skipped. Open Source Yaw's settings and press Apply."
 
 say "Done. Open \"Source Yaw\" from your app menu, or run: $NAME"
+echo "Both open its settings in Soulmanyes's Movement Kit. Without it, install it with:"
+echo "    curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/movekit/install-hub.sh | sh"
 echo "Add this to the game's launch options, right before %command%:"
 echo "    movekit-run"
 }

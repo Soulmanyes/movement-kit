@@ -5,12 +5,12 @@ A module is a tool folder with a module.json:
     {"key": "strafe-review", "title": "Strafe Review", "summary": "...",
      "os": ["linux", "win32"],                  sys.platform prefixes it runs on
      "tag_prefix": "strafe-review-v",           its release line in the monorepo
-     "version_from": "collector/updater.py",    the file whose VERSION = "x.y.z" line is its version
+     "version_from": "collector/collector.py",  the file whose VERSION = "x.y.z" line is its version
      "needs_core": "1.0.0",                     the lowest core version it runs on
      "needs": [],                               keys of modules it can't run without
      "data": ["data:strafe-review/attempts"],   what "Also delete saved data" removes, under
                                                 movekit.paths' data_dir (data:) or config_dir (config:)
-     "standalone": ["gain_converter.py"]}       files that run on their own, never in the core (an
+     "standalone": ["old_window.py"]}           files that run on their own, never in the core (an
                                                 old window), so check_modules' import rule skips them
 
 and, if it changes anything outside its own folder, a module_hooks.py with any of:

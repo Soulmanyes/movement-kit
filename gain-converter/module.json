@@ -7,11 +7,8 @@
     "win32"
   ],
   "tag_prefix": "gain-converter-v",
-  "version_from": "gain_converter.py",
+  "version_from": "hub_section.py",
   "needs_core": "1.0.0",
   "needs": [],
-  "data": [],
-  "standalone": [
-    "gain_converter.py"
-  ]
+  "data": []
 }

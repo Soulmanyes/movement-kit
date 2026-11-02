@@ -15,19 +15,21 @@ strafes.
 - **Strafe trainer** (optional): a tone while you turn without the matching strafe key, and
   each strafe's offset in ticks on screen, with a key to show or hide it. See
   [Strafe trainer](#strafe-trainer).
-- **Updates:** the app checks GitHub for new releases and installs them for you.
+- **Settings in the hub:** its settings are a section of
+  [Soulmanyes's Movement Kit](../README.md), whose Modules page also installs its updates.
 
 https://github.com/user-attachments/assets/40f99c9d-ba8a-4a52-8c9c-d5cf06575f16
 
-![Source Yaw settings window](docs/screenshot.png)
+![Source Yaw's settings in the Movement Kit hub](docs/screenshot.png)
 
 ## What you need
 
 - Linux, and the native Linux version of CS:S or Momentum Mod on Steam. Steam from your
   distro's packages works. Flatpak Steam doesn't, because `movekit-run` can't run inside
   its sandbox.
-- Python 3, GTK 4.6 or newer, libadwaita 1.1 or newer, PyGObject and Pillow.
-  `install.sh` installs them with pacman, apt or dnf if they are missing.
+- Python 3 and Pillow. `install.sh` installs them with pacman, apt or dnf if they are missing.
+- [Soulmanyes's Movement Kit](../README.md#install) for the settings. Its installer brings what
+  its window needs.
 - For the crosshair colours in CS:S: KROSSHAIR. If it isn't installed, the app can install
   it for you (see below). crosshair-maker is optional. Momentum Mod needs neither.
 - For the strafe trainer: a C compiler and `make` (to build its overlay), PipeWire's
@@ -45,7 +47,7 @@ Two ways, and they end up the same:
 
 - **In the hub:** install [Soulmanyes's Movement Kit](../README.md#install) and click **Install**
   on the Source Yaw card of its Modules page. The card runs the same `install.sh`, but it has no
-  terminal to ask for your password: if Python, GTK 4, libadwaita or Pillow is missing, it stops
+  terminal to ask for your password: if Python or Pillow is missing, it stops
   with an error. Install them (or run `install.sh` once in a terminal), then press Install again.
 - **On its own:**
 
@@ -54,13 +56,14 @@ Two ways, and they end up the same:
   ```
 
   It installs the latest release. Or clone the repository and run `./install.sh` from it. Run the
-  same command again to update, or let the app do it (see **Updates** below). If you install the
-  hub later, it takes this copy over as its Source Yaw module the first time it starts, keeping
-  your auto-update choice.
+  same command again to update. The settings still open in the hub, so install it too: the first
+  time it starts, it takes this copy over as its Source Yaw module, and its Modules page updates
+  it from then on.
 
 Then:
 
-1. Open **Source Yaw**. If you have both games, pick one at the top; each has its own
+1. Open **Source Yaw** (from the app menu, or `sourceyaw`); it opens the hub on Source Yaw's
+   section. If you have both games, pick one at the top; each has its own
    settings. Pick your key, yawspeeds, colours and sounds, and press **Apply**.
 2. Turn on **Load from autoexec.cfg**, or add `exec yaws.cfg` to your `autoexec.cfg` yourself.
 
@@ -95,7 +98,7 @@ trainer's input service, the uninstall prints the command that removes it.
 If you already had a `yaws.cfg` of your own, the app saves it as `yaws.cfg.bak-sourceyaw`
 before writing its own, and uninstalling puts it back.
 
-## In the app
+## Settings
 
 - **Cycle key:** press any key, mouse button or wheel direction to bind it. If that key is
   already bound to something else, the app tells you what.
@@ -109,13 +112,10 @@ before writing its own, and uninstalling puts it back.
 - **KROSSHAIR** (CS:S): if it isn't installed, **Install** downloads KROSSHAIR 0.2.5 (GPL-3.0,
   x86_64 only) from its GitHub releases into your user folder. No password is needed, and
   nothing is downloaded unless you press it.
-- **Updates:** once a day the app asks GitHub for the latest release. When there is a newer
-  one, a banner offers **Update**, which downloads it and runs its installer; restart the app
-  to use it. Turn on **Install updates automatically** to skip the banner. A copy running
-  from a git clone only tells you about the update. If a new release needs new system
-  packages, the update stops and asks you to run `install.sh` in a terminal. Once the hub
-  manages Source Yaw, this switch and the hub's card are the same switch, and **Update** installs
-  through the hub, so both always run the same version.
+- **Updates:** the Source Yaw card on the hub's Modules page shows new releases, with **Update**,
+  an auto-update switch and roll back. Source Yaw's own window and its update banner retired in
+  Movement Kit 3.8; a copy that still has the old window turns into the launcher at its next
+  update.
 
 If the game is already running when you press Apply, run `exec yaws` in the console.
 
@@ -200,7 +200,7 @@ Settings and generated images are stored in `~/.config/sourceyaw`.
 
 [CC0 1.0](LICENSE). Public domain, do what you like. Source Yaw plays sounds straight from
 your own game install, and KROSSHAIR is only downloaded from its own releases if you ask for
-it. The only other connection it makes is the daily update check to GitHub.
+it. The only other connection is the hub's update check to GitHub.
 
 The one exception is the strafe trainer's overlay in [`overlay/`](overlay/): it is a fork
 of KROSSHAIR and stays under the [GPL-3.0](overlay/LICENSE), with the Vulkan headers it

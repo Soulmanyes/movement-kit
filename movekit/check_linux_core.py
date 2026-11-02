@@ -12,9 +12,8 @@ own copy and when the last tool unregisters; --uninstall keeping the core while 
 installed and removing it after; the copy's core update (Manager.linux_core_installer) from a
 source archive; Manager.adopt (Source Yaw installed before the core: installed once with its old
 auto switch, the flag kept, nothing in a git checkout, tried again after a failure); auto switches
-written by another program surviving a held Manager's next save and showing on its cards; and
-Source Yaw's GTK updater, once it is a module, using the core's manager for its auto switch and
-its update instead of installing itself.
+written by another program surviving a held Manager's next save and showing on its cards. (Source
+Yaw's GTK updater was checked here until its window retired in 3.8.)
 """
 import http.server
 import io
@@ -296,100 +295,6 @@ def check_shared_auto():
     ok("auto switches: another program's survive a held manager's save and show on its cards")
 
 
-def check_gtk_updater(gh):
-    # an installed Source Yaw, as install.sh lays it out: its files and a copy of movekit
-    app = TMP / "data" / "sourceyaw-app"
-    shutil.copytree(REPO / "sourceyaw", app, ignore=shutil.ignore_patterns(
-        "__pycache__", "check_*", "overlay", "inputd", "icons"))
-    shutil.copytree(REPO / "movekit", app / "movekit", ignore=shutil.ignore_patterns("check_*", "__pycache__"))
-    code = '''
-import json, sys
-sys.path.insert(0, sys.argv[1])
-import updater
-u = updater.Updater("x/y", "1.6.0", sys.argv[1], sys.argv[2])
-out = {"managed": u.managed, "auto": u.auto}
-u.auto = True
-out["auto_after"] = u.auto
-calls = []
-updater.kit.install_source = lambda *a, **k: calls.append("self-install")
-u._manager = lambda *a, **k: calls.append(list(a))
-u._install({"tag": "sourceyaw-v9.9.9"})
-out["install"] = calls
-print(json.dumps(out))
-'''
-
-    def run():
-        res = subprocess.run([sys.executable, "-c", code, str(app), str(TMP / "gtk-updates.json")],
-                             capture_output=True, text=True, check=False)
-        if res.returncode:
-            fail(f"GTK updater: {res.stderr.strip()}")
-        return json.loads(res.stdout)
-
-    out = run()
-    expect((out["managed"], out["install"]), (False, ["self-install"]), "not a module: installs itself")
-    expect(json.loads((TMP / "gtk-updates.json").read_text())["auto"], True, "not a module: its own switch")
-
-    (KIT / "sourceyaw").mkdir()
-    (KIT / "sourceyaw" / "module.json").write_text("{}")
-    mgr = modules.Manager(kit_root=KIT)
-    mgr.set_auto("sourceyaw", False)
-    out = run()
-    expect(out["managed"], True, "a module: managed")
-    expect(out["install"], [["update", "sourceyaw"]], "a module: the update goes to the core's manager")
-    expect(out["auto"], False, "a module: the switch read from the manager")
-    expect(out["auto_after"], True, "a module: the switch written through the manager")
-    expect(modules.Manager(kit_root=KIT).info("sourceyaw")["auto"], True, "the manager's switch is on")
-    shutil.rmtree(KIT / "sourceyaw")
-    ok("Source Yaw's GTK updater: as a module, switch and update through the core's manager")
-
-    # the same with the real manager command and a fake GitHub: the window and the manager agree
-    os.environ["MOVEKIT_MODULES_API"] = gh.api  # the window's manager command reads it
-    gh.add("sourceyaw-v1.6.0", [("sourceyaw-module.zip", module_zip("sourceyaw", "1.6.0"))])
-    hub_mgr = modules.Manager(kit_root=KIT, api=gh.api)
-    hub_mgr.check(force=True)  # not the adopt check's list, still cached
-    hub_mgr.install("sourceyaw")
-    expect(hub_mgr.version("sourceyaw"), "1.6.0", "the module installed")
-    hub_mgr.check(force=True)  # the hub looked before the next release came out
-    code = '''
-import json, sys
-sys.path.insert(0, sys.argv[1])
-import updater
-u = updater.Updater("x/y", sys.argv[3], sys.argv[1], sys.argv[2])
-latest = u.check(force=sys.argv[4] == "force")
-out = {"latest": latest and latest["tag"], "installed": bool(latest and u.installed(latest))}
-if sys.argv[5] == "install":
-    u.install(latest)
-    out["failed"] = u.state.get("failed")
-print(json.dumps(out))
-'''
-
-    def gtk(version, action="", force=""):
-        res = subprocess.run([sys.executable, "-c", code, str(app), str(TMP / "gtk2.json"), version,
-                              force, action], capture_output=True, text=True, check=False)
-        if res.returncode:
-            fail(f"GTK updater ({version} {action}): {res.stderr.strip()}")
-        return json.loads(res.stdout)
-
-    expect(gtk("1.6.0"), {"latest": None, "installed": False}, "up to date")
-    gh.add("sourceyaw-v1.7.0", [("sourceyaw-module.zip", module_zip("sourceyaw", "1.7.0"))])
-    # A: a release since the hub's look; the window's update gets it through the manager
-    expect(gtk("1.6.0", "install"), {"latest": "sourceyaw-v1.7.0", "installed": False, "failed": None},
-           "a new release, updated from the window")
-    expect(modules.Manager(kit_root=KIT).version("sourceyaw"), "1.7.0", "the module folder updated")
-    # B: the hub updated the module while a 1.7.0 window ran: waiting for a restart, no install
-    gh.add("sourceyaw-v1.7.1", [("sourceyaw-module.zip", module_zip("sourceyaw", "1.7.1"))])
-    hub_mgr.check(force=True)
-    hub_mgr.update("sourceyaw")
-    expect(gtk("1.7.0"), {"latest": "sourceyaw-v1.7.1", "installed": True}, "updated while the window ran")
-    # C: a tag whose module zip isn't up yet isn't offered
-    gh.add("sourceyaw-v1.8.0")
-    expect(gtk("1.7.1"), {"latest": None, "installed": False}, "a release with no module zip")
-    hub_mgr.uninstall("sourceyaw")
-    gh.releases.clear()
-    del os.environ["MOVEKIT_MODULES_API"]
-    ok("Source Yaw's GTK updater with the real manager: new release, updated by the hub, no zip yet")
-
-
 def check_uninstall_core():
     sh(KIT / "movekit" / "install-hub.sh", "--uninstall")
     if KIT.exists() or BIN.exists() or BIN.is_symlink():
@@ -404,7 +309,6 @@ def main():
     check_core_update(gh)
     check_adopt(gh)
     check_shared_auto()
-    check_gtk_updater(gh)
     check_uninstall_core()
     gh.server.shutdown()
     shutil.rmtree(TMP, ignore_errors=True)

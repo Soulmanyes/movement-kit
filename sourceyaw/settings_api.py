@@ -1,16 +1,16 @@
-"""Source Yaw's settings logic without a window: what the GTK app shows and saves, as plain data.
+"""Source Yaw's settings logic without a window: what its settings show and save, as plain data.
 
-The GTK app (app.py) and the hub's Source Yaw section (Phase 3.6) both call this, so the two windows
-can't drift. Everything here takes and returns JSON-able data (tuples come back as lists over the
-hub bridge, which the app doesn't mind). Text comes back raw: the GTK app escapes it for markup,
-a web page puts it in as text.
+Written in 3.5 so the GTK window and the hub's Source Yaw section (Phase 3.6) shared one copy; the
+GTK window retired in 3.8, and the hub section is the one caller left. Everything here takes and
+returns JSON-able data (tuples come back as lists over the hub bridge). Text comes back raw, and
+the page puts it in as text.
 
-Siblings: app.py puts sourceyaw/ on sys.path, so there they're imported by name, the same modules
-app.py uses. The hub doesn't (tool folders share file names, see movekit/hub.py), so there this file
-loads them by path under hub.local_import's names. trainer.py needs `import yawcore` to work, so yawcore sits
-in sys.modules under that name only while trainer loads. Either way there is one module object per
-file. trainer is Linux-only (fcntl, the input
-service), so it loads on first use: setup_problem, base_options and collect work without it.
+Siblings: with sourceyaw/ on sys.path (yawcore's CLI, the checks) they're imported by name, the same
+modules the caller uses. The hub doesn't (tool folders share file names, see movekit/hub.py), so
+there this file loads them by path under hub.local_import's names. trainer.py needs `import yawcore`
+to work, so yawcore sits in sys.modules under that name only while trainer loads. Either way there
+is one module object per file. trainer is Linux-only (fcntl, the input service), so it loads on
+first use: setup_problem, base_options and collect work without it.
 """
 import importlib.util
 import os
@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def _on_path():
-    """True when sourceyaw/ is on sys.path (app.py, yawcore's CLI), so siblings go by plain name."""
+    """True when sourceyaw/ is on sys.path (yawcore's CLI, the checks), so siblings go by plain name."""
     return any(Path(p or ".").resolve() == HERE for p in sys.path)
 
 
@@ -45,7 +45,7 @@ def _sibling(name, module_name):
 
 
 # hub.local_import's names (movekit/hub.py _module_name), so a section that also asks local_import
-# for yawcore gets this same module; written out here to keep the hub out of the GTK app
+# for yawcore gets this same module; written out here so this file doesn't import the hub
 _PREFIX = "movekit_section_" + re.sub(r"\W", "_", HERE.name) + "."
 core = _sibling("yawcore", _PREFIX + "yawcore")
 _trainer = None

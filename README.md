@@ -71,12 +71,12 @@ The older per-tool options still work and start only their own tool: `sourceyaw-
 
 ## Releases
 
-Each tool keeps its own version and its own tags: `sourceyaw-v1.6.0`, `strafe-review-v1.5.0`, `gain-converter-v1.1.0`. A pushed tool tag attaches `<tool>-module.zip` (the tool's folder) and `<tool>-module.json` (its manifest) to that release; the hub only offers releases that have them. The hub itself, the core, has the line `hub-v*`: the Windows exe (`hub-windows.zip`) and, on Linux, the source archive that `install-hub.sh` installs. Its card on the Modules page updates it like a tool.
+Each tool keeps its own version and its own tags: `sourceyaw-v1.8.0`, `strafe-review-v1.6.0`, `gain-converter-v1.3.0`. A pushed tool tag attaches `<tool>-module.zip` (the tool's folder) and `<tool>-module.json` (its manifest) to that release; the hub only offers releases that have them. The hub itself, the core, has the line `hub-v*`: the Windows exe (`hub-windows.zip`) and, on Linux, the source archive that `install-hub.sh` installs. Its card on the Modules page updates it like a tool.
 
-A `gain-converter-v*` tag also builds Gain Converter's own small Windows exe. A `strafe-review-v*` tag builds `strafe-review-windows.zip`, the hub exe under Strafe Review's old name, so a copy of the old standalone exe that updates itself turns into the hub, installs the Strafe Review module on its first start, and keeps its Steam launch option.
+A `strafe-review-v*` tag also builds `strafe-review-windows.zip`, the hub exe under Strafe Review's old name, so a copy of the old standalone exe that updates itself turns into the hub, installs the Strafe Review module on its first start, and keeps its Steam launch option.
 
 The tools used to live in their own repos (`Soulmanyes/sourceyaw`, `Soulmanyes/strafe-review`, `Soulmanyes/gain-converter`), and their history and tags came along. Each old repo's last release points its tool's updater here.
 
 ## Licence
 
-CC0 1.0 (see [LICENSE](LICENSE)), except `sourceyaw/overlay/`, which is GPL-3.0 (see [its LICENSE](sourceyaw/overlay/LICENSE)) and includes the Vulkan headers and stb_image under their own licences. The Windows exes also bundle Python and other parts under their own licences; [hub/THIRD-PARTY-NOTICES.txt](hub/THIRD-PARTY-NOTICES.txt) lists the hub's and `gain-converter/THIRD-PARTY-NOTICES.txt` Gain Converter's.
+CC0 1.0 (see [LICENSE](LICENSE)), except `sourceyaw/overlay/`, which is GPL-3.0 (see [its LICENSE](sourceyaw/overlay/LICENSE)) and includes the Vulkan headers and stb_image under their own licences. The Windows exes also bundle Python and other parts under their own licences; [hub/THIRD-PARTY-NOTICES.txt](hub/THIRD-PARTY-NOTICES.txt) lists them. (Gain Converter's own small exe, which bundled Tcl/Tk, was last built for `gain-converter-v1.2.0`; it is the hub's Gain Converter section now.)

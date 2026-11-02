@@ -97,7 +97,7 @@ def _with_kept(choices, value):
     return [list(c) for c in choices]
 
 
-# ---------------------------------------------------------------- texts (as app.py builds them)
+# ---------------------------------------------------------------- texts (in the GTK window's words, before 3.8)
 
 def _bound_to(cstrike, key):
     return sorted({cmd for _, cmd in _core().key_conflicts(cstrike, key)}) if cstrike else []

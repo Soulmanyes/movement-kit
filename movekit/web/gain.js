@@ -1,7 +1,7 @@
 // CS:S (SSJ) gain % <-> Momentum Mod gain %: the one copy of the curve for every web page (the hub's
 // Gain Converter section, later the viewer). Momentum = 1 - (1 - CS:S) ** K, fitted to runs measured
-// both ways with Strafe Review. gain-converter/gain_converter.py keeps a Python copy for the old
-// tkinter window until Phase 3.8 retires it; gain-converter/check_gain.py keeps the two equal.
+// both ways with Strafe Review. The tkinter window's Python copy went with it in Phase 3.8;
+// gain-converter/check_gain.py checks this one against values taken from it.
 "use strict";
 
 const gain = (() => {

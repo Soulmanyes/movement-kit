@@ -19,6 +19,10 @@ The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top r
 
 ## Install
 
+Install [Soulmanyes's Movement Kit](../README.md#install) (Windows or Linux) and click **Install** on the Gain Converter card of its Modules page. It shows up as the Gain Converter section.
+
+Its own small window and Windows exe retired in Movement Kit 3.8. The last exe, in `gain-converter-v1.2.0`, still works, but gets no more updates.
+
 ### Licence
 
-CC0 1.0 (see `LICENSE`). Its own Windows exe also bundles Python, Tcl/Tk and the PyInstaller bootloader; their licences are in the zip (see `THIRD-PARTY-NOTICES.txt`).
+CC0 1.0 (see `LICENSE`).

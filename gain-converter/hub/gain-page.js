@@ -1,4 +1,4 @@
-// The Gain Converter section: the same controls as the tkinter window (gain_converter.py), with the
+// The Gain Converter section: the controls of the old tkinter window (retired in Phase 3.8), with the
 // curve from movekit/web/gain.js.
 "use strict";
 
