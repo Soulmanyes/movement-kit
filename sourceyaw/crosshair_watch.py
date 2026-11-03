@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Swaps the CS:S crosshair when the yaw_cycle bind echoes "YAW_<speed>" (started by launch-hook.sh through movekit-run).
+"""Swaps the CS:S crosshair when the yaw_cycle bind echoes "YAW_<speed>" ("YAWSURF_<speed>" for the surf list; started by launch-hook.sh through movekit-run).
 
   crosshair_watch.py LOG
 
@@ -22,7 +22,7 @@ from movekit import session  # after yawcore, which puts movekit on the path
 
 IMG = yawcore.CONFIG_DIR / "crosshairs"
 CURRENT = yawcore.CONFIG_DIR / "current.png"
-YAW = re.compile(r"YAW_\d+(?:\.\d+)?")
+YAW = re.compile(r"YAW(?:SURF)?_\d+(?:\.\d+)?")
 
 
 def swap(name, img=IMG, current=CURRENT):
@@ -38,7 +38,7 @@ def swap(name, img=IMG, current=CURRENT):
 
 
 def handle(event, img=IMG, current=CURRENT):
-    """Swap the crosshair for a YAW_<speed> token event; True if it did."""
+    """Swap the crosshair for a YAW_<speed> or YAWSURF_<speed> token event; True if it did."""
     name = event["data"].get("name") if event["type"] == "token" else None
     return bool(name and YAW.fullmatch(name) and swap(name, img, current))
 

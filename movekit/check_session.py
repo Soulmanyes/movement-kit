@@ -69,6 +69,9 @@ def check_tokens():
     check("at line end", t.scan("YAW_45", True), ["YAW_45"])
     check("decimal speed", t.scan("YAW_62.5 ", True), ["YAW_62.5"])
     check("offsets toggle", t.scan("SY_OFFSETS\r", True), ["SY_OFFSETS"])
+    check("surf list and mode switch", t.scan("SY_MODE_SURF YAWSURF_30.5 SY_MODE_BHOP", True),
+          ["SY_MODE_SURF", "YAWSURF_30.5", "SY_MODE_BHOP"])
+    check("mode look-alikes", t.scan("SY_MODE_KZ YAWSURF_ xSY_MODE_SURF", True), [])
     check("chat ignored", t.scan("Bob :  YAW_60 SY_OFFSETS", True), [])
     check("name before chat counts", t.scan("YAW_60 : x", True), ["YAW_60"])
     check("look-alikes", t.scan("xYAW_60 YAW_60abc SY_OFFSETSX MY_SY_OFFSETS", True), [])

@@ -128,7 +128,7 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/trainer.py" "$SRC/crosshair_watch.py" \
+install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/trainer.py" "$SRC/crosshair_watch.py" "$SRC/mode_watch.py" \
     "$SRC/launch-hook.sh" "$DEST/"
 # the GTK window's updater, gone with the window in 3.8 (the hub's Modules page updates Source Yaw);
 # app.py stays, as the launcher that opens the hub

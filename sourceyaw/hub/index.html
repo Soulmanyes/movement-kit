@@ -41,12 +41,33 @@
 				<span id="sy-key" class="sy-key"></span>
 				<button id="sy-key-change">Change…</button>
 			</div>
+			<div class="sy-row" data-surf>
+				<div class="sy-label">Mode key<div id="sy-mode-note" class="muted"></div></div>
+				<span id="sy-mode-key" class="sy-key"></span>
+				<button id="sy-mode-change">Change…</button>
+				<button id="sy-mode-clear" title="No mode key">Clear</button>
+			</div>
+			<div class="sy-row" data-surf>
+				<label class="sy-label" for="sy-auto">Auto by map prefix<div id="sy-auto-note" class="muted"></div></label>
+				<input id="sy-auto" type="checkbox" class="sy-switch">
+			</div>
 		</section>
 
 		<section class="card">
 			<div class="sy-group-head">
-				<div><h2>Yawspeeds</h2><div class="muted">Cycled in this order. The ticked one is set when the game starts.</div></div>
+				<div><h2>Yawspeeds</h2><div id="sy-entries-note" class="muted"></div></div>
 				<button id="sy-add" title="Add a yawspeed">+ Add</button>
+			</div>
+			<div class="sy-row">
+				<label class="sy-label" for="sy-surf-on">Separate surf yawspeeds<div class="muted">A bhop list and a surf list; the mode key or the map picks one</div></label>
+				<input id="sy-surf-on" type="checkbox" class="sy-switch">
+			</div>
+			<div class="sy-row" data-surf>
+				<div class="sy-label">Editing</div>
+				<div id="sy-tabs" class="sy-seg">
+					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
+					<button id="sy-tab-surf" data-tab="surf">Surf</button>
+				</div>
 			</div>
 			<div id="sy-entries"></div>
 		</section>

@@ -422,6 +422,55 @@ The owner asked for the jump-1 line to be "a separate hud element ... like jhud 
   - Every `check_*.py`, the node checks and the smoke test pass.
 - **Released 2026-11-03.** The owner tested it in game and found it fine. `first-jump` was fast-forwarded into `main` (1a26cf8), and the tags `hub-v1.6.0`, `strafe-review-v1.9.0` and `first-jump-v1.0.0` were pushed by Claude (from now on Claude pushes the tags). All 4 CI runs passed. Each release has its files: hub-windows.zip; strafe-review module zip and json plus strafe-review-windows.zip; first-jump module zip and json.
 
+## Phase 8: bhop and surf yaw lists in Source Yaw (owner, 2026-11-03; OK'd the same day, branch `sourceyaw-modes`)
+
+The owner wants separate bhop and surf yawspeeds in both games. They picked "both" for switching: automatic by map prefix, plus a mode key that overrides it.
+
+- **Settings.** A profile keeps `entries` and `start` as the bhop list, which is also the only list while no surf list exists. New optional keys:
+  - `surf: {entries, start}`, or missing. Missing means the feature is off, and the yaws.cfg is byte-identical to 1.8.0's.
+  - `mode_key`: a key, or "".
+  - `auto_mode`: bool, default true.
+  - `map_modes`: `{"bhop_": "bhop", "surf_": "surf"}`, the same prefix style as the trainer's `map_tickrates`.
+- **yaws.cfg with a surf list.**
+  - Both cycles are aliases: `yaw_b1..N` and `yaw_s1..N`.
+  - Each list has `sourceyaw_bhop` / `sourceyaw_surf`. These apply the list's start yaw at once (cvar, echo, colour, sound), point `yaw_cycle` at the next entry, point `sourceyaw_mode` at the other list, and echo `SY_MODE_BHOP` / `SY_MODE_SURF`. The mode key is bound to `sourceyaw_mode`.
+  - Each list also has `sourceyaw_arm_bhop` / `sourceyaw_arm_surf`. These only point `yaw_cycle` at the list's start entry and echo the mode token, so the next press lands on the start yaw.
+  - The cycle key is bound to `sourceyaw_press` = `exec sourceyaw_auto; yaw_cycle`. `cfg/sourceyaw_auto.cfg` is normally empty.
+  - The game starts on the bhop list. `con_logfile yaw.log` is on whenever `auto_mode` is.
+- **Surf tokens.** The surf list echoes `YAWSURF_<speed>`, so a speed in both lists can have its own crosshair image. `crosshair_watch.py` accepts both token forms. Momentum's colour cfgs become `b<i>.cfg` / `s<i>.cfg` (`c<i>.cfg` while there's no surf list).
+- **Mode watcher.** A new `mode_watch.py` helper is started by `launch-hook.sh` when `watch.env` has `AUTO=1`. It joins the movekit session.
+  - It tracks the current mode from the `SY_MODE_*` tokens, which covers the mode key too.
+  - On `map_loaded`, if the prefix gives a mode other than the current one, it writes `sourceyaw_arm_<mode>` into `sourceyaw_auto.cfg`.
+  - When it sees the matching token, it empties the file.
+  - An unknown map (CS:S's "Connected to" line has no name) changes nothing.
+  - The file is emptied at start and at exit.
+- **Hub page.** A "Separate surf yaws" switch. When it's on, a Bhop / Surf tab pair sits above the yaw list (each tab with its own start radio), plus a mode key field (with conflict notes like the offset key) and an "Auto by map prefix" switch.
+- **Unchanged.** The trainer, and the old `yaw_cycle` binds: `keys_bound_to_cycle` also looks for `sourceyaw_press`.
+- **Step 1, probe in game before any code.** Write `cfg/sy_probe.cfg` with `echo PROBE_A`, run `bind p "exec sy_probe"` and press p. Then, with the game still running, change the file to `echo PROBE_B` and press p again. Do this in CS:S on a public server and in Momentum. If the second press doesn't print PROBE_B, auto switching can't work and only the mode key is built. Also note the console noise from the exec.
+- **Arms are one-shot.** `sourceyaw_surf` turns `sourceyaw_arm_surf` into a no-op and puts `sourceyaw_arm_bhop` back, and the reverse for bhop. Alias bodies can't nest quotes, so the redefinitions point at single-word aliases (`alias sy_noop ""` at the top level). A press before the watcher empties the file, or a file left armed after a crash or after the hookless BHOP shortcut, can't reset the cycle. `apply()` also writes `sourceyaw_auto.cfg` empty.
+- **Core 1.7.0.** The session publishes only the tokens in `movekit/session.py` `TOKENS`. This adds `YAWSURF_<speed>` and `SY_MODE_(BHOP|SURF)`. Source Yaw 1.9.0 then needs core 1.7.0.
+- **Shared prefix lookup.** One helper in `yawcore` maps a map name to a value by prefix. Both `map_modes` and the trainer's `map_tickrate` use it.
+- **Plumbing.** `settings_api.collect()`, and `hub_section.load()` / `settings()`, carry `surf`, `mode_key` and `auto_mode`. `validate()` adds three checks: the surf list isn't empty, its speeds are unique within the list, and the mode key is valid and differs from the cycle and offset keys. In `apply()` the mode key joins `ours`, and stale `sourceyaw_mode` binds are unbound. `write_color_cfgs` deletes `c*`, `b*` and `s*`. `write_crosshairs` also makes the surf PNGs. `remove_from_game` deletes `sourceyaw_auto.cfg`.
+- **Checks.** A new `sourceyaw/check_modes.py`:
+  - yaws.cfg is byte-identical to 1.8.0's without a surf list.
+  - The alias chains, simulated: press order, mode key, arm then press lands on start.
+  - The watcher, on fake session events: map to arm, token to clear, same mode does nothing, unknown map does nothing.
+  - Settings round-trip through the real `hub_section.settings()` / `load()` path.
+  - Cleanup of the colour cfgs and the auto file.
+  - Mutations: the arm landing one past the start, the watcher writing on a same-mode map, a shared token for both lists.
+- **Release.** hub-v1.7.0 (core 1.7.0) and sourceyaw-v1.9.0.
+- **Probe (2026-11-03).** CS:S on a public server (bhop_bfur): `bind p "exec sy_probe"` printed PROBE_A, and after the file was changed with the game running, PROBE_B. So exec re-reads the file on every press. No "execing" line shows in the console or log. Momentum is still to probe.
+- **Built (2026-11-03).**
+  - Everything as above. `_set_alias` and `_key_lines` are shared by the one-list and two-list yaws.cfg.
+  - `mode_watch.py` is installed by `install.sh`.
+  - The page has a "Separate surf yawspeeds" switch, Bhop / Surf tabs (a first surf list starts as a copy of the bhop list), the mode key with Change and Clear, and "Auto by map prefix".
+  - Checked:
+    - `sourceyaw/check_modes.py`: yaws.cfg without a surf list is identical to sourceyaw-v1.8.0's yawcore (24 cases from git); a console model runs yaws.cfg with exec inserted before the rest of the buffer; the watcher; validate; apply and cleanup; the hub's save and load. `--mutations`: 8 of 8 caught.
+    - `movekit/check_session.py` covers the new tokens.
+    - `check_settings_api.py` covers collect with a surf list.
+    - Every `check_*.py` and `hub/smoke_test.py --repo` pass.
+  - Not yet checked: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

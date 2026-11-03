@@ -49,8 +49,9 @@ POLL = 0.05  # seconds between log reads; tokens should show within a frame or s
 HISTORY = 500  # events kept for clients that reconnect
 PING = 15  # seconds between keep-alive comments on /events
 LISTEN_TIMEOUT = 2 * PING + 5  # a client gives up on a stream this quiet and reconnects
-# markers the tools' binds echo into the console: Source Yaw's yaw_cycle and the trainer's toggle
-TOKENS = (r"YAW_\d+(?:\.\d+)?", r"SY_OFFSETS")
+# markers the tools' binds echo into the console: Source Yaw's yaw_cycle (YAWSURF_ for its surf
+# list), its bhop/surf list switch and the trainer's toggle
+TOKENS = (r"YAW_\d+(?:\.\d+)?", r"YAWSURF_\d+(?:\.\d+)?", r"SY_MODE_(?:BHOP|SURF)", r"SY_OFFSETS")
 
 
 class Bus:

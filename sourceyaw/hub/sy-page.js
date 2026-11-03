@@ -13,8 +13,13 @@
 
 	let st = null;       // what load() returned for the current game
 	let keyInfo = null;  // keys(): code map, mouse map, valid bind names
-	let entries = [];    // [{speed, color, sound}] in cycle order
-	let start = 0;       // index of the yawspeed the game starts on
+	let entries = [];    // [{speed, color, sound}] in cycle order: the list on the open tab
+	let start = 0;       // index of the yawspeed that list starts on
+	// both lists; entries/start above are the open tab's, put back by keepTab()
+	let lists = { bhop: null, surf: null };
+	let tab = "bhop";
+	let surfOn = false;
+	let modeKey = "";    // switches between the bhop and surf lists, "" for none
 	let key = "";        // the cycle key
 	let offsetKey = "";  // the trainer's offset key, "" for none
 	let base = "";       // the crosshair base: "crosshair-maker", "builtin" or a path
@@ -166,6 +171,44 @@
 		changed();
 	}
 
+	// ------------------------------------------------------------ bhop and surf lists
+
+	function keepTab() {
+		lists[tab] = { entries, start };
+	}
+
+	function openTab(name) {
+		keepTab();
+		tab = name;
+		({ entries, start } = lists[tab]);
+		showLists();
+		drawEntries();
+		refreshPreviews();
+	}
+
+	function showLists() {
+		document.querySelectorAll("[data-surf]").forEach((n) => { n.hidden = !surfOn; });
+		document.querySelectorAll("#sy-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+		$("sy-entries-note").textContent = !surfOn
+			? "Cycled in this order. The ticked one is set when the game starts."
+			: tab === "bhop"
+				? "Bhop list, cycled in this order. The ticked one is set when the game starts or the list is picked."
+				: "Surf list, cycled in this order. The ticked one is set when the list is picked.";
+	}
+
+	$("sy-surf-on").onchange = () => {
+		surfOn = $("sy-surf-on").checked;
+		keepTab();
+		// a first surf list starts as a copy of the bhop list
+		if (surfOn && !lists.surf)
+			lists.surf = { entries: lists.bhop.entries.map((e) => ({ ...e })), start: lists.bhop.start };
+		if (!surfOn && tab !== "bhop") openTab("bhop");
+		else showLists();
+		changed();
+	};
+	document.querySelectorAll("#sy-tabs button").forEach((b) => { b.onclick = () => { if (b.dataset.tab !== tab) openTab(b.dataset.tab); }; });
+	$("sy-auto").onchange = changed;
+
 	$("sy-add").onclick = async () => {
 		entries.push(await call("new_entry", { entries }));
 		drawEntries(currentUrls());
@@ -235,16 +278,23 @@
 	let notesAsked = 0;
 	async function showKeyNotes() {
 		const asked = ++notesAsked;
-		const notes = await call("key_notes", { game: st.game, key, offset_key: offsetKey });
+		const notes = await call("key_notes", { game: st.game, key, offset_key: offsetKey, mode_key: modeKey });
 		if (asked !== notesAsked) return;  // a newer key's notes are on the way
+		showNotes(notes);
+	}
+
+	function showNotes(notes) {
 		note("sy-key-note", notes.key);
 		note("sy-offset-note", notes.offset);
+		note("sy-mode-note", notes.mode);
 	}
 
 	function showKeys() {
 		$("sy-key").textContent = key;
 		$("sy-offset-key").textContent = offsetKey || "None";
 		$("sy-offset-clear").hidden = !offsetKey;
+		$("sy-mode-key").textContent = modeKey || "None";
+		$("sy-mode-clear").hidden = !modeKey;
 	}
 
 	$("sy-key-change").onclick = () => capture("Cycle key", (name) => {
@@ -260,6 +310,14 @@
 		trainerChanged();
 	}
 	$("sy-offset-change").onclick = () => capture("Offset key", setOffsetKey);
+	function setModeKey(name) {
+		modeKey = name;
+		showKeys();
+		showKeyNotes();
+		changed();
+	}
+	$("sy-mode-change").onclick = () => capture("Mode key", setModeKey);
+	$("sy-mode-clear").onclick = () => setModeKey("");
 	$("sy-offset-clear").onclick = () => setOffsetKey("");
 
 	// ------------------------------------------------------------ crosshair
@@ -418,8 +476,12 @@
 	$("sy-launch-copy").onclick = () => copy($("sy-launch").textContent);
 
 	function form() {
-		return { key, crosshair: $("sy-crosshair").checked, start, base,
-			entries: entries.map((e) => ({ ...e })), trainer: trainerForm() };
+		keepTab();
+		const copyList = (l) => ({ entries: l.entries.map((e) => ({ ...e })), start: l.start });
+		const bhop = copyList(lists.bhop);
+		return { key, crosshair: $("sy-crosshair").checked, start: bhop.start, base, entries: bhop.entries,
+			trainer: trainerForm(), surf: surfOn ? copyList(lists.surf) : null, mode_key: modeKey,
+			auto_mode: $("sy-auto").checked };
 	}
 
 	$("sy-apply").onclick = async () => {
@@ -437,8 +499,17 @@
 
 	function fill(data) {
 		st = data;
-		entries = st.entries.map((e) => ({ ...e }));
-		start = st.start;
+		lists = {
+			bhop: { entries: st.entries.map((e) => ({ ...e })), start: st.start },
+			surf: st.surf ? { entries: st.surf.entries.map((e) => ({ ...e })), start: st.surf.start } : null,
+		};
+		surfOn = !!st.surf;
+		tab = "bhop";
+		({ entries, start } = lists.bhop);
+		modeKey = st.mode_key;
+		$("sy-surf-on").checked = surfOn;
+		$("sy-auto").checked = st.auto_mode;
+		$("sy-auto-note").textContent = st.mode_note;
 		key = st.key;
 		offsetKey = st.trainer.offset_key;
 		base = st.base;
@@ -458,8 +529,8 @@
 		}
 		drawGames();
 		showKeys();
-		note("sy-key-note", st.notes.key);
-		note("sy-offset-note", st.notes.offset);
+		showNotes(st.notes);
+		showLists();
 		drawEntries(st.previews);
 		fillTrainer();
 		showTrainerStatus();

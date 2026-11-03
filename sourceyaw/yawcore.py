@@ -42,7 +42,7 @@ if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
 from movekit import binds, cfgblock, keyvalues, steam, vpk  # after the path above
 from movekit import games as kit_games
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -99,6 +99,20 @@ COLOR_DIR = "yaws_colors"
 # the strafe trainer's in-game key: its alias echoes OFFSETS_TOKEN into yaw.log
 OFFSETS_ALIAS = "sourceyaw_offsets"
 OFFSETS_TOKEN = "SY_OFFSETS"
+# bhop and surf lists (1.9.0). A profile with a "surf" list has two cycles. The mode key runs
+# MODE_ALIAS, which switches to the other list at once. With auto_mode the cycle key runs
+# PRESS_ALIAS: it first execs AUTO_CFG (normally empty), then cycles. When a map of the other mode
+# loads, mode_watch.py writes that mode's arm alias into AUTO_CFG, so the next press starts that
+# list. Every switch echoes MODE_TOKENS[mode]; the surf list echoes SURF_PREFIX tokens.
+MODES = ("bhop", "surf")
+MODE_TOKENS = {"bhop": "SY_MODE_BHOP", "surf": "SY_MODE_SURF"}
+SURF_PREFIX = "YAWSURF_"
+MODE_ALIAS = "sourceyaw_mode"
+PRESS_ALIAS = "sourceyaw_press"
+AUTO_CFG = "sourceyaw_auto"
+DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
+# commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
+OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS, OFFSETS_ALIAS)
 
 # short UI sounds to offer; the app only lists the ones this game install has
 SOUNDS = ["buttons/blip1", "buttons/blip2", "buttons/button10", "buttons/button11",
@@ -141,8 +155,49 @@ def fmt_speed(value):
     return text or "0"
 
 
-def token(value):
-    return f"YAW_{fmt_speed(value)}"
+def token(value, surf=False):
+    return f"{SURF_PREFIX if surf else 'YAW_'}{fmt_speed(value)}"
+
+
+def prefix_value(name, table, default=None):
+    """table[prefix] for the first prefix map `name` starts with (any case), else `default`.
+    None for a name that isn't known (CS:S's "Connected to" line)."""
+    if name is None:
+        return None
+    for prefix, value in table.items():
+        if name.lower().startswith(prefix.lower()):
+            return value
+    return default
+
+
+def surf_on(data):
+    return bool(data.get("surf"))
+
+
+def mode_lists(data):
+    """[(mode, letter, {entries, start})]: the bhop list (the profile's own entries), then the
+    surf list when there is one. letter names its aliases and colour cfgs (yaw_b1, b1.cfg)."""
+    out = [("bhop", "b", data)]
+    if surf_on(data):
+        out.append(("surf", "s", data["surf"]))
+    return out
+
+
+def auto_on(data):
+    return surf_on(data) and bool(data.get("auto_mode", True))
+
+
+def mode_key_of(data):
+    """The key that switches between the lists, or "" when there is none."""
+    key = data.get("mode_key") or ""
+    if not surf_on(data) or key.lower() == data["key"].lower():
+        return ""
+    return key
+
+
+def map_mode(data, name):
+    """"bhop" or "surf" for map `name` by its prefix, or None."""
+    return prefix_value(name, data.get("map_modes") or DEFAULT_MAP_MODES)
 
 
 # ---------------------------------------------------------------- locations
@@ -334,11 +389,17 @@ def load_settings(game="css"):
     data.setdefault("crosshair", True)
     data.setdefault("base", "crosshair-maker")
     data["start"] = start_index(data)
-    for entry in data["entries"]:
-        if not entry.get("color"):
-            original = data.get("original_color")
-            entry["color"] = (rgba_to_hex(original) if original
-                              else main_color(resolve_base(data)))
+    data.setdefault("mode_key", "")
+    data.setdefault("auto_mode", True)
+    data.setdefault("map_modes", dict(DEFAULT_MAP_MODES))
+    if surf_on(data):
+        data["surf"]["start"] = start_index(data["surf"])
+    for _, _, lst in mode_lists(data):
+        for entry in lst["entries"]:
+            if not entry.get("color"):
+                original = data.get("original_color")
+                entry["color"] = (rgba_to_hex(original) if original
+                                  else main_color(resolve_base(data)))
     return data
 
 
@@ -367,6 +428,22 @@ def validate(data):
     tokens = [token(e["speed"]) for e in data["entries"]]
     if len(set(tokens)) != len(tokens):
         problems.append("Each yawspeed must be different")
+    if surf_on(data):
+        surf = data["surf"]["entries"]
+        if not surf:
+            problems.append("Add at least one surf yawspeed")
+        tokens = [token(e["speed"]) for e in surf]
+        if len(set(tokens)) != len(tokens):
+            problems.append("Each surf yawspeed must be different")
+        key = data.get("mode_key") or ""
+        if key:
+            if key not in VALID_KEYS:
+                problems.append(f"'{key}' is not a key name the game knows")
+            elif key.lower() == data["key"].lower():
+                problems.append("The mode key must differ from the yaw key")
+            elif key.lower() == ((data.get("trainer") or {}).get("offset_key") or "").lower() \
+                    and trainer_on(data):
+                problems.append("The mode key must differ from the offset key")
     return problems
 
 
@@ -407,13 +484,15 @@ def write_crosshairs(data, reset_current):
     CROSSHAIRS.mkdir(parents=True, exist_ok=True)
     for old in CROSSHAIRS.glob("*.png"):
         old.unlink()
-    for i, entry in enumerate(data["entries"]):
-        im = recolor(base, entry["color"])
-        im.save(CROSSHAIRS / f"{token(entry['speed'])}.png")
-        if i == start_index(data) and (reset_current or not CURRENT.exists()):
-            tmp = CURRENT.with_name(CURRENT.name + ".tmp.png")
-            im.save(tmp)
-            tmp.replace(CURRENT)
+    for mode, _, lst in mode_lists(data):
+        for i, entry in enumerate(lst["entries"]):
+            im = recolor(base, entry["color"])
+            im.save(CROSSHAIRS / f"{token(entry['speed'], mode == 'surf')}.png")
+            # the game starts on the bhop list
+            if mode == "bhop" and i == start_index(data) and (reset_current or not CURRENT.exists()):
+                tmp = CURRENT.with_name(CURRENT.name + ".tmp.png")
+                im.save(tmp)
+                tmp.replace(CURRENT)
 
 
 # ---------------------------------------------------------------- game config
@@ -435,7 +514,7 @@ def key_conflicts(cstrike, key):
             if not bind or bind[0].lower() != key.lower():
                 continue
             command = bind[1].strip().strip('"')
-            if command not in ("yaw_cycle", OFFSETS_ALIAS):
+            if command not in OWN_COMMANDS:
                 found.append((name, command))
     return found
 
@@ -452,7 +531,94 @@ def offsets_key_of(data):
     return key
 
 
+def _set_alias(name, entry, nxt, surf, color_cfg):
+    """`alias <name> "cl_yawspeed ..; echo ..; [exec colour cfg]; [play ..]; alias yaw_cycle <nxt>"`."""
+    speed = fmt_speed(entry["speed"])
+    parts = [f"cl_yawspeed {speed}", f"echo {token(speed, surf)}"]
+    if color_cfg:
+        parts.append(f"exec {COLOR_DIR}/{color_cfg}")
+    if entry.get("sound"):
+        parts.append(f"play {entry['sound']}")
+    parts.append(f"alias yaw_cycle {nxt}")
+    return f'alias {name} "{"; ".join(parts)}"'
+
+
+def _key_lines(data, unbind, cycle_command):
+    lines = [f'unbind "{key}"' for key in unbind]
+    lines.append(f'bind "{data["key"]}" "{cycle_command}"')
+    mode_key = mode_key_of(data)
+    if mode_key:
+        lines.append(f'bind "{mode_key}" "{MODE_ALIAS}"')
+    offsets_key = offsets_key_of(data)
+    if offsets_key:
+        lines += [
+            "",
+            "// strafe trainer: each press shows or hides the offset (the trainer reads the echo)",
+            f'alias {OFFSETS_ALIAS} "echo {OFFSETS_TOKEN}"',
+            f'bind "{offsets_key}" "{OFFSETS_ALIAS}"',
+        ]
+    return lines
+
+
+def _yaws_cfg_modes(data, unbind, game):
+    """yaws.cfg with a bhop and a surf list (see MODE_ALIAS)."""
+    cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
+    lines = [f"{YAWS_HEADER} Change it in the app, edits here are overwritten."]
+    if GAMES[game]["colors"] == "krosshair":
+        lines += ["// echo goes to the console and yaw.log (read by the crosshair watcher and the",
+                  "// list switcher); play is a local-only sound cue.",
+                  "con_logfile yaw.log"]
+    else:
+        lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour.")
+        if trainer_on(data) or auto_on(data):
+            lines += ["// the strafe trainer and the list switcher read map loads from yaw.log",
+                      "con_logfile yaw.log"]
+    starts = {}
+    for mode, letter, lst in mode_lists(data):
+        entries = lst["entries"]
+        starts[mode] = f"yaw_{letter}{start_index(lst) + 1}"
+        lines += ["", f"// {mode} yawspeeds"]
+        for i, entry in enumerate(entries):
+            lines.append(_set_alias(f"yaw_{letter}{i + 1}", entry,
+                                    f"yaw_{letter}{(i + 1) % len(entries) + 1}", mode == "surf",
+                                    f"{letter}{i + 1}" if cvar_colors else None))
+    lines += [
+        "",
+        f"// switching lists: sourceyaw_bhop/_surf switch at once ({MODE_ALIAS} runs the other one);",
+        f"// an arm alias only makes the next yaw key press start its list. {PRESS_ALIAS} runs",
+        f"// {AUTO_CFG}.cfg first, where the list switcher writes an arm alias when a map loads.",
+        "// An arm works once: switching to a list turns its own arm off.",
+        'alias sy_noop ""',
+    ]
+    for mode, other in (("bhop", "surf"), ("surf", "bhop")):
+        lines.append(f'alias sy_{mode}_state "alias {MODE_ALIAS} sourceyaw_{other}; '
+                     f'alias sourceyaw_arm_{mode} sy_noop; alias sourceyaw_arm_{other} sy_arm_{other}; '
+                     f'echo {MODE_TOKENS[mode]}"')
+    for mode in MODES:
+        lines.append(f'alias sourceyaw_{mode} "sy_{mode}_state; {starts[mode]}"')
+    for mode in MODES:
+        lines.append(f'alias sy_arm_{mode} "sy_{mode}_state; alias yaw_cycle {starts[mode]}"')
+    if auto_on(data):
+        lines.append(f'alias {PRESS_ALIAS} "exec {AUTO_CFG}; yaw_cycle"')
+    start = start_index(data)
+    entries = data["entries"]
+    first = fmt_speed(entries[start]["speed"])
+    lines += [
+        "",
+        "// start on the bhop list's start yawspeed (no sound at launch); the next press goes to the one after it",
+        f"cl_yawspeed {first}",
+        f"echo {token(first)}",
+    ]
+    if cvar_colors:
+        lines.append(f"exec {COLOR_DIR}/b{start + 1}")
+    lines += [f"alias yaw_cycle yaw_b{(start + 1) % len(entries) + 1}", "sy_bhop_state", ""]
+    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle")
+    return "\n".join(lines) + "\n"
+
+
 def yaws_cfg(data, unbind=(), game="css"):
+    if surf_on(data):
+        return _yaws_cfg_modes(data, unbind, game)
     entries = data["entries"]
     cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
     lines = [f"{YAWS_HEADER} Change it in the app, edits here are overwritten."]
@@ -469,15 +635,8 @@ def yaws_cfg(data, unbind=(), game="css"):
                       "con_logfile yaw.log"]
     lines.append("")
     for i, entry in enumerate(entries):
-        speed = fmt_speed(entry["speed"])
-        nxt = (i + 1) % len(entries) + 1
-        parts = [f"cl_yawspeed {speed}", f"echo {token(speed)}"]
-        if cvar_colors:
-            parts.append(f"exec {COLOR_DIR}/c{i + 1}")
-        if entry.get("sound"):
-            parts.append(f"play {entry['sound']}")
-        parts.append(f"alias yaw_cycle yaw_set{nxt}")
-        lines.append(f'alias yaw_set{i + 1} "{"; ".join(parts)}"')
+        lines.append(_set_alias(f"yaw_set{i + 1}", entry, f"yaw_set{(i + 1) % len(entries) + 1}", False,
+                                f"c{i + 1}" if cvar_colors else None))
     start = start_index(data)
     first = fmt_speed(entries[start]["speed"])
     lines += [
@@ -492,17 +651,7 @@ def yaws_cfg(data, unbind=(), game="css"):
         f'alias yaw_cycle "yaw_set{(start + 1) % len(entries) + 1}"',
         "",
     ]
-    for key in unbind:
-        lines.append(f'unbind "{key}"')
-    lines.append(f'bind "{data["key"]}" "yaw_cycle"')
-    offsets_key = offsets_key_of(data)
-    if offsets_key:
-        lines += [
-            "",
-            "// strafe trainer: each press shows or hides the offset (the trainer reads the echo)",
-            f'alias {OFFSETS_ALIAS} "echo {OFFSETS_TOKEN}"',
-            f'bind "{offsets_key}" "{OFFSETS_ALIAS}"',
-        ]
+    lines += _key_lines(data, unbind, "yaw_cycle")
     return "\n".join(lines) + "\n"
 
 
@@ -580,16 +729,19 @@ def hex_to_rgba(color, alpha="255"):
 def write_color_cfgs(data, game_dir):
     folder = game_dir / "cfg" / COLOR_DIR
     if folder.is_dir():
-        for old in folder.glob("c*.cfg"):
+        for old in folder.glob("[bcs]*.cfg"):
             old.unlink()
     if not data["crosshair"]:
         return
     folder.mkdir(exist_ok=True)
     original = data.get("original_color") or "0 255 0 255"
     alpha = original.split()[3] if len(original.split()) > 3 else "255"
-    for i, entry in enumerate(data["entries"]):
-        write_text_atomic(folder / f"c{i + 1}.cfg",
-                          f'cl_crosshair_color "{hex_to_rgba(entry["color"], alpha)}"\n')
+    # c<i> with one list; b<i> and s<i> with a bhop and a surf list
+    for _, letter, lst in mode_lists(data):
+        name = letter if surf_on(data) else "c"
+        for i, entry in enumerate(lst["entries"]):
+            write_text_atomic(folder / f"{name}{i + 1}.cfg",
+                              f'cl_crosshair_color "{hex_to_rgba(entry["color"], alpha)}"\n')
 
 
 def restore_crosshair_color(data, game_dir, game):
@@ -616,9 +768,9 @@ def apply(data, cstrike, reset_current=False, game="css"):
     """Write yaws.cfg plus the game's colour files (CS:S: crosshair images and watcher
     env; Momentum: colour cfgs). `cstrike` is the game's mod folder. Returns notes."""
     notes = []
-    ours = {data["key"], offsets_key_of(data)}
-    unbind = [k for k in dict.fromkeys(keys_bound_to_cycle(cstrike)
-                                       + keys_bound_to_cycle(cstrike, OFFSETS_ALIAS))
+    ours = {data["key"], offsets_key_of(data), mode_key_of(data)}
+    unbind = [k for k in dict.fromkeys(key for command in OWN_COMMANDS
+                                       for key in keys_bound_to_cycle(cstrike, command))
               if k not in ours]
     for key in unbind:
         notes.append(f"'{key}' gets unbound next time yaws.cfg runs")
@@ -633,11 +785,18 @@ def apply(data, cstrike, reset_current=False, game="css"):
         shutil.copyfile(target, backup)
         notes.append(f"Your old yaws.cfg was saved as {backup.name}")
     write_text_atomic(target, yaws_cfg(data, unbind, game))
+    # empty, so no arm left from the last game (a crash, a launch without the hook) fires
+    auto = cstrike / "cfg" / f"{AUTO_CFG}.cfg"
+    if auto_on(data):
+        write_text_atomic(auto, "")
+    else:
+        auto.unlink(missing_ok=True)
     krosshair = GAMES[game]["colors"] == "krosshair"
     # read by launch-hook.sh (shell), so quote the path: it has spaces
     write_text_atomic(WATCH_ENV, f"LOG={shlex.quote(str(cstrike / 'yaw.log'))}\n"
                                  f"COLORS={1 if krosshair and data['crosshair'] else 0}\n"
-                                 f"TRAINER={1 if trainer_on(data) else 0}\n")
+                                 f"TRAINER={1 if trainer_on(data) else 0}\n"
+                                 f"AUTO={1 if auto_on(data) else 0}\n")
     if krosshair:
         write_crosshairs(data, reset_current)
     else:
@@ -654,6 +813,7 @@ def remove_from_game(cstrike, game="css"):
     """For uninstalling: takes yaws.cfg out of autoexec.cfg and deletes it (if it is
     ours), putting back a yaws.cfg the user had before."""
     set_autoexec(cstrike, False)
+    (cstrike / "cfg" / f"{AUTO_CFG}.cfg").unlink(missing_ok=True)
     if GAMES[game]["colors"] == "cvar":
         shutil.rmtree(cstrike / "cfg" / COLOR_DIR, ignore_errors=True)
         if has_profile(game):

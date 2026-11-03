@@ -128,8 +128,23 @@ def offset_key_note(game, key, offset_key):
                     "starts. Takes effect from the next game start", "warn": False}
 
 
-def key_notes(game, key, offset_key):
-    return {"key": key_note(game, key), "offset": offset_key_note(game, key, offset_key)}
+def mode_key_note(game, key, offset_key, mode_key):
+    """The note under the bhop/surf mode key."""
+    if not mode_key:
+        return {"text": "No key: only the map's prefix picks the list", "warn": False}
+    for other, what in ((key, "the cycle key"), (offset_key, "the offset key")):
+        if other and mode_key.lower() == other.lower():
+            return {"text": f"⚠ {mode_key} is also {what}. Pick another key", "warn": True}
+    commands = _bound_to(_cstrike(game), mode_key)
+    if commands:
+        return {"text": f"⚠ {mode_key} is bound to {', '.join(commands)} now. Apply replaces that",
+                "warn": True}
+    return {"text": "Each press switches to the other list's start yawspeed", "warn": False}
+
+
+def key_notes(game, key, offset_key, mode_key=""):
+    return {"key": key_note(game, key), "offset": offset_key_note(game, key, offset_key),
+            "mode": mode_key_note(game, key, offset_key, mode_key)}
 
 
 def launch_option(game):
@@ -203,6 +218,10 @@ def _trainer_form(cfg, game):
     }
 
 
+def _entries_form(entries):
+    return [{"speed": float(e["speed"]), "color": e["color"], "sound": e.get("sound") or ""} for e in entries]
+
+
 def load(game=None):
     """Everything the page shows for `game` (None: the last one used, as the window opens)."""
     api, core = _api(), _core()
@@ -221,8 +240,10 @@ def load(game=None):
     rates = ", ".join(f"{p}* {r}" for p, r in cfg["map_tickrates"].items())
     tickrate_note = (f"From the map: {rates}, others {cfg['tickrate']['momentum']}" if game == "momentum"
                      else f"From the map: {rates}; on other maps the server's tickrate")
-    entries = [{"speed": float(e["speed"]), "color": e["color"], "sound": e.get("sound") or ""}
-               for e in data["entries"]]
+    entries = _entries_form(data["entries"])
+    surf = ({"entries": _entries_form(data["surf"]["entries"]), "start": data["surf"]["start"]}
+            if core.surf_on(data) else None)
+    modes = ", ".join(f"{p}* {m}" for p, m in data["map_modes"].items())
     base_values = [v for v, _ in api.base_options(data["base"])]
     trainer = _trainer_form(cfg, game)
     return {
@@ -243,11 +264,13 @@ def load(game=None):
         # an unavailable choice (crosshair-maker gone) shows what is used instead
         "base_shown": data["base"] if data["base"] in base_values else "builtin",
         "entries": entries,
+        "surf": surf, "mode_key": data["mode_key"], "auto_mode": data["auto_mode"],
+        "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
         "cue_sounds": _with_kept([("tone", "Constant tone"), *sound_choices], cfg["sound"]),
         "trainer": trainer, "tickrate_note": tickrate_note,
         "trainer_status": api.trainer_status(cstrike, cfg["sound"]),
-        "notes": key_notes(game, data["key"], trainer["offset_key"]),
+        "notes": key_notes(game, data["key"], trainer["offset_key"], data["mode_key"]),
         "krosshair": krosshair() if uses_krosshair else None,
         "launch": launch_option(game),
         "previews": previews(game, data["base"], [e["color"] for e in entries]),
@@ -392,16 +415,27 @@ def _trainer_value(game, form, saved=None):
 
 def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
-    form = {key, crosshair, start, base, entries: [{speed, color, sound}], trainer: {...}}."""
+    form = {key, crosshair, start, base, entries: [{speed, color, sound}], trainer: {...},
+            surf: {entries, start} or null, mode_key, auto_mode}."""
     data = _core().load_settings(game)
-    entries = [{"speed": round(_number(e, "speed"), 4), "color": _color(e["color"], "a yawspeed's colour"),
-                "sound": e.get("sound") or None} for e in form["entries"]]
-    start = form.get("start", 0)
-    if not isinstance(start, int) or not 0 <= start < len(entries):
-        start = 0
+    entries, start = _list_value(form["entries"], form.get("start", 0))
+    surf = None
+    if form.get("surf"):
+        surf_entries, surf_start = _list_value(form["surf"]["entries"], form["surf"].get("start", 0))
+        surf = {"entries": surf_entries, "start": surf_start}
     return _api().collect(str(form["key"]), bool(form["crosshair"]), start, str(form["base"]),
                           data.get("original_color"), _trainer_value(game, form["trainer"], data.get("trainer")),
-                          entries)
+                          entries, surf=surf, mode_key=str(form.get("mode_key") or ""),
+                          auto_mode=bool(form.get("auto_mode", True)), map_modes=data.get("map_modes"))
+
+
+def _list_value(form_entries, start):
+    """One yaw list from the form: [{speed, color, sound}] and its start index (0 when out of range)."""
+    entries = [{"speed": round(_number(e, "speed"), 4), "color": _color(e["color"], "a yawspeed's colour"),
+                "sound": e.get("sound") or None} for e in form_entries]
+    if not isinstance(start, int) or not 0 <= start < len(entries):
+        start = 0
+    return entries, start
 
 
 def apply(game, form):

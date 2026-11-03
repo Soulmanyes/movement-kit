@@ -495,12 +495,7 @@ def connect():
 
 def map_tickrate(cfg, game, name):
     """The tickrate for map `name`, or None when the name isn't known (CS:S's "Connected to" line)."""
-    if name is None:
-        return None
-    for prefix, rate in cfg["map_tickrates"].items():
-        if name.startswith(prefix.lower()):
-            return rate
-    return cfg["tickrate"].get(game, 66)
+    return yawcore.prefix_value(name, cfg["map_tickrates"], cfg["tickrate"].get(game, 66))
 
 
 class GameEvents:

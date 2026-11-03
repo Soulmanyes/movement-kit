@@ -9,6 +9,8 @@ strafes.
 
 - **Yawspeed cycle:** one key steps through your yawspeeds. A short game sound plays when
   you switch, and only you hear it.
+- **Bhop and surf lists** (optional): separate yawspeeds for bhop and surf. The map's name
+  picks the list, and a mode key switches by hand.
 - **Crosshair colour:** your crosshair changes colour for each yawspeed. In Momentum Mod
   that's the game's own crosshair. CS:S has no crosshair without a weapon, so there it's a
   [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair.
@@ -104,6 +106,13 @@ before writing its own, and uninstalling puts it back.
   already bound to something else, the app tells you what.
 - **Yawspeeds:** add, remove or drag them into order. Each one has a crosshair colour and a
   sound, which you can preview from the dropdown. The ticked one is set when the game starts.
+- **Separate surf yawspeeds:** adds a second list. The **Bhop** and **Surf** tabs pick which list
+  you edit. The game starts on the bhop list.
+  - **Mode key:** each press switches to the other list's ticked yawspeed.
+  - **Auto by map prefix:** on a `bhop_` map the bhop list is used, on a `surf_` map the surf list.
+    The switch happens on your first press of the cycle key after the map loads: that press
+    sets the list's ticked yawspeed. Other maps keep the list you're on. Needs `movekit-run` in
+    the launch options.
 - **Change crosshair colour:** turn the colour changing off if you only want the sounds.
   In Momentum Mod, turning it off puts your own crosshair colour back.
 - **Crosshair** (CS:S): the image that gets recoloured. Choose your crosshair-maker crosshair if
@@ -184,6 +193,12 @@ ticks, so they can differ from a server's offset display by about one tick.
   frame, so nothing is reloaded while you play, and the layer does no work while the number
   is hidden. In Momentum Mod, `yaws.cfg` also turns on `con_logfile yaw.log` so the trainer
   can see which map loads.
+
+- **Bhop and surf lists:** the surf list echoes `YAWSURF_<speed>` and the mode key's alias
+  `sourceyaw_mode` echoes `SY_MODE_BHOP` or `SY_MODE_SURF`. With auto on, the cycle key runs
+  `exec sourceyaw_auto` before it cycles. That file is normally empty. When a map of the other
+  list loads, `mode_watch.py` (started by `movekit-run`) writes one line into it, and the next
+  press switches the list. It empties the file again once the game reports the switch.
 
 Settings and generated images are stored in `~/.config/sourceyaw`.
 

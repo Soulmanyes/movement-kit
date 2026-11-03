@@ -4,7 +4,7 @@
 # settings. For CS:S it also swaps the crosshair colour while the game runs: it turns KROSSHAIR
 # on for the game and points it at our own image, so crosshair-maker's files are never
 # touched. Momentum Mod sets its crosshair colour itself, so it only needs the apply.
-local CFG OLD_CFG RUNLOG LOG COLORS TRAINER
+local CFG OLD_CFG RUNLOG LOG COLORS TRAINER AUTO
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}/sourceyaw"
 OLD_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/css-yaw"
 # settings from before the rename (done here because mkdir below would block it)
@@ -22,6 +22,11 @@ if [ "$GAME" = css ] && [ "${COLORS:-0}" = 1 ] && [ -n "${LOG:-}" ] && [ -f "$CF
     : > "$LOG"
     # started directly (not via a function) so $! is the watcher itself
     python3 "$HOOK_DIR/crosshair_watch.py" "$LOG" >> "$RUNLOG" 2>&1 &
+    HELPERS="$HELPERS $!"
+fi
+# bhop/surf list switcher: writes an arm alias into cfg/sourceyaw_auto.cfg when a map loads
+if [ "${AUTO:-0}" = 1 ] && [ -n "${LOG:-}" ]; then
+    python3 "$HOOK_DIR/mode_watch.py" "$LOG" "$GAME" >> "$RUNLOG" 2>&1 &
     HELPERS="$HELPERS $!"
 fi
 # strafe trainer: reads keys from the input service and draws the offset through

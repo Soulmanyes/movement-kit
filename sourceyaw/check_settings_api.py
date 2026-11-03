@@ -137,9 +137,13 @@ def main():
         # collect
         entries = [{"speed": 100 + i, "color": "#ff0000", "sound": None} for i in range(3)]
         data = api.collect("f", True, 1, "builtin", None, value, entries)
-        expect(sorted(data), ["base", "crosshair", "entries", "key", "original_color", "start", "trainer"],
-               "collect keys")
+        expect(sorted(data), ["auto_mode", "base", "crosshair", "entries", "key", "map_modes", "mode_key",
+                              "original_color", "start", "trainer"], "collect keys")
         expect(core.validate(data), [], "collected settings validate")
+        surf = {"entries": [{"speed": 60, "color": "#00ff00", "sound": None}], "start": 0}
+        data = api.collect("f", True, 1, "builtin", None, value, entries, surf=surf, mode_key="g")
+        expect((data["surf"], data["mode_key"], data["auto_mode"]), (surf, "g", True), "collect with a surf list")
+        expect(core.validate(data), [], "collected surf settings validate")
 
         bare = [m for m in ("yawcore", "trainer", "settings_api") if m in sys.modules]
         expect(bare, [], "bare modules after loading the hub's way")

@@ -174,12 +174,19 @@ def trainer_status(cstrike, sound):
 
 # ---------------------------------------------------------------- saving
 
-def collect(key, crosshair, start, base, original_color, trainer, entries):
+def collect(key, crosshair, start, base, original_color, trainer, entries,
+            surf=None, mode_key="", auto_mode=True, map_modes=None):
     """The settings dict that yawcore.validate checks and yawcore.apply writes.
-    `start` is the index of the yawspeed a game starts on, `entries` the yawspeeds in order."""
-    return {"key": key, "crosshair": crosshair, "start": start,
+    `start` is the index of the yawspeed a game starts on, `entries` the yawspeeds in order (the
+    bhop list). `surf` is {entries, start} for a separate surf list, or None for one list."""
+    data = {"key": key, "crosshair": crosshair, "start": start,
             "base": base,
             # Momentum: the user's own crosshair colour, put back when colours are off
             "original_color": original_color,
             "trainer": trainer,
-            "entries": entries}
+            "entries": entries,
+            "mode_key": mode_key, "auto_mode": auto_mode,
+            "map_modes": dict(map_modes or {"bhop_": "bhop", "surf_": "surf"})}
+    if surf is not None:
+        data["surf"] = surf
+    return data
