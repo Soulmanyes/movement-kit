@@ -110,7 +110,7 @@ expect(Object.keys(kv).sort(), Object.keys(api.DEFAULTS).sort(), 'kv3 keys = DEF
 if (!/^    MovekitJhud = \n/.test(entry[1])) fail('kv3 entry is not for the panel id MovekitJhud');
 
 // ---- plain functions ----
-const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)', upColor: 'rgba(24, 150, 211, 1)', downColor: 'rgba(255, 106, 106, 1)' };
+const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)' };
 expect(api.parseColor('rgba(1, 2, 3, 0.5)'), [1, 2, 3, 0.5], 'parse rgba');
 expect(api.parseColor('#ff8000'), [255, 128, 0, 1], 'parse hex');
 expect(api.parseColor('blue'), null, 'parse junk');
@@ -129,15 +129,20 @@ expect(pick(0, 1), [1, 2, 3, 4, 5, 6, 7], 'first 0 counts as 1');
 const st = { jumpCount: 4, takeoffSpeed: 508.81, jumpSpeedDelta: 65.28, speedGain: 0.92076, strafeSync: 1, strafeCount: 2,
 	yawRatio: 0.9319, efficiency: 0.5817, heightDelta: -0.04, distance: 357.89, timeDelta: 0.75 };
 const r = api.rows(st, 3, S);
-expect(r.map((row) => row.map((p) => p.text)), [['3:', '509', '(+65)'], ['92.1 %', 'sync 100 %']], 'default rows');
-expect(r[0][2].color, S.upColor, 'speed up: up colour');
-expect(r[0][0].color, null, 'number: font colour');
-expect(api.rows({ ...st, jumpSpeedDelta: -3.4 }, 3, S)[0][2], { text: '(-3)', color: S.downColor }, 'speed down');
+const GC = api.gainColor(92.076, S);
+expect(r.map((row) => row.map((p) => p.text)), [['3:', '509', '(+65)', '92.1 %', 'sync 100 %']], 'default: one line');
+expect([...new Set(r[0].map((p) => p.color))], [GC], 'gainAll: the whole line in the gain colour');
+const own = api.rows(st, 3, { ...S, gainAll: false })[0];
+expect(own.map((p) => p.color), [null, null, null, GC, null], 'gainAll off: only the gain % coloured');
+expect(api.rows({ ...st, jumpSpeedDelta: -3.4 }, 3, S)[0][2].text, '(-3)', 'speed down');
 const all = Object.fromEntries(Object.keys(S).map((k) => [k, k.startsWith('show') ? true : S[k]]));
-expect(api.rows(st, 3, all)[2].map((p) => p.text), ['2 strafes', 'ratio 0.93', 'eff 58 %', 'h +0.0', '357.9 u', '0.75 s'], 'extras row');
+expect(api.rows(st, 3, all).map((row) => row.map((p) => p.text)),
+	[['3:', '509', '(+65)', '92.1 %', 'sync 100 %', '2 strafes', 'ratio 0.93', 'eff 58 %', 'h +0.0', '357.9 u', '0.75 s']], 'every field: still one line');
 const none = Object.fromEntries(Object.keys(S).map((k) => [k, k.startsWith('show') ? false : S[k]]));
 expect(api.rows(st, 3, none), [], 'no fields: no rows');
-expect(api.rows(st, 3, { ...none, showGain: true }).length, 1, 'only gain: one row');
+// the owner's pick on 2026-11-03 (number, speed, gain, yaw ratio) came out on three lines before
+expect(api.rows(st, 3, { ...none, showNumber: true, showSpeed: true, showGain: true, showYawRatio: true }).map((row) => row.map((p) => p.text)),
+	[['3:', '509', '92.1 %', 'ratio 0.93']], 'a few fields: one line');
 
 // ---- Panorama side ----
 fire('HudCustomizer_Ready');
@@ -169,8 +174,8 @@ expect(panel.visible, false, 'switched off in the customizer shows nothing');
 panel.enabled = true;
 fire('OnJumpStarted');
 expect(panel.visible, true, 'a bhop jump shows');
-expect(texts(panel), [['3:', '509', '(+65)'], ['92.1 %', 'sync 100 %']], 'drawn rows');
-if (!/color: rgba\(24, 150, 211, 1\)/.test(panel.children[0].children[2].styleText)) fail('speed change not in the up colour');
+expect(texts(panel), [['3:', '509', '(+65)', '92.1 %', 'sync 100 %']], 'drawn line');
+if (!panel.children[0].children.every((l) => l.styleText.includes(`color: ${GC};`))) fail('drawn line not all in the gain colour');
 expect(panel.style.opacity, '1', 'shown fully');
 expect(runSchedules(), [2], 'held for holdMs');
 expect([panel.style.opacity, panel.style.transitionDuration], ['0', '0.3s'], 'fading over fadeMs');
@@ -190,12 +195,12 @@ schedules = [];
 // the customizer: a sample to drag while it is open, hidden when it closes
 fire('HudCustomizer_Opened');
 expect(panel.visible, true, 'sample shown in the customizer');
-expect(texts(panel)[0], ['6:', '642', '(+48)'], 'sample rows');
+expect(texts(panel)[0], ['6:', '642', '(+48)', '87.4 %', 'sync 93 %'], 'sample line');
 expect(schedules.length, 0, 'sample is held');
 fire('OnJumpStarted');
 expect(texts(panel)[0][0], '6:', 'jumps don\'t replace the sample while editing');
 loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, false);
-expect(texts(panel)[0], ['6:', '(+48)'], 'a changed setting redraws the sample');
+expect(texts(panel)[0], ['6:', '(+48)', '87.4 %', 'sync 93 %'], 'a changed setting redraws the sample');
 loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, true);
 fire('HudCustomizer_Closed');
 expect(panel.visible, false, 'hidden when the customizer closes');

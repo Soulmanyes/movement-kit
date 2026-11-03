@@ -208,8 +208,7 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - `movekit/panorama.py` allows only `panorama/` files today (`Patch` check).
 
 **Default look** (all of it can be changed in the customizer):
-- Row 1: `6: 1234 (+12)`, the jump number, takeoff speed and speed change. The change uses the customizer's shared `gainColor` / `lossColor`.
-- Row 2: `85.3 % · 92 %`, gain % and sync. Gain is coloured on the drill page's scale: red at 60 %, green at 95 %. Both thresholds and both colours are customizer settings.
+- One line: `6: 1234 (+12) 85.3 % sync 92 %`, the jump number, takeoff speed, speed change, gain % and sync, all in the gain colour (drill page scale: red at 60 %, green at 95 %; both thresholds and both colours are customizer settings). A tick box (`gainAll`) colours only the gain %. (Owner after the first in-game test, 2026-11-03: fields on one line, not rows; the gain colour on all the text. The speed change's own up/down colours went.)
 - Off by default, but can be ticked: strafes, yaw ratio, efficiency, height change, distance, time change.
 - Which jumps show: from jump N, every Nth jump (the built-in panel's two settings). The default is every jump.
 - Bhop modes only (`BHOP`, `BHOP_HL1`, through the customizer's `gamemode`), like the game's Jump Stats (owner, after 5.1: not in surf). Hidden until the first jump, no placeholder text.
@@ -260,7 +259,7 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - `check_jhud.js`: settings vs kv3 entry, colour scale, `jumpOf`/`shows`, rows, the Panorama flow with stubs, and 8621 saved jump events drawn with no NaN. Mutations caught (7/7): no mode check, `jumpOf` off by one, customizer switch ignored, an old timer fading a new jump, every 0 showing all, no sample redraw, a kv3 default drifting.
 - `check_jhud.py`: fake game, both patches once, another tool's include kept, a mod's kv3 as the base, a changed kv3 left out and reported, failed sync keeps the script, hooks. Mutations caught (3/3): no kv3 patch, script removed on a failed sync, no hook unregister.
 - On copies of the real `timer.xml` and `hud_default.kv3` (LF), the install applies both patches once.
-- Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. Not yet: an in-game test, the CI test runs, the release.
+- Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. In-game test 2026-11-03 (installed from the repo): works; the owner asked for one line and the whole line in the gain colour, done the same day (`check_jhud.js` covers the owner's pick: number, speed, gain, yaw ratio on one line). Not yet: a second in-game look, the CI test runs, the release.
 
 ## Later / undecided
 

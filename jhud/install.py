@@ -64,8 +64,7 @@ ENTRY = """    MovekitJhud =
             gainGreen = 95
             redColor = "rgba(255, 92, 92, 1)"
             greenColor = "rgba(123, 216, 143, 1)"
-            upColor = "$gainColor"
-            downColor = "$lossColor"
+            gainAll = true
             firstJump = 1
             everyJump = 1
             holdMs = 2000

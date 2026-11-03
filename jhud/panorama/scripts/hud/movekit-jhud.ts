@@ -1,8 +1,8 @@
 // JHUD, part of Soulmanyes's Movement Kit (jhud/ in the repo). Loaded next to timer.ts through the kit's
 // timer.xml patch (movekit/panorama.py).
 //
-// After every bhop jump: the jump's number, speed and speed change, gain % and sync, in the middle of
-// the screen, coloured by how good it was; held for a moment, then faded out. The numbers are the
+// After every bhop jump: the jump's number, speed and speed change, gain % and sync on one line in the
+// middle of the screen, the whole line coloured by gain; held for a moment, then faded out. The numbers are the
 // game's own (MomentumMovementAPI.GetLastJumpStats(), as its Jump Stats panel shows them).
 //
 // Settings live in Momentum's HUD customizer. It loads a component only when hud_default.kv3 has an
@@ -63,8 +63,7 @@ const DEFAULTS: Settings = {
 	gainGreen: 95,
 	redColor: 'rgba(255, 92, 92, 1)',
 	greenColor: 'rgba(123, 216, 143, 1)',
-	upColor: '$gainColor',
-	downColor: '$lossColor',
+	gainAll: true,
 	firstJump: 1,
 	everyJump: 1,
 	holdMs: 2000,
@@ -91,13 +90,12 @@ const STYLES: [string, string, number, string[]?][] = [
 	['showHeight', 'Height change', CHECKBOX],
 	['showDistance', 'Distance', CHECKBOX],
 	['showTime', 'Time since the last jump', CHECKBOX],
-	['colours', 'Colours', NONE, ['gainRed', 'gainGreen', 'redColor', 'greenColor', 'upColor', 'downColor']],
+	['colours', 'Colours', NONE, ['gainAll', 'gainRed', 'gainGreen', 'redColor', 'greenColor']],
+	['gainAll', 'Colour the whole line by gain (off: only the gain %)', CHECKBOX],
 	['gainRed', 'Gain % shown fully red at or below', NUMBER_ENTRY],
 	['gainGreen', 'Gain % shown fully green at or above', NUMBER_ENTRY],
 	['redColor', 'Red (bad gain)', COLOR_PICKER],
 	['greenColor', 'Green (good gain)', COLOR_PICKER],
-	['upColor', 'Speed went up', COLOR_PICKER],
-	['downColor', 'Speed went down', COLOR_PICKER],
 	['jumps', 'Which jumps', NONE, ['firstJump', 'everyJump']],
 	['firstJump', 'From jump', NUMBER_ENTRY],
 	['everyJump', 'Every Nth jump (0: only the first)', NUMBER_ENTRY],
@@ -154,30 +152,26 @@ function shows(n: number, s: Settings): boolean {
 
 const signed = (v: number, digits: number) => (v >= 0 ? '+' : '') + v.toFixed(digits);
 
-// The rows to draw for a jump: row 1 number, speed, change; row 2 gain, sync; row 3 the extras.
-// Empty rows are left out.
+// The rows to draw for a jump: one line with every field switched on, in this order, the whole line in
+// the gain colour (gainAll) or only the gain %. No fields: no rows. Kept as rows, so a layout with more
+// lines can come back without changing draw().
 function rows(st: Stats, n: number, s: Settings): Part[][] {
-	const r1: Part[] = [];
-	if (s.showNumber) r1.push({ text: `${n}:`, color: null });
-	if (s.showSpeed) r1.push({ text: st.takeoffSpeed.toFixed(0), color: null });
-	if (s.showDelta) {
-		const d = Math.round(st.jumpSpeedDelta);
-		r1.push({ text: `(${signed(d, 0)})`, color: d >= 0 ? s.upColor : s.downColor });
-	}
-	const r2: Part[] = [];
-	if (s.showGain) {
-		const g = st.speedGain * 100;
-		r2.push({ text: `${g.toFixed(1)} %`, color: gainColor(g, s) });
-	}
-	if (s.showSync) r2.push({ text: `sync ${(st.strafeSync * 100).toFixed(0)} %`, color: null });
-	const r3: Part[] = [];
-	if (s.showStrafes) r3.push({ text: `${st.strafeCount.toFixed(0)} strafes`, color: null });
-	if (s.showYawRatio) r3.push({ text: `ratio ${st.yawRatio.toFixed(2)}`, color: null });
-	if (s.showEfficiency) r3.push({ text: `eff ${(st.efficiency * 100).toFixed(0)} %`, color: null });
-	if (s.showHeight) r3.push({ text: `h ${signed(Math.abs(st.heightDelta) < 0.1 ? 0 : st.heightDelta, 1)}`, color: null });
-	if (s.showDistance) r3.push({ text: `${st.distance.toFixed(1)} u`, color: null });
-	if (s.showTime) r3.push({ text: `${st.timeDelta.toFixed(2)} s`, color: null });
-	return [r1, r2, r3].filter((r) => r.length);
+	const g = st.speedGain * 100;
+	const gc = gainColor(g, s);
+	const c = s.gainAll ? gc : null;
+	const line: Part[] = [];
+	if (s.showNumber) line.push({ text: `${n}:`, color: c });
+	if (s.showSpeed) line.push({ text: st.takeoffSpeed.toFixed(0), color: c });
+	if (s.showDelta) line.push({ text: `(${signed(Math.round(st.jumpSpeedDelta), 0)})`, color: c });
+	if (s.showGain) line.push({ text: `${g.toFixed(1)} %`, color: gc });
+	if (s.showSync) line.push({ text: `sync ${(st.strafeSync * 100).toFixed(0)} %`, color: c });
+	if (s.showStrafes) line.push({ text: `${st.strafeCount.toFixed(0)} strafes`, color: c });
+	if (s.showYawRatio) line.push({ text: `ratio ${st.yawRatio.toFixed(2)}`, color: c });
+	if (s.showEfficiency) line.push({ text: `eff ${(st.efficiency * 100).toFixed(0)} %`, color: c });
+	if (s.showHeight) line.push({ text: `h ${signed(Math.abs(st.heightDelta) < 0.1 ? 0 : st.heightDelta, 1)}`, color: c });
+	if (s.showDistance) line.push({ text: `${st.distance.toFixed(1)} u`, color: c });
+	if (s.showTime) line.push({ text: `${st.timeDelta.toFixed(2)} s`, color: c });
+	return line.length ? [line] : [];
 }
 
 // ---- Panorama ----
@@ -202,7 +196,7 @@ function draw(parts: Part[][]) {
 	p.RemoveAndDeleteChildren();
 	const font = String(settings.font || '').replace(/"/g, '');
 	for (const row of parts) {
-		const line = $.CreatePanel('Panel', p, '', { style: 'horizontal-align: center; flow-children: right;' });
+		const line = $.CreatePanel('Panel', p, '', { style: 'horizontal-align: center; max-width: 100%; flow-children: right-wrap;' });
 		row.forEach((part, i) =>
 			$.CreatePanel('Label', line, '', {
 				text: part.text,
