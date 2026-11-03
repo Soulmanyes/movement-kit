@@ -13,6 +13,10 @@ A tool lists its patches in custom/<its folder>/movekit-panorama.json:
         {"file": "panorama/layout/hud/timer.xml", "before": "</scripts>", "line": "<include ... />"},
         {"file": "panorama/scripts/hud/strafe-trainer.ts", "find": "resizeY: false,", "replace": "resizeY: true,"}]}
 
+A patch's file is under panorama/, or a HUD customizer layout cfg/hud/*.kv3 (the customizer reads
+hud_default.kv3 from custom/ too: Phase 5.1). The game writes its own presets into cfg/hud, so patch
+only the *_default.kv3 files, which it doesn't write.
+
 - "before"/"line": put line on its own line in front of the one line that starts with "before"
   (leading space ignored), one indent step deeper, with the file's own line endings.
 - "find"/"replace": swap the text, which must occur exactly once.
@@ -47,8 +51,10 @@ class Patch:
         if not isinstance(raw, dict) or not isinstance(raw.get("file"), str):
             raise TypeError("a patch needs a file")
         self.tool, self.folder, self.file = tool, folder, raw["file"].replace("\\", "/").strip("/")
-        if ".." in self.file.split("/") or not self.file.lower().startswith("panorama/"):
-            raise ValueError(f"not a Panorama file: {raw['file']!r}")
+        low = self.file.lower()
+        if ".." in self.file.split("/") or not (
+                low.startswith("panorama/") or (low.startswith("cfg/hud/") and low.endswith(".kv3"))):
+            raise ValueError(f"not a Panorama file or HUD layout: {raw['file']!r}")
         if isinstance(raw.get("before"), str) and isinstance(raw.get("line"), str):
             self.before, self.line = raw["before"].strip(), raw["line"].strip()
             self.find = self.replace = None

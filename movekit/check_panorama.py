@@ -9,7 +9,8 @@ indent and CRLF line endings of the base kept; a patch already in the base appli
 picked as the base); a find/replace patch; a patch that doesn't fit skipped with the tool's other
 patches to that file, the other tool kept; bad manifests and bad patches refused; the kit folder never
 picked as the base; sync run twice giving the same files, and nothing left behind in custom/ but the
-kit folder; uninstalling one tool keeping the other; no patches left removing the kit folder.
+kit folder; a cfg/hud/*.kv3 layout patched like a Panorama file (from the game and from custom/), other
+cfg/ files refused; uninstalling one tool keeping the other; no patches left removing the kit folder.
 XDG_DATA_HOME and LOCALAPPDATA point into the temp folder (the lock file).
 """
 import json
@@ -28,6 +29,8 @@ GAME_TIMER = "<root>\r\n\t<scripts>\r\n\t\t<include src=\"timer.ts\" />\r\n\t</s
 GAME_TRAINER = "const a = {\n\tresizeX: true,\n\tresizeY: false,\n};\n"
 REC = '<include src="rec.ts" />'
 JH = '<include src="jhud.ts" />'
+LAYOUT_ANCHOR = "    CustomizerSettings = "
+GAME_LAYOUT = "{\n" + LAYOUT_ANCHOR + "\n    {\n        enabled = true\n    }\n}"
 
 
 def fail(msg):
@@ -169,6 +172,8 @@ def main():
 
         # bad patches: refused by install before writing, left out (with a warning) when on disk
         for bad in ({"file": "cfg/autoexec.cfg", "find": "a", "replace": "b"},
+                    {"file": "cfg/hud/notes.txt", "find": "a", "replace": "b"},
+                    {"file": "cfg/hud/../autoexec.kv3", "find": "a", "replace": "b"},
                     {"file": "panorama/../x", "find": "a", "replace": "b"},
                     {"file": TIMER}, {"file": TIMER, "find": "a", "replace": "a"},
                     {"file": TIMER, "before": "</scripts>", "line": "a\nb"}):
@@ -188,6 +193,22 @@ def main():
         mtime = (kit / TIMER).stat().st_mtime_ns
         expect(panorama.status(game)["patches"], report["patches"], "status equals the sync report")
         expect((kit / TIMER).stat().st_mtime_ns, mtime, "status wrote nothing")
+
+        # a HUD customizer layout: patched from the game's cfg/hud, then from a mod's copy in custom/
+        layout = "cfg/hud/hud_default.kv3"
+        entry = "    MovekitJhud = \n    {\n        enabled = true\n    }\n"
+        write(game / layout, GAME_LAYOUT)
+        report = panorama.install(game, "movekit-hudlayout", "hudlayout",
+                                  [{"file": layout, "find": LAYOUT_ANCHOR, "replace": entry + LAYOUT_ANCHOR}])
+        expect(read(kit / layout), GAME_LAYOUT.replace(LAYOUT_ANCHOR, entry + LAYOUT_ANCHOR), "kv3 from the game")
+        expect(("hudlayout", "applied") in states(report), True, "kv3 patch applied")
+        write(custom / "a-hudmod" / layout, GAME_LAYOUT.replace("enabled = true", "enabled = false"))
+        panorama.sync(game)
+        expect(read(kit / layout).count("MovekitJhud"), 1, "kv3 from a mod, entry once")
+        expect("enabled = false" in read(kit / layout), True, "the mod's kv3 is the base")
+        panorama.uninstall(game, "movekit-hudlayout")
+        expect((kit / layout).exists(), False, "kv3 gone with its tool")
+        expect(REC in read(kit / TIMER), True, "recorder kept after the kv3 tool goes")
 
         # uninstall keeps the others; with none left the kit folder goes
         panorama.uninstall(game, "movekit-trainer-height")

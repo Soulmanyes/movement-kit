@@ -16,13 +16,26 @@ def _recorder():
     return local_import(file, "recorder_settings") if file.is_file() else None
 
 
-def _line_tool():
-    """True when Strafe Review, which draws the jump-1 line, is installed (the HUD section also shows
-    for Strafe Trainer Height alone, and then the line's card is hidden)."""
+def _installed():
+    """Keys of the installed modules, or None when the state file can't be read."""
     try:
-        return "strafe-review" in modules.Manager().installed()
-    except Exception:  # noqa: BLE001 - an unreadable state file: go by the folder, as _recorder does
-        return _recorder() is not None
+        return modules.Manager().installed()
+    except Exception:  # noqa: BLE001 - an unreadable state file: callers fall back on the folders
+        return None
+
+
+def _line_tool(keys):
+    """True when Strafe Review, which draws the jump-1 line, is installed (the HUD section also shows
+    for the other HUD modules alone, and then the line's card is hidden)."""
+    return "strafe-review" in keys if keys is not None else _recorder() is not None
+
+
+def _jhud(keys):
+    """True when JHUD is installed. Its settings live in Momentum's own HUD customizer, so the section
+    only says so."""
+    if keys is not None:
+        return "jhud" in keys
+    return (modules.default_kit_root() / "jhud" / "module.json").is_file()
 
 
 def _game():
@@ -40,7 +53,8 @@ def _status():
 
 
 def get():
-    return {**settings.load(), "recorder": _status(), "strafeReview": _line_tool()}
+    keys = _installed()
+    return {**settings.load(), "recorder": _status(), "strafeReview": _line_tool(keys), "jhud": _jhud(keys)}
 
 
 def set_line(on):
@@ -70,7 +84,8 @@ SECTION = {
     "page": "hub/index.html",
     "api": {"get": get, "set_line": set_line, "panorama_status": panorama_status},
     "order": 20,
-    # the jump-1 line is drawn by Strafe Review's recorder; the patched files card is for every tool
-    # that patches a game file. The two modules don't need each other.
-    "show_with": ["strafe-review", "trainer-height"],
+    # the jump-1 line is drawn by Strafe Review's recorder, JHUD's card only points at the game's HUD
+    # customizer; the patched files card is for every tool that patches a game file. The modules
+    # don't need each other.
+    "show_with": ["strafe-review", "trainer-height", "jhud"],
 }

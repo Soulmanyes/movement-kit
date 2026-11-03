@@ -11,12 +11,20 @@
 <nav id="hub-side"></nav>
 <main id="hub-main">
 	<h1>HUD</h1>
-	<p class="muted">What the kit's tools show in game. Each setting is off by default, so it never covers your own HUD.</p>
+	<p class="muted">What the kit's tools show in game.</p>
 	<div id="hud-line-card" class="card hud-item">
 		<label class="hud-toggle"><input id="hud-line" type="checkbox" disabled> Show the jump-1 line in game</label>
 		<div class="muted">After jump 1 lands: landing speed, gain %, gain per strafe and the biggest mistake,
-		at the top middle of the screen. Drawn by Strafe Review's recorder in Momentum Mod.</div>
+		at the top middle of the screen. Drawn by Strafe Review's recorder in Momentum Mod. Off by default,
+		so it never covers your own HUD.</div>
 		<div id="hud-line-note" class="hud-note"></div>
+	</div>
+	<div id="hud-jhud-card" class="card hud-item" hidden>
+		<div class="hud-title">JHUD</div>
+		<div class="muted">After every jump in bhop: the jump's number, speed, speed change, gain % and sync,
+		in the middle of the screen, coloured by how good it was. Its position, size, font, colours, fields and
+		thresholds are set in Momentum Mod's own HUD customizer, where it is listed as JHUD, and saved with
+		your HUD preset. Turn it off there too.</div>
 	</div>
 	<div class="card hud-item">
 		<div class="hud-title">Patched game files</div>

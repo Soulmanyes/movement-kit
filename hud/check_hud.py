@@ -100,8 +100,10 @@ def main():
         if "hud" not in [s.key for s in sections]:
             fail("discovery didn't find the hud section")
         bridge = hub.Bridge(sections, problems)
+        jhud = (KIT / "jhud" / "module.json").is_file()  # a checkout counts its module folders as installed
         settings.save("inGameLine", False)
-        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True}},
+        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True,
+                                                            "jhud": jhud}},
                "get, no game")
         expect(bridge.call("hud", "set_line", {"on": True}),
                {"ok": True, "result": {"inGameLine": True, "applied": False}}, "set_line, no game")
@@ -109,14 +111,17 @@ def main():
         (tmp / "bare").mkdir()
         expect(bridge.call("hud", "get")["result"]["recorder"], "not installed", "get, no recorder")
         os.environ["MOMENTUM_DIR"] = str(game)
-        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "strafeReview": True},
+        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "strafeReview": True,
+                                                       "jhud": jhud},
                "get, installed")
         # the section shows for Strafe Trainer Height alone too; the jump-1 line's card then hides
-        expect(sections[[s.key for s in sections].index("hud")].show_with, ["strafe-review", "trainer-height"],
-               "hud shows with either module")
+        expect(sections[[s.key for s in sections].index("hud")].show_with, ["strafe-review", "trainer-height", "jhud"],
+               "hud shows with any HUD module")
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
         expect(bridge.call("hud", "get")["result"]["strafeReview"], False, "get, Strafe Review uninstalled")
+        state.write_text(json.dumps({"modules": {"jhud": {"removed": True}}}))
+        expect(bridge.call("hud", "get")["result"]["jhud"], False, "get, JHUD uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
         expect(ts.read_text(), TS.replace("false", "true"), "recorder after set_line(True)")
