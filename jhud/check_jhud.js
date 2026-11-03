@@ -69,7 +69,10 @@ let schedules = [];
 let mode = 2;
 let stats = null;
 let loaded = null;
-const ctx = {
+let loads = 0;
+// one global object for every load, as Panorama keeps it across panorama_reload
+const GLOBAL = { HudCustomizerHandler: { customizerReady: false, loadComponent: (p, props) => { loaded = { p, props }; loads++; } } };
+const stubs = {
 	$: {
 		GetContextPanel: () => timer,
 		CreatePanel: (type, parent, id, props) => new FakePanel(type, parent, id, props),
@@ -79,14 +82,20 @@ const ctx = {
 	},
 	GameModeAPI: { GetCurrentGameMode: () => mode },
 	MomentumMovementAPI: { GetLastJumpStats: () => stats },
-	UiToolkitAPI: { GetGlobalObject: () => ({ HudCustomizerHandler: { loadComponent: (p, props) => { loaded = { p, props }; } } }) },
+	UiToolkitAPI: { GetGlobalObject: () => GLOBAL },
 	console
 };
-vm.createContext(ctx);
 const src = stripTypeScriptTypes(fs.readFileSync(TS, 'utf8'), { mode: 'strip' });
-vm.runInContext(`${src}
+// One load of the script in a fresh context; the panels, event handlers and global object are shared,
+// so a second load is panorama_reload: the first load's handlers stay registered.
+function loadScript() {
+	const ctx = { ...stubs };
+	vm.createContext(ctx);
+	vm.runInContext(`${src}
 globalThis.__api = { DEFAULTS, STYLES, SAMPLE, parseColor, mixColor, gainColor, jumpOf, shows, rows, settings, NONE };`, ctx);
-const api = ctx.__api;
+	return ctx.__api;
+}
+const api = loadScript();
 const fire = (ev) => (handlers[ev] || []).forEach((fn) => fn());
 const texts = (p) => p.children.map((line) => line.children.map((l) => l.text));
 const runSchedules = () => { const s = schedules; schedules = []; s.forEach((x) => x.fn()); return s.map((x) => x.s); };
@@ -145,7 +154,9 @@ expect(api.rows(st, 3, { ...none, showNumber: true, showSpeed: true, showGain: t
 	[['3:', '509', '92.1 %', 'ratio 0.93']], 'a few fields: one line');
 
 // ---- Panorama side ----
+expect(loads, 0, 'no registration before the customizer is ready');
 fire('HudCustomizer_Ready');
+GLOBAL.HudCustomizerHandler.customizerReady = true;
 if (!loaded) fail('the customizer got no component');
 expect(loaded.p.id, 'MovekitJhud', 'component panel id');
 expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
@@ -209,6 +220,34 @@ fire('HudCustomizer_Opened');
 expect(panel.visible, false, 'no sample outside bhop');
 fire('HudCustomizer_Closed');
 mode = 2;
+
+// panorama_reload in a map: the new copy takes over the placed panel and registers at once (no
+// HudCustomizer_Ready until the next map), the old copy's handlers do nothing
+stats = st;
+fire('OnJumpStarted');
+const oldTimers = schedules; // the old copy's hold timer, still pending at the reload
+schedules = [];
+const before = loads;
+const api2 = loadScript();
+expect(loads, before + 1, 'registered at load after a reload');
+expect(loaded.p === panel, true, 'the placed panel taken over, not replaced');
+expect(panel.valid, true, 'the panel survives the reload');
+for (const [id, value] of Object.entries({ ...S, showSpeed: false })) {
+	const d = loaded.props.dynamicStyles[id];
+	if (d.callbackFunc) d.callbackFunc(loaded.p, value);
+}
+expect(api2.settings.showSpeed, false, 'the new copy gets the saved settings');
+stats = { ...st, jumpCount: 6 };
+fire('OnJumpStarted');
+expect(panel.visible, true, 'shows after a reload');
+expect(texts(panel), [['5:', '(+65)', '92.1 %', 'sync 100 %']], 'drawn once, by the new copy with its settings');
+expect(schedules.length, 1, 'only the new copy schedules a fade');
+oldTimers.forEach((x) => x.fn());
+expect([panel.visible, panel.style.opacity], [true, '1'], 'the old copy\'s pending timer leaves the new jump');
+runSchedules();
+runSchedules();
+expect(panel.visible, false, 'the new copy fades it');
+expect(hud.children.filter((c) => c.id === 'MovekitJhud').length, 1, 'one JHUD panel');
 
 // ---- saved jump events ----
 let n = 0;

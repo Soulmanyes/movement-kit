@@ -176,6 +176,13 @@ function rows(st: Stats, n: number, s: Settings): Part[][] {
 
 // ---- Panorama ----
 
+// panorama_reload loads this file again, but the old copy's event handlers stay registered (seen
+// 2026-11-03: the two copies deleted each other's panel at every jump, so nothing showed). Each load
+// takes a new number in Panorama's global object; a handler whose number isn't the latest does nothing.
+const GLOBAL = UiToolkitAPI.GetGlobalObject() as Record<string, any>;
+const GEN = (GLOBAL['MovekitJhudGen'] = (GLOBAL['MovekitJhudGen'] || 0) + 1);
+const live = () => GLOBAL['MovekitJhudGen'] === GEN;
+
 const settings: Settings = { ...DEFAULTS };
 let panel: GenericPanel | null = null;
 let editing = false;
@@ -185,7 +192,12 @@ function getPanel(): GenericPanel {
 	if (panel && panel.IsValid()) return panel;
 	const ctx = $.GetContextPanel();
 	const root = ctx.GetParent() ?? ctx;
-	root.FindChildTraverse(ID)?.DeleteAsync(0);
+	// an earlier load's panel is taken over, not replaced: the customizer has placed that one
+	const old = root.FindChildTraverse(ID);
+	if (old && old.IsValid()) {
+		panel = old;
+		return panel;
+	}
 	panel = $.CreatePanel('Panel', root, ID, { style: 'flow-children: down; width: 400px; transition-property: opacity;' });
 	panel.visible = false;
 	return panel;
@@ -217,11 +229,11 @@ function show(parts: Part[][], hold: boolean) {
 	const mine = ++token;
 	if (hold) return;
 	$.Schedule(Math.max(0, +settings.holdMs || 0) / 1000, () => {
-		if (mine !== token || !p.IsValid()) return;
+		if (mine !== token || !live() || !p.IsValid()) return;
 		p.style.transitionDuration = `${Math.max(0, +settings.fadeMs || 0) / 1000}s`;
 		p.style.opacity = '0';
 		$.Schedule(Math.max(0, +settings.fadeMs || 0) / 1000 + 0.05, () => {
-			if (mine === token && p.IsValid()) p.visible = false;
+			if (mine === token && live() && p.IsValid()) p.visible = false;
 		});
 	});
 }
@@ -262,19 +274,30 @@ function customizerProps() {
 	return { name: 'JHUD', resizeX: true, resizeY: false, gamemode: GAMEMODES, dynamicStyles };
 }
 
+function register() {
+	const h = GLOBAL['HudCustomizerHandler'];
+	if (h) h.loadComponent(getPanel(), customizerProps());
+}
+
 $.RegisterForUnhandledEvent('HudCustomizer_Ready', () => {
+	if (!live()) return;
 	editing = false;
 	hide();
-	const h = UiToolkitAPI.GetGlobalObject()['HudCustomizerHandler'] as any;
-	if (h) h.loadComponent(getPanel(), customizerProps());
+	register();
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {
-	if (!GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
+	if (!live() || !GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
 	editing = true;
 	show(rows(SAMPLE, jumpOf(SAMPLE), settings), true);
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Closed', () => {
+	if (!live()) return;
 	editing = false;
 	hide();
 });
-$.RegisterForUnhandledEvent('OnJumpStarted', onJump);
+$.RegisterForUnhandledEvent('OnJumpStarted', () => {
+	if (live()) onJump();
+});
+// HudCustomizer_Ready comes only at a map load; after panorama_reload in a map, register now, so the
+// customizer hands this copy the saved settings
+if (GLOBAL['HudCustomizerHandler']?.customizerReady) register();
