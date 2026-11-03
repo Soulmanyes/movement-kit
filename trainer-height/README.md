@@ -4,7 +4,7 @@ Lets you make [Momentum Mod](https://momentum-mod.org/)'s strafe trainer taller.
 
 ## Install
 
-Install [Soulmanyes's Movement Kit](../README.md#install) (Windows or Linux) and click **Install** on the Strafe Trainer Height card of its Modules page. Then type `panorama_reload` in the game console, or restart the game, and drag the trainer's height in the HUD editor.
+Install [Soulmanyes's Movement Kit](../README.md#install) (Windows or Linux) and click **Install** on the Strafe Trainer Height card of its Modules page. Then restart the game, and drag the trainer's height in the HUD editor: Momentum mounts the folders in `custom/` only when it starts, so a game that was running doesn't see the new one. After an update, `panorama_reload` in the console is enough.
 
 It doesn't need Strafe Review, and Strafe Review doesn't need it. The hub's HUD section lists its changes under **Patched game files**.
 

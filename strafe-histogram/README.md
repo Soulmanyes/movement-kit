@@ -22,7 +22,7 @@ The settings are saved with your HUD preset. The customizer's switch turns it of
 
 ## Install
 
-Install [Soulmanyes's Movement Kit](../README.md#install) (Windows or Linux) and click **Install** on the Strafe Speed Histogram card of its Modules page. Then type `panorama_reload` in the game console, or restart the game.
+Install [Soulmanyes's Movement Kit](../README.md#install) (Windows or Linux) and click **Install** on the Strafe Speed Histogram card of its Modules page. Then restart the game: Momentum mounts the folders in `custom/` only when it starts, so a game that was running doesn't see the new one. After an update, `panorama_reload` in the console is enough.
 
 It doesn't need Strafe Review or JHUD, and they don't need it. The hub's HUD section has a card for it, and lists its changes under **Patched game files**.
 

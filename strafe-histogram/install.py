@@ -8,8 +8,8 @@ Usage: install.py [--game DIR] [--uninstall]
   and hands the kit (movekit/panorama.py) two patches: the script's include in layout/hud/timer.xml,
   and the histogram's entry in cfg/hud/hud_default.kv3, without which Momentum's HUD customizer won't take the
   panel. The kit writes both files into custom/0-movekit, made from the copies the game would use
-  otherwise (another HUD mod's in custom/, else the game's own). Type panorama_reload in game after
-  installing.
+  otherwise (another HUD mod's in custom/, else the game's own). Restart the game after the first
+  install (custom/ folders are mounted at start); after an update, panorama_reload is enough.
 - On Linux, registers launch-hook.sh with movekit-run (movekit/launch.py), which runs this install
   again when Momentum starts, so a game update to either file carries over. On Windows the kit's
   core does that through module_hooks.launch.
