@@ -5,7 +5,7 @@
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-review-v",
   "version_from": "collector/collector.py",
-  "needs_core": "1.2.0",
+  "needs_core": "1.6.0",
   "needs": [],
   "data": ["data:strafe-review/attempts", "data:strafe-review/updates.json"]
 }

@@ -1189,7 +1189,7 @@ function drawHover() {
 
 // ---------- top-down path ----------
 
-// Same scale as the drill page and the in-game line: red at 60 % and under, green at 95 % and over
+// Same scale as the drill page: red at 60 % and under, green at 95 % and over
 function gainColor(p) {
 	if (!Number.isFinite(p)) return '#8c8c96';
 	const t = Math.max(0, Math.min(1, (p - 60) / 35));

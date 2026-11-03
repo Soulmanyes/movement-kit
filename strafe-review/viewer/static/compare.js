@@ -849,7 +849,7 @@ function pathIn(r) {
 	return (i) => r.gd.x[i] >= view.x0 && r.gd.x[i] <= view.x1;
 }
 
-// Same scale as the main page, drill page and in-game line: red at 60 % and under, green at 95 % and over
+// Same scale as the main page and drill page: red at 60 % and under, green at 95 % and over
 function gainColor(p) {
 	if (!Number.isFinite(p)) return C.muted;
 	const t = Math.max(0, Math.min(1, (p - 60) / 35));

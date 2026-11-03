@@ -66,7 +66,7 @@ Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts` on Windows and `~/.
 ## Updates and settings
 
 - Updates come from Strafe Review's card on the hub's Modules page: **Update** with **What's new**, **Roll back**, and an auto-update switch that starts off. An update stops the server, swaps the files, reinstalls the recorder and starts the server again. A copy running from a clone is updated by `git pull`: then restart Strafe Review (**Stop**, then start it again with the game or `systemctl --user restart strafe-review`), because a server still running the old code can't serve the new page files, and run `python install.py` again when the recorder changed. Type `panorama_reload` in the game console after a recorder change.
-- **Show the jump-1 line in game** in the hub's HUD section turns on the in-game line after jump 1. It is off by default so it doesn't land on top of anyone's own HUD. Type `panorama_reload` in the game console after changing it.
+- The in-game line after jump 1 (landing speed, gain %, per strafe, biggest mistake) is the [First Jump HUD](../first-jump/) module since Strafe Review 1.9.0, set up in the game's HUD customizer. Before that the recorder drew it, switched on in the hub's HUD section.
 
 More plans: [PLAN.md](PLAN.md). The saved attempt format, for tools that read attempts: [FORMAT.md](FORMAT.md).
 

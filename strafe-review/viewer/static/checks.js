@@ -102,7 +102,7 @@ const CAUSE_HI = 1.15;
 const CAUSES = ['keys', 'slow', 'fast'];
 
 // The cause that lost strafe st the most u/s: { cause, ticks, lost }, or null when no lost tick has one.
-// The recorder's in-game line has a port of this (strafePcts in strafe-review.ts).
+// First Jump HUD has a port of this (strafePcts in first-jump/.../movekit-first-jump.ts; check_parity.js diffs it).
 function strafeCause(d, st) {
 	const by = { keys: { lost: 0, ticks: 0 }, slow: { lost: 0, ticks: 0 }, fast: { lost: 0, ticks: 0 } };
 	for (let i = st.i0; i <= st.i1; i++) {

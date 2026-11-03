@@ -36,13 +36,11 @@ def _bundled():
 
 ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "collector"))
-import recorder_settings
 import steam  # found through the path above; it also puts movekit on the path
-from recorder_settings import FOLDER
 
-from hud import settings as hud_settings  # the repo root is on the path too
 from movekit import cfgblock, panorama
 
+FOLDER = "0-strafe-review"  # in custom/: the recorder and its kit manifest (timer.xml is in 0-movekit)
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
 BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0"]
@@ -53,12 +51,6 @@ OLD_FOLDERS = ["strafe-review"]  # before 2026-10-28; removed on install
 TIMER = Path("panorama") / "layout" / "hud" / "timer.xml"
 INCLUDE = '<include type="module" src="file://{scripts}/hud/strafe-review.ts" />'
 PATCHES = [{"file": TIMER.as_posix(), "before": "</scripts>", "line": INCLUDE}]  # for movekit/panorama.py
-
-
-def apply_settings(game):
-    """Write the HUD settings (hud/settings.py) into the installed recorder; panorama_reload or a game
-    restart applies them. Returns False when the recorder isn't installed."""
-    return recorder_settings.apply(game, hud_settings.get("inGameLine"))
 
 
 def set_autoexec(game, add):
@@ -108,7 +100,6 @@ def install(game):
     dest = Path(game) / "custom" / FOLDER
     shutil.rmtree(dest, ignore_errors=True)  # also drops the timer.xml older versions wrote here
     shutil.copytree(ROOT / "recorder" / "panorama", dest / "panorama")
-    apply_settings(game)
     # after the copy: the kit's timer.xml must never include a script that isn't there
     result = panorama.install(game, FOLDER, TOOL, PATCHES)
     report(result)
