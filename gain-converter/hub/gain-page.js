@@ -84,7 +84,6 @@
 		let d = "";
 		for (let i = 0; i <= 200; i++) d += `${i ? "L" : "M"}${X(i / 2).toFixed(1)},${Y(gain.momToCss(i / 2)).toFixed(1)}`;
 		el(svg, "path", { d, fill: "none", stroke: COL.css, "stroke-width": 3 });
-		for (const [c, m] of gain.MEASURED) el(svg, "circle", { cx: X(m), cy: Y(c), r: 4, fill: COL.text });
 
 		// legend
 		[["Momentum", COL.mom], ["CS:S", COL.css]].forEach(([name, col], i) => {

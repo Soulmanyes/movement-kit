@@ -12,7 +12,6 @@ from pathlib import Path
 
 JS = Path(__file__).resolve().parent.parent / "movekit" / "web" / "gain.js"
 K = 1.45
-MEASURED = [[71, 83], [77, 88], [79, 91], [88, 95]]
 POINTS = [i * 2.5 for i in range(41)]  # 0, 2.5, ..., 100
 # css_to_mom and mom_to_css at POINTS, rounded to 10 decimals
 CSS_TO_MOM = [
@@ -37,7 +36,7 @@ MOM_TO_CSS = [
 script = f"""
 const g = require({json.dumps(str(JS))});
 const p = {json.dumps(POINTS)};
-console.log(JSON.stringify({{K: g.K, MEASURED: g.MEASURED,
+console.log(JSON.stringify({{K: g.K,
   c2m: p.map(g.cssToMom), m2c: p.map(g.momToCss)}}));
 """
 js = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout)
@@ -45,8 +44,6 @@ js = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text
 fails = []
 if js["K"] != K:
     fails.append(f"K: js {js['K']}, expected {K}")
-if js["MEASURED"] != MEASURED:
-    fails.append(f"MEASURED: js {js['MEASURED']}, expected {MEASURED}")
 for name, want in (("c2m", CSS_TO_MOM), ("m2c", MOM_TO_CSS)):
     worst = max(abs(a - b) for a, b in zip(js[name], want, strict=True))
     if worst > 1e-9:
@@ -55,4 +52,4 @@ for f in fails:
     print("FAIL:", f)
 if fails:
     sys.exit(1)
-print(f"gain.js matches the curve (K, measured points, {len(POINTS)} values each way)")
+print(f"gain.js matches the curve (K, {len(POINTS)} values each way)")
