@@ -127,12 +127,15 @@ const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)' };
 expect(api.parseColor('rgba(1, 2, 3, 0.5)'), [1, 2, 3, 0.5], 'parse rgba');
 expect(api.parseColor('#ff8000'), [255, 128, 0, 1], 'parse hex');
 expect(api.parseColor('blue'), null, 'parse junk');
-expect(api.gainColor(40, S), 'rgba(255, 92, 92, 1)', 'gain under red: red');
-expect(api.gainColor(60, S), 'rgba(255, 92, 92, 1)', 'gain at red: red');
-expect(api.gainColor(95, S), 'rgba(123, 216, 143, 1)', 'gain at green: green');
-expect(api.gainColor(120, S), 'rgba(123, 216, 143, 1)', 'gain over green: green');
-expect(api.gainColor(77.5, S), 'rgba(189, 154, 118, 1)', 'gain half way: mixed');
-expect(api.gainColor(70, { ...S, gainRed: 90, gainGreen: 80 }), 'rgba(255, 92, 92, 1)', 'thresholds the wrong way round');
+const [LOW, MID, HIGH] = [S.lowColor, S.midColor, S.highColor];
+expect([40, 86.4, 86.5, 90, 92, 92.1, 120, NaN].map((g) => api.gainColor(g, S)), [LOW, LOW, MID, MID, MID, HIGH, HIGH, LOW],
+	'gain bands: amber under 86.5, green 86.5-92 (both in), blue above');
+expect(api.gainColor(70, { ...S, gainLow: 600, gainHigh: 650 }), HIGH, 'thresholds can be set (tenths of a %)');
+const hist = fs.readFileSync(path.join(__dirname, '..', 'strafe-histogram', 'panorama', 'scripts', 'hud', 'movekit-strafe-histogram.ts'), 'utf8');
+for (const k of ['gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor']) {
+	const m = new RegExp(`^\\t${k}: (.+),$`, 'm').exec(hist);
+	if (!m || eval(m[1]) !== S[k]) fail(`${k}: JHUD's default ${S[k]} isn't the histogram's ${m && m[1]}`);
+}
 expect([0, 1, 2, 3].map((c) => api.jumpOf({ jumpCount: c })), [0, 1, 2, 3], 'jumpOf: labelled with the takeoff number');
 const pick = (first, every) => [1, 2, 3, 4, 5, 6, 7].filter((n) => api.shows(n, { firstJump: first, everyJump: every }));
 expect(pick(1, 1), [1, 2, 3, 4, 5, 6, 7], 'shows every jump');
@@ -202,7 +205,7 @@ expect(api.settings.fontColor, S.fontColor, 'callback stores the setting');
 const cb = loaded.props.dynamicStyles.colorBy;
 expect([cb.type, cb.options.map((o) => o.value)], [4, ['off', 'gain', 'pace']], 'colorBy: a dropdown, off, gain and pace');
 const PACE_IDS = ['paceCut', 'tier1Speed', 'tier1Color', 'tier2Speed', 'tier2Color', 'tier3Speed', 'tier3Color', 'belowColor'];
-const GAIN_IDS = ['gainAll', 'gainRed', 'gainGreen', 'redColor', 'greenColor'];
+const GAIN_IDS = ['gainAll', 'gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor'];
 expect(Object.fromEntries(cb.children.map((c) => [c.styleID, c.showWhen])),
 	Object.fromEntries(cb.children.map((c) => [c.styleID, PACE_IDS.includes(c.styleID) ? ['pace'] : ['gain', 'pace']])),
 	'pace settings show only for pace, gain settings for gain and pace (gain after the cutoff)');

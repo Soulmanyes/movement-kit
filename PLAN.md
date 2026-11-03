@@ -374,6 +374,12 @@ A first install while the game is running fails to load the script (`Resource ..
 
   Tests copy the real throw. Mutations caught (6/6): no fit, throw passed on, no loop, group children kept, and JHUD's no fit and throw passed on.
 
+- **Gain colours (owner, 2026-11-03).**
+  - The histogram has a third mode, Gain %. The gain a tick's turn speed gives is `100 * (1 - (ratio - 1)^2)`, fitted to 1.0 M saved air ticks: within 0.5 % of the median gain at 86.5 % and 92 % on both sides.
+  - Bands: amber below 86.5 %, green 86.5-92 % (both ends in), blue above. Thresholds are in tenths (865), since number boxes are int32.
+  - JHUD's Gain % mode moved to the same bands and defaults (`gainLow`, `gainHigh`, `lowColor`, `midColor`, `highColor`), in place of the red-green fade (`gainRed` 60, `gainGreen` 95). `check_jhud.js` checks that its defaults equal the histogram's.
+  - JHUD goes to 1.1.0 (it was 1.0.1), so the release order is `hub-v1.4.0`, `jhud-v1.1.0`, `strafe-histogram-v1.0.0`.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

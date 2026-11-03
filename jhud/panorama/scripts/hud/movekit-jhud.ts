@@ -62,10 +62,11 @@ const DEFAULTS: Settings = {
 	showHeight: false,
 	showDistance: false,
 	showTime: false,
-	gainRed: 60,
-	gainGreen: 95,
-	redColor: 'rgba(255, 92, 92, 1)',
-	greenColor: 'rgba(123, 216, 143, 1)',
+	gainLow: 865,
+	gainHigh: 920,
+	lowColor: 'rgba(255, 176, 50, 1)',
+	midColor: 'rgba(123, 216, 143, 1)',
+	highColor: 'rgba(92, 160, 255, 1)',
 	colorBy: 'off',
 	paceCut: '6',
 	tier1Speed: 620,
@@ -136,11 +137,11 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['showTime', 'Time since the last jump', CHECKBOX],
 	['colours', 'Colours', NONE, ['colorBy']],
 	['colorBy', 'Colour by', DROPDOWN, ['gainAll', 'paceCut', 'tier1Speed', 'tier1Color', 'tier2Speed', 'tier2Color',
-		'tier3Speed', 'tier3Color', 'belowColor', 'gainRed', 'gainGreen', 'redColor', 'greenColor'],
+		'tier3Speed', 'tier3Color', 'belowColor', 'gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor'],
 		{ options: COLOR_BY, showWhen: {
 			gainAll: GAIN_OR_PACE, paceCut: PACE_ONLY, tier1Speed: PACE_ONLY, tier1Color: PACE_ONLY, tier2Speed: PACE_ONLY,
 			tier2Color: PACE_ONLY, tier3Speed: PACE_ONLY, tier3Color: PACE_ONLY, belowColor: PACE_ONLY,
-			gainRed: GAIN_OR_PACE, gainGreen: GAIN_OR_PACE, redColor: GAIN_OR_PACE, greenColor: GAIN_OR_PACE } }],
+			gainLow: GAIN_OR_PACE, gainHigh: GAIN_OR_PACE, lowColor: GAIN_OR_PACE, midColor: GAIN_OR_PACE, highColor: GAIN_OR_PACE } }],
 	['gainAll', 'Colour the whole line', CHECKBOX],
 	['paceCut', 'Speed pace up to', DROPDOWN, undefined, { options: PACE_CUTS }],
 	['tier1Speed', 'On pace for this speed at the cutoff', NUMBER_ENTRY, undefined, SPEED_RANGE],
@@ -150,10 +151,11 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['tier3Speed', 'On pace for this speed', NUMBER_ENTRY, undefined, SPEED_RANGE],
 	['tier3Color', '... shown in', COLOR_PICKER],
 	['belowColor', 'Below every pace speed', COLOR_PICKER],
-	['gainRed', 'Gain % shown fully red at or below', NUMBER_ENTRY, undefined, { range: { min: 0, max: 200 } }],
-	['gainGreen', 'Gain % shown fully green at or above', NUMBER_ENTRY, undefined, { range: { min: 0, max: 200 } }],
-	['redColor', 'Red (bad gain)', COLOR_PICKER],
-	['greenColor', 'Green (good gain)', COLOR_PICKER],
+	['gainLow', 'Middle colour from (gain %, tenths: 865 = 86.5 %)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 2000 } }],
+	['gainHigh', 'Top colour above (gain %, tenths: 920 = 92 %)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 2000 } }],
+	['lowColor', 'Below the middle (amber)', COLOR_PICKER],
+	['midColor', 'Middle (green)', COLOR_PICKER],
+	['highColor', 'Top (blue)', COLOR_PICKER],
 	['jumps', 'Which jumps', NONE, ['firstJump', 'everyJump']],
 	['firstJump', 'From jump', NUMBER_ENTRY, undefined, { range: { min: 0, max: 999 } }],
 	['everyJump', 'Every Nth jump (0: only the first)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 999 } }],
@@ -187,12 +189,12 @@ function mixColor(a: string, b: string, t: number): string {
 	return `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${+c[3].toFixed(3)})`;
 }
 
-// Gain % on a scale: red at or below gainRed, green at or above gainGreen, mixed between
+// Gain % in three bands, the same as the Strafe Speed Histogram's Gain % mode (owner, 2026-11-03): lowColor
+// under gainLow, midColor up to gainHigh, highColor above. The thresholds are in tenths of a %, as the
+// customizer's number boxes take whole numbers (865 = 86.5 %).
 function gainColor(pct: number, s: Settings): string {
-	const lo = +s.gainRed;
-	const hi = +s.gainGreen;
-	const t = hi > lo ? (pct - lo) / (hi - lo) : pct >= hi ? 1 : 0;
-	return mixColor(s.redColor, s.greenColor, t);
+	if (!(pct >= +s.gainLow / 10)) return s.lowColor;
+	return pct <= +s.gainHigh / 10 ? s.midColor : s.highColor;
 }
 
 // The takeoff number a jump event is labelled with (1 = the first takeoff), or 0 when it has none

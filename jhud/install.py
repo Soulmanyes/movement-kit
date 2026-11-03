@@ -28,7 +28,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import games, panorama, steam  # after the path above
 
-VERSION = "1.0.1"  # JHUD's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.0"  # JHUD's (module.json reads it); bump in the same commit as the release tag
 TOOL = "jhud"
 FOLDER = "movekit-jhud"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 40  # after Strafe Review's (20) and Strafe Trainer Height's (30); all only sync the kit
@@ -60,10 +60,11 @@ ENTRY = """    MovekitJhud =
             showHeight = false
             showDistance = false
             showTime = false
-            gainRed = 60
-            gainGreen = 95
-            redColor = "rgba(255, 92, 92, 1)"
-            greenColor = "rgba(123, 216, 143, 1)"
+            gainLow = 865
+            gainHigh = 920
+            lowColor = "rgba(255, 176, 50, 1)"
+            midColor = "rgba(123, 216, 143, 1)"
+            highColor = "rgba(92, 160, 255, 1)"
             colorBy = "off"
             paceCut = "6"
             tier1Speed = 620
