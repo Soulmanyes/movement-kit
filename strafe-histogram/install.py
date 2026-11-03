@@ -42,26 +42,23 @@ ANCHOR = "    CustomizerSettings = "  # the first entry in the game's hud_defaul
 ENTRY = """    MovekitStrafeHist = 
     {
         enabled = true
-        offsetX = 810
-        offsetY = 880
-        width = 300
+        offsetX = 860
+        offsetY = 640
+        width = 200
         dynamicStyles = 
         {
-            font = "$fontPrimary"
-            fontSize = 16
-            fontColor = "$fontColor"
-            backgroundColor = "rgba(0, 0, 0, 0)"
-            windowS = 3
-            lowPct = 40
-            highPct = 160
-            stepPct = 10
-            barHeight = 60
+            backgroundColor = "rgba(0, 0, 0, 0.25)"
+            rows = 100
+            rowHeight = 2
+            optimalAt = "middle"
+            fromSides = false
             colorBy = "plain"
             barColor = "rgba(255, 255, 255, 0.85)"
             goodColor = "rgba(123, 216, 143, 1)"
             badColor = "rgba(255, 92, 92, 1)"
             badPct = 50
-            showBand = true
+            showMarker = true
+            markerColor = "rgba(255, 220, 90, 0.9)"
         }
     }
 """

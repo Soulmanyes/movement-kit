@@ -2,18 +2,17 @@
 // Checks strafe-histogram/panorama/scripts/hud/movekit-strafe-histogram.ts in node, with Panorama stubbed
 // (types stripped, as jhud/check_jhud.js does).
 //
-// Usage: node strafe-histogram/check_strafe_histogram.js [--store DIR] [--max N]   (exits 1 on the first failure)
+// Usage: node strafe-histogram/check_strafe_histogram.js [--store DIR]   (exits 1 on the first failure)
 //
-// Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group) against
-// install.py's hud_default.kv3 entry; bars (edges, which bar a ratio goes in, heights, colours, the band
-// line); the window (keeps the last N counted ticks, band share inclusive at 0.85 and 1.15); the tick rule
-// on made-up rows (strafe ends skipped, +left/+right, gaps, collisions, slow ticks, ground, a tick seen over
-// several frames counted once); the Panorama side (customizer component for bhop modes only, sample while
-// it is open, nothing while spectating, a replay or in another mode, the panel taken over after
-// panorama_reload and the old copy's loop stopping); then every own attempt in Strafe Review's store (--store,
-// default ~/.local/share/strafe-review/attempts; skipped when missing): the ticks the HUD counts, fed one at a
-// time, are exactly the viewer's strafe-middle ticks (checks.js strafesOf + interior, skip 2), and the in-band
-// share is the same. Surf maps are skipped (surf modes don't show it).
+// Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group, number boxes
+// have a range around their default) against install.py's hud_default.kv3 entry; bar length, side, colour
+// and marker lines; ground from vz; the Panorama side: the customizer component for bhop modes only, the
+// sample while it is open, one row per air tick (each tick once over several frames, none for ground ticks),
+// newest at the bottom and the top row reused (no panel made or deleted per tick), a setting that changes the
+// rows building them again, nothing while spectating, in a replay, in another mode or switched off, and after
+// panorama_reload the panel taken over and the old copy's loop stopping. Then every own bhop attempt in
+// Strafe Review's store (--store, default ~/.local/share/strafe-review/attempts; skipped when missing): the
+// HUD's ground rule against the viewer's, row by row.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -25,9 +24,8 @@ const TS = path.join(__dirname, 'panorama/scripts/hud/movekit-strafe-histogram.t
 const INSTALL = path.join(__dirname, 'install.py');
 const VIEWER = path.join(__dirname, '..', 'strafe-review', 'viewer', 'static');
 const args = process.argv.slice(2);
-const opt = (name, dflt) => (args.indexOf(name) >= 0 ? args[args.indexOf(name) + 1] : dflt);
-const store = opt('--store', path.join(process.env.HOME || '', '.local/share/strafe-review/attempts'));
-const maxFiles = +opt('--max', 'Infinity');
+const at = args.indexOf('--store');
+const store = at >= 0 ? args[at + 1] : path.join(process.env.HOME || '', '.local/share/strafe-review/attempts');
 
 function fail(msg) {
 	console.error('FAIL: ' + msg);
@@ -40,12 +38,13 @@ function expect(got, want, what) {
 }
 
 // ---- Panorama stubs ----
+let made = 0;
 class FakePanel {
 	constructor(type, parent, id, props) {
+		made++;
 		this.type = type;
 		this.paneltype = type;
 		this.id = id;
-		this.text = props && props.text;
 		this.styleText = (props && props.style) || '';
 		this.style = {};
 		this.children = [];
@@ -67,20 +66,26 @@ class FakePanel {
 		}
 		return null;
 	}
-	RemoveAndDeleteChildren() { this.children = []; }
+	MoveChildAfter(child, after) {
+		const i = this.children.indexOf(child);
+		if (i < 0 || this.children.indexOf(after) < 0) throw new Error('MoveChildAfter: not my children');
+		this.children.splice(i, 1);
+		this.children.splice(this.children.indexOf(after) + 1, 0, child);
+	}
+	RemoveAndDeleteChildren() {
+		for (const c of this.children) c.valid = false;
+		this.children = [];
+	}
 }
 const hud = new FakePanel('Hud', null, 'Hud');
 const timer = new FakePanel('MomHudTimer', hud, 'Timer');
 const handlers = {};
 let schedules = [];
 let mode = 2;
-let moveType = 2;
 let replayState = 0;
 let time = 0;
 let tickStats = { speedGain: 0, idealGain: 0, yawRatio: 0, strafeRight: 0 };
 let vel = { x: 0, y: 0, z: 0 };
-let yaw = 0;
-let buttons = 0;
 let loaded = null;
 let loads = 0;
 const GLOBAL = { HudCustomizerHandler: { customizerReady: false, loadComponent: (p, props) => { loaded = { p, props }; loads++; } } };
@@ -97,13 +102,11 @@ const stubs = {
 		GetLastTickStats: () => tickStats,
 		GetCurrentTime: () => time,
 		GetTickInterval: () => 0.01,
-		GetMoveType: () => moveType
+		GetMoveType: () => 2
 	},
-	MomentumPlayerAPI: { GetVelocity: () => vel, GetAngles: () => ({ x: 0, y: yaw, z: 0 }) },
-	MomentumInputAPI: { GetButtons: () => ({ physicalButtons: buttons }) },
+	MomentumPlayerAPI: { GetVelocity: () => vel },
 	MomentumReplayAPI: { GetReplayState: () => replayState },
 	UiToolkitAPI: { GetGlobalObject: () => GLOBAL },
-	Date: { now: () => time * 1000 },
 	console
 };
 const src = stripTypeScriptTypes(fs.readFileSync(TS, 'utf8'), { mode: 'strip' });
@@ -111,14 +114,13 @@ function loadScript() {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${src}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, BAND_LO, BAND_HI, middles, Middles, Window, edges, barOf, windowTicks,
-	barColors, heights, bandText, mixColor, settings, getWin: () => win };`, ctx);
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
+	rowStyle, settings };`, ctx);
 	return ctx.__api;
 }
 const api = loadScript();
 const fire = (ev) => (handlers[ev] || []).forEach((fn) => fn());
-// runs the scheduled callbacks once (one frame); returns the delays they were scheduled with
-const frame = () => { const s = schedules; schedules = []; s.forEach((x) => x.fn()); return s.map((x) => x.s); };
+const frame = () => { const s = schedules; schedules = []; s.forEach((x) => x.fn()); };
 
 // ---- settings against install.py's kv3 entry ----
 const ids = api.STYLES.filter((r) => r[2] !== api.NONE).map((r) => r[0]);
@@ -143,96 +145,33 @@ for (const [id, , type, , extra] of api.STYLES) {
 	if (!(extra.range.min <= api.DEFAULTS[id] && api.DEFAULTS[id] <= extra.range.max)) fail(`${id}'s default is outside its range`);
 }
 
-// ---- bars ----
-const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)' };
-const E = api.edges(S);
-expect([E.lo, E.hi, E.bars], [0.4, 1.6, 14], 'default bars: 0.4 to 1.6, 12 inner + 2 ends');
-expect([-2, 0, 0.39, 0.4, 0.49, 0.5, 0.85, 0.99, 1.0, 1.59, 1.6, 9].map((r) => api.barOf(r, E)),
-	[0, 0, 0, 1, 1, 2, 5, 6, 7, 12, 13, 13], 'which bar a ratio goes in');
-expect(api.barOf(0.7, E), 4, 'a ratio on an inner edge goes in the bar above it (0.7: 0.7-0.8)');
-expect(api.edges({ ...S, lowPct: 160, highPct: 40 }).bars, 3, 'from above to: one inner bar');
-expect(api.edges({ ...S, stepPct: 0 }).bars, 14, 'bar width 0 counts as 10');
-expect(api.heights([0, 5, 10, 2], S), [0, 30, 60, 12], 'heights: the tallest bar is barHeight');
-expect(api.heights([0, 0], S), [0, 0], 'heights with nothing counted');
-expect(new Set(api.barColors(S)).size, 1, 'plain: one colour');
-expect(api.barColors(S)[0], S.barColor, 'plain: the bar colour');
-const good = api.barColors({ ...S, colorBy: 'good' });
-expect(good.length, 14, 'one colour per bar');
-expect([good[6], good[7]], [api.mixColor(S.goodColor, S.badColor, 0.1), api.mixColor(S.goodColor, S.badColor, 0.1)],
-	'how good: the two bars next to 1.0 alike, near good');
-expect([good[0], good[13], good[1]], [S.badColor, S.badColor, api.mixColor(S.goodColor, S.badColor, 0.55 / 0.5)],
-	'how good: far bars fully bad');
-expect(good[3] === good[10], true, 'how good: both sides alike');
-expect(api.bandText(61.6, S), 'in band 62 %', 'band line');
-expect(api.bandText(NaN, S), '', 'no band line with nothing counted');
-expect(api.bandText(50, { ...S, showBand: false }), '', 'band line off');
-
-// ---- window ----
-const w = new api.Window(4);
-[0.1, 0.85, 1.15, 1.16, 0.849, 1].forEach((r) => w.add(r));
-expect(w.ratios, [1.15, 1.16, 0.849, 1], 'the window keeps the last ticks');
-expect(w.band(), 50, 'band: 0.85 to 1.15, both ends in');
-const wb = new api.Window(10);
-[0.85, 1.15].forEach((r) => wb.add(r));
-expect(wb.band(), 100, 'band edges count as in band');
-w.resize(2);
-expect(w.ratios, [0.849, 1], 'a smaller window drops the oldest');
-expect(new api.Window(4).band(), NaN, 'empty window: no band');
-expect(api.windowTicks(3, 0.01), 300, '3 s at 100 tick');
-expect(api.windowTicks(3, 1 / 66), 198, '3 s at 66 tick');
-const cnt = new api.Window(10);
-[0.3, 0.95, 0.95, 2].forEach((r) => cnt.add(r));
-expect(cnt.counts(E), [1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1], 'counts per bar');
-
-// ---- the tick rule on made-up rows ----
-// A jump: takeoff vz 290, then air falling by 8 a tick, turning `turn` degrees a tick (left, then right)
-function jump(t0, n, opts = {}) {
-	const out = [{ tick: t0 - 1, ratio: 0, gain: 0, buttons: 0, vx: 300, vy: 0, vz: 0, yaw: 0 }];
-	let y = 0;
-	for (let i = 0; i < n; i++) {
-		const left = i < n / 2;
-		y += left ? 1 : -1;
-		out.push({ tick: t0 + i, ratio: 0.9 + i / 1000, gain: 1, buttons: left ? 1 << 9 : 1 << 10, vx: 300 + i, vy: 0, vz: 290 - 8 * i, yaw: y });
-	}
-	out.push({ tick: t0 + n, ratio: 0, gain: 0, buttons: 0, vx: 300, vy: 0, vz: 0, yaw: y }); // ground
-	out.push({ tick: t0 + n + 1, ratio: 0, gain: 0, buttons: 0, vx: 300, vy: 0, vz: 0, yaw: y });
-	out.push({ tick: t0 + n + 2, ratio: 0, gain: 0, buttons: 0, vx: 300, vy: 0, vz: 0, yaw: y });
-	return out;
-}
-const counted = (rows) => {
-	const m = new api.Middles();
-	const got = [];
-	for (const r of rows) got.push(...m.push(r).map((x) => x.ratio));
-	return got;
-};
-const j = jump(100, 20);
-const all = counted(j).map((r) => Math.round((r - 0.9) * 1000)); // back to the air row number
-// Keys turn left on rows 0-9, right on 10-19. The 5-tick yaw average is under 0.3 on rows 9 and 10 (0.2 and
-// -0.2), so the strafes are rows 0-8 and 11-19, and their middles (2 skipped at each end) 2-6 and 13-17.
-expect(all, [2, 3, 4, 5, 6, 13, 14, 15, 16, 17], 'a two-strafe jump: ends skipped');
-const batch = api.middles(j).idx.map((i) => j[i].tick - 100);
-expect(batch, all, 'the stream counts what the whole rows give');
-const lr = j.map((r, i) => (i === 5 ? { ...r, buttons: r.buttons | (1 << 7) } : r));
-expect(counted(lr).length, 9, '+left tick left out');
-const hit = j.map((r, i) => (i === 6 ? { ...r, gain: -12 } : r));
-expect(counted(hit).length, 9, 'a wall hit (gain under -10) left out');
-const slow = j.map((r, i) => (i === 4 ? { ...r, vx: 90 } : r));
-expect(counted(slow).length, 9, 'a tick under 100 u/s left out');
-const gapped = j.filter((r, i) => i !== 5);
-expect(counted(gapped).includes(j[6].ratio), false, 'the row after a missed tick left out');
-const noTake = j.map((r) => ({ ...r, vz: r.vz > 100 ? 99 : r.vz }));
-expect(counted(noTake), [], 'no takeoff: no jump, nothing counted');
-const twice = counted([...jump(100, 20), ...jump(200, 20)]);
-expect(twice.length, 20, 'two jumps');
-// the stream on the jump with the end not seen yet: the last strafe's ticks wait for two more rows
-const m = new api.Middles();
-let got = [];
-for (const r of j.slice(0, 16)) got.push(...m.push(r));
-expect(got.length < 10, true, 'not everything counted before the jump ends');
-for (const r of j.slice(16)) got.push(...m.push(r));
-expect(got.length, 10, 'the rest once it ends');
+// ---- plain functions ----
+const S = { ...api.DEFAULTS };
+const S3 = { ...S, optimalAt: 'three' };
+expect([api.optimalAt(S), api.optimalAt(S3)], [0.5, 0.75], 'optimal in the middle by default, or at 3/4');
+expect([0, -0.5, NaN, 0.5, 1, 1.5, 2, 3].map((r) => api.barLength(r, S)), [0, 0, 0, 0.25, 0.5, 0.75, 1, 1], 'length, optimal in the middle');
+expect([1, 1.2, 4 / 3, 2].map((r) => +api.barLength(r, S3).toFixed(4)), [0.75, 0.9, 1, 1], 'length, optimal at 3/4');
+expect([api.barSide(true, S), api.barSide(false, S)], ['left', 'left'], 'from the left by default');
+const SS = { ...S, fromSides: true };
+expect([api.barSide(true, SS), api.barSide(false, SS)], ['right', 'left'], 'from the strafe side');
+expect(api.markers(S), [0.5], 'one marker in the middle');
+expect(api.markers(S3), [0.75], 'one marker at 3/4');
+expect(api.markers({ ...S3, fromSides: true }), [0.75, 0.25], 'from the sides at 3/4: both markers');
+expect(api.markers({ ...S, fromSides: true }), [0.5], 'from the sides in the middle: one marker');
+expect(api.barColor(0.3, S), S.barColor, 'plain: one colour');
+const G = { ...S, colorBy: 'good' };
+expect([api.barColor(1, G), api.barColor(1.5, G), api.barColor(0.5, G), api.barColor(3, G)],
+	[api.mixColor(G.goodColor, G.badColor, 0), G.badColor, G.badColor, G.badColor], 'how good: good at 1, bad at 50 % away');
+expect(api.barColor(0.75, G), api.barColor(1.25, G), 'how good: slow and fast alike');
+expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'right', color: S.barColor }, 'a row');
+expect(api.rowStyle(0.333, false, S).width, 16.7, 'width rounded to 0.1 %');
+expect([api.onGround(0, -290, 290), api.onGround(0, 3, -5), api.onGround(0, 3, 0), api.onGround(-8, 0, -16), api.onGround(0.42, 0.42, 0),
+	api.onGround(0.42, 0, 0.42), api.onGround(0.42, 0.5, 0)], [true, false, true, false, true, true, false],
+	'ground: vz 0 unless an apex, a small vz the same as a neighbour');
 
 // ---- Panorama ----
+const rowsOf = (p) => p.children[0].children;
+const shownRows = (p) => rowsOf(p).filter((r) => r.visible);
 expect(loaded, null, 'not registered before the customizer is ready');
 fire('HudCustomizer_Ready');
 expect(loads, 1, 'registered at HudCustomizer_Ready');
@@ -240,156 +179,118 @@ expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
 expect(loaded.props.name, 'Strafe Speed Histogram', 'component name');
 const P = loaded.p;
 expect(P.id, 'MovekitStrafeHist', 'panel id');
-expect(P.visible, false, 'hidden before any strafing');
+expect(P.visible, false, 'hidden before any tick');
 fire('HudCustomizer_Opened');
-expect(P.visible, true, 'sample while the customizer is open');
-expect(P.children[0].children.length, 14, 'sample: 14 bars');
-expect(P.children[1].text.startsWith('in band '), true, 'sample: band line');
+expect([P.visible, rowsOf(P).length, shownRows(P).length], [true, 100, 100], 'sample while the customizer is open');
+expect(P.children.length, 2, 'sample: the rows and one marker line');
 fire('HudCustomizer_Closed');
-expect(P.visible, false, 'hidden when the customizer closes, with nothing counted');
-// play the made-up jump through the stubs: three frames per tick, the same values each time
-function play(rows, frames = 3) {
-	for (const r of rows) {
-		time = r.tick * 0.01 + 0.001;
-		tickStats = { speedGain: r.gain, idealGain: 1, yawRatio: r.ratio, strafeRight: 0 };
-		vel = { x: r.vx, y: r.vy, z: r.vz };
-		yaw = r.yaw;
-		buttons = r.buttons;
-		for (let f = 0; f < frames; f++) {
-			frame();
-			time += 0.002;
-		}
+expect(P.visible, false, 'hidden when the customizer closes');
+
+// one game tick, seen over `frames` frames with the same values
+function tick(t, ratio, right, vz, frames = 3) {
+	time = t * 0.01 + 0.001;
+	tickStats = { speedGain: 1, idealGain: 1, yawRatio: ratio, strafeRight: right ? 1 : 0 };
+	vel = { x: 300 + t, y: 0, z: vz };
+	for (let f = 0; f < frames; f++) {
+		frame();
+		time += 0.002;
 	}
 }
-// a distinct row before the jump, so its first row is a new key (the ground rows repeat)
-play([{ tick: 98, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(100, 20), { tick: 124, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-expect(api.getWin().ratios.length, 10, 'in game: each tick counted once over three frames');
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.visible, true, 'shown after strafing');
-expect(P.children[0].children.length, 14, '14 bars');
-expect(P.children[1].text, 'in band 100 %', 'band line in game');
-// a redraw keeps the panels and only changes the heights and the text
-const barsBefore = P.children[0].children.slice();
-const hBefore = barsBefore.map((b) => b.style.height);
-play([{ tick: 148, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 },
-	...jump(150, 20).map((r) => (r.ratio ? { ...r, ratio: 1.3 } : r)), { tick: 174, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.children[0].children.every((b, i) => b === barsBefore[i]), true, 'a redraw keeps the bar panels');
-expect(P.children[0].children.map((b) => b.style.height).join() !== hBefore.join(), true, 'a redraw changes the heights');
-expect(P.children[1].text, 'in band 50 %', 'a redraw changes the text');
-// a setting that changes the bars builds them again
-const cb = (id, v) => loaded.props.dynamicStyles[id].callbackFunc(null, v);
-cb('stepPct', 20);
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.children[0].children.length, 8, 'bar width 20: the bars built again (6 + 2)');
-cb('stepPct', 10);
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.children[0].children.length, 14, 'back to 14 bars');
-const bars14 = P.children[0].children.slice();
-cb('barColor', 'rgba(1, 2, 3, 1)');
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.children[0].children[0] !== bars14[0] && P.children[0].children[0].styleText.includes('rgba(1, 2, 3, 1)'), true,
-	'a new bar colour builds the bars again');
-cb('barColor', api.DEFAULTS.barColor);
-// standing still: nothing new, the bars stay
+// a jump: `n` air ticks, left then right, then two ground ticks
+function jump(t0, n, ratio = (i) => 0.9 + i / 100) {
+	for (let i = 0; i < n; i++) tick(t0 + i, ratio(i), i >= n / 2, 290 - (580 * i) / Math.max(1, n - 1));
+	tick(t0 + n, 0, false, 0);
+	tick(t0 + n + 1, 0, false, 0);
+}
+jump(100, 20);
+expect(shownRows(P).length, 20, 'one row per air tick, each tick once over three frames, none for ground ticks');
+expect(shownRows(P).map((r) => r.style.width), Array.from({ length: 20 }, (_, i) => `${Math.round((0.9 + i / 100) * 500) / 10}%`),
+	'oldest on top, newest at the bottom');
+expect(rowsOf(P).slice(80).every((r) => r.visible) && rowsOf(P).slice(0, 80).every((r) => !r.visible), true,
+	'the shown rows sit at the end of the list (the bottom)');
+const before = rowsOf(P).slice();
+const madeBefore = made;
+jump(200, 30, () => 1.2);
+expect(made, madeBefore, 'no panel made per tick');
+expect(new Set(rowsOf(P)).size === 100 && rowsOf(P).every((r) => before.includes(r)), true, 'the same 100 rows, reused');
+expect(shownRows(P).length, 50, 'rows pile up across jumps');
+expect(rowsOf(P)[99].style.width, '60%', 'the newest row is the last tick');
+jump(300, 80, () => 0.6);
+expect([shownRows(P).length, rowsOf(P)[0].style.width], [100, '60%'], 'full: the oldest scroll out the top');
+// standing still: nothing new, the rows stay
 for (let f = 0; f < 20; f++) { time += 0.01; frame(); }
-expect([P.visible, api.getWin().ratios.length], [true, 20], 'standing still: the bars stay');
+expect([P.visible, shownRows(P).length], [true, 100], 'standing still: the bars stay');
+// a setting that changes the rows builds them again (empty); one that doesn't keeps them
+const cb = (id, v) => loaded.props.dynamicStyles[id].callbackFunc(null, v);
+cb('barColor', 'rgba(1, 2, 3, 1)');
+jump(400, 4);
+expect([rowsOf(P).length, shownRows(P).length, rowsOf(P)[99].style.backgroundColor], [100, 100, 'rgba(1, 2, 3, 1)'],
+	'a new bar colour: rows kept, new rows in it');
+cb('rows', 50);
+jump(500, 4);
+expect([rowsOf(P).length, shownRows(P).length], [50, 4], 'fewer ticks shown: built again, empty');
+cb('optimalAt', 'three');
+cb('fromSides', true);
+jump(600, 4, () => 1);
+expect(P.children.length, 3, 'from the sides at 3/4: two marker lines');
+expect(rowsOf(P).slice(-4).map((r) => [r.style.width, r.style.horizontalAlign]),
+	[['75%', 'left'], ['75%', 'left'], ['75%', 'right'], ['75%', 'right']], 'from the sides: right strafes from the right');
+for (const [k, v] of [['rows', 100], ['optimalAt', 'middle'], ['fromSides', false], ['barColor', api.DEFAULTS.barColor]]) cb(k, v);
+jump(700, 4);
+const n0 = shownRows(P).length;
 mode = 1;
-frame();
-expect(P.visible, false, 'another mode: hidden');
+jump(800, 10);
+expect([P.visible, shownRows(P).length], [false, n0], 'another mode: hidden, nothing added');
 mode = 2;
 replayState = 1;
-frame();
-expect(P.visible, false, 'watching a replay: hidden');
-play([{ tick: 198, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(200, 20), { tick: 224, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-expect(api.getWin().ratios.length, 20, 'watching a replay: its strafing not counted');
+jump(900, 10);
+expect([P.visible, shownRows(P).length], [false, n0], 'watching a replay: hidden, nothing added');
 replayState = 0;
 fire('MomentumSpectateStart');
-frame();
-expect([P.visible, api.getWin().ratios.length], [false, 0], 'spectating: hidden and cleared');
-play([{ tick: 248, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(250, 20), { tick: 274, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-expect([P.visible, api.getWin().ratios.length], [false, 0], 'spectating: strafing not counted');
+jump(1000, 10);
+expect(P.visible, false, 'spectating: hidden');
 fire('MomentumSpectateStop');
+jump(1100, 6);
+expect(shownRows(P).length, 6, 'after spectating: a fresh start');
 P.enabled = false;
-play(jump(300, 20));
-expect(api.getWin().ratios.length, 0, 'switched off in the customizer: nothing counted');
+jump(1200, 10);
+expect([P.visible, shownRows(P).length], [false, 6], 'switched off in the customizer: nothing added');
 P.enabled = true;
 // panorama_reload: a second load takes the panel over, the old loop stops (its schedule is still pending)
 GLOBAL.HudCustomizerHandler.customizerReady = true;
 expect(schedules.length, 1, 'one loop running before the reload');
-const api2 = loadScript();
+loadScript();
 expect(loads, 2, 'a reload registers at once while the customizer is ready');
 expect(loaded.p === P, true, 'a reload takes the placed panel over');
 expect(timer.parent.children.filter((c) => c.id === 'MovekitStrafeHist').length, 1, 'still one panel');
-play([{ tick: 498, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(500, 20), { tick: 524, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-expect([api.getWin().ratios.length, api2.getWin().ratios.length], [0, 10], 'only the new copy counts');
-for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
-expect(P.children.length, 2, 'after the reload: the new copy built its own bars and line, once');
-expect(P.children[0].children.length, 14, 'after the reload: 14 bars');
+jump(1300, 10);
+expect([shownRows(P).length, P.children.length], [10, 2], 'after the reload: the new copy built its own rows, once');
 expect(schedules.length, 1, 'one loop running after the reload');
 
-// ---- the store: HUD ticks = viewer strafe-middle ticks ----
+// ---- the store: the HUD's ground rule against the viewer's ----
 if (!fs.existsSync(store)) {
-	console.log(`check_strafe_histogram: all good (no store at ${store}, attempts skipped)`);
+	console.log(`check_strafe_histogram: all good (no store at ${store}, ground rule not compared)`);
 	process.exit(0);
 }
 const data = require(path.join(VIEWER, 'data.js'));
-Object.assign(globalThis, data);
-const checks = require(path.join(VIEWER, 'checks.js'));
 let files = 0;
-let ticks = 0;
-let outside = 0;
-let hudIn = 0;
-let viewIn = 0;
+let rowsN = 0;
+let differ = 0;
 for (const mapDir of fs.readdirSync(store).sort()) {
 	const dir = path.join(store, mapDir);
-	// surf maps play in surf modes, where the histogram is hidden; a ramp run there is one long "jump" that
-	// outgrows the HUD's KEEP_ROWS
 	if (mapDir.startsWith('surf_') || !fs.statSync(dir).isDirectory()) continue;
 	for (const file of fs.readdirSync(dir).sort()) {
-		if (!file.endsWith('.json.gz') || files >= maxFiles) continue;
+		if (!file.endsWith('.json.gz')) continue;
 		const a = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(dir, file))).toString());
 		const d = data.parse(a);
-		if (data.isOther(a) || d.derived || d.n < 10) continue;
+		if (data.isOther(a) || d.derived) continue;
 		files++;
-		const { jumps } = data.findJumps(d, a.preRows);
-		// the viewer: every jump's strafes, their middles (stats.js), with a known ratio; the last 5 rows left out
-		// (the HUD waits for rows after them)
-		const last = d.n - 5;
-		const want = new Set();
-		const inJump = new Set();
-		for (const jj of jumps) {
-			for (let i = jj.s; i < jj.e; i++) inJump.add(i);
-			for (const st of checks.strafesOf(d, jj, d.n - 1)) {
-				for (const i of checks.interior(d, st, 2)) if (Number.isFinite(d.ratio[i]) && i < last) want.add(i);
-			}
+		for (let i = 1; i < d.n - 1; i++) {
+			if (d.gap[i] > 0) continue;
+			rowsN++;
+			if (api.onGround(d.vz[i], d.vz[i - 1], d.vz[i + 1]) !== !!d.ground[i]) differ++;
 		}
-		// the HUD, fed one row at a time
-		const byTick = new Map();
-		for (let i = 0; i < d.n; i++) byTick.set(d.tick[i], i);
-		const stream = new api.Middles();
-		const got = new Set();
-		for (let i = 0; i < d.n; i++) {
-			const row = { tick: d.tick[i], ratio: d.ratio[i], gain: d.gain[i], buttons: d.buttons[i], vx: d.vx[i], vy: d.vy[i], vz: d.vz[i], yaw: d.yaw[i] };
-			for (const r of stream.push(row)) {
-				const k = byTick.get(r.tick);
-				if (got.has(k)) fail(`${mapDir}/${file}: row ${k} counted twice`);
-				got.add(k);
-			}
-		}
-		const hudJ = [...got].filter((i) => inJump.has(i) && i < last);
-		outside += [...got].filter((i) => !inJump.has(i)).length;
-		const miss = [...want].filter((i) => !got.has(i));
-		const extra = hudJ.filter((i) => !want.has(i));
-		if (miss.length || extra.length) {
-			fail(`${mapDir}/${file}: HUD vs viewer middles differ: ${miss.length} missed (first row ${miss[0]}), ` +
-				`${extra.length} extra (first row ${extra[0]}) of ${want.size}`);
-		}
-		ticks += want.size;
-		hudIn += hudJ.filter((i) => d.ratio[i] >= api.BAND_LO && d.ratio[i] <= api.BAND_HI).length;
-		viewIn += [...want].filter((i) => d.ratio[i] >= 0.85 && d.ratio[i] <= 1.15).length;
 	}
 }
-expect(hudIn, viewIn, 'in-band ticks, HUD vs viewer');
-console.log(`check_strafe_histogram: all good (${files} own attempts, ${ticks} strafe-middle ticks match the viewer; ` +
-	`${outside} more in hops the viewer drops before a teleport)`);
+if (differ) fail(`ground rule: ${differ} of ${rowsN} rows differ from the viewer's`);
+console.log(`check_strafe_histogram: all good (ground rule on ${files} own bhop attempts: ${differ} of ${rowsN} rows differ from the viewer's)`);

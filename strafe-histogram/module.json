@@ -1,7 +1,7 @@
 {
   "key": "strafe-histogram",
   "title": "Strafe Speed Histogram",
-  "summary": "While you bhop in Momentum Mod: a histogram of how fast you turn against the optimal over the middle of your strafes in the last few seconds, and the share in the optimal band.",
+  "summary": "While you bhop in Momentum Mod: one bar per air tick for how fast you turned against the optimal, scrolling up from the bottom.",
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-histogram-v",
   "version_from": "install.py",
@@ -10,6 +10,6 @@
   "data": [],
   "hud_card": {
     "title": "Strafe Speed Histogram",
-    "text": "While you bhop: bars of how fast you turn compared with the optimal (1.0) over the middle of your strafes in the last few seconds of strafing, and the share inside the optimal band (85-115 %). Its position, width, range, bar colours and window length are set in Momentum Mod's own HUD customizer, where it is listed as Strafe Speed Histogram, and saved with your HUD preset. Turn it off there too."
+    "text": "While you bhop: one bar per air tick, the newest at the bottom and the older ones scrolling up. A bar's length is how fast you turned against the optimal, with a line where the optimal is (the middle, or 3/4 of the width). Bars grow from the left, or from the strafe's side. Its position, width, ticks shown, bar height and colours are set in Momentum Mod's own HUD customizer, where it is listed as Strafe Speed Histogram, and saved with your HUD preset. Turn it off there too."
   }
 }

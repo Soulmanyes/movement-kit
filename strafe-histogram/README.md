@@ -1,24 +1,25 @@
 # Strafe Speed Histogram
 
-While you bhop in [Momentum Mod](https://momentum-mod.org/), this HUD element shows how fast you turn your mouse compared with the optimal turn speed, as a histogram. It covers the middle of your strafes in the last few seconds of strafing. The value is the game's yaw ratio, where 1.0 is optimal, below is too slow and above is too fast.
+While you bhop in [Momentum Mod](https://momentum-mod.org/), this HUD element draws one bar for every tick you are in the air. The newest bar appears at the bottom and the older ones scroll up. A bar's length is how fast you turned your mouse that tick compared with the optimal turn speed (the game's yaw ratio, where 1.0 is optimal).
 
-- **Bars:** by default 14 bars. There are 12 of width 0.1 from 0.4 to 1.6, plus one bar for everything under 0.4 and one for 1.6 and over. Each bar's height is its share of the ticks counted, so the tallest bar is always full height.
-- **In band:** a line under the bars gives the share of ticks inside the optimal band, 0.85 to 1.15. A tick box turns it off.
-- **Window:** the last 3 seconds of strafing by default. Standing still adds nothing, so the bars stay as they are until new strafing pushes the oldest ticks out. A map load clears them.
-- **Colours:** "Colour by" is **Plain** by default: every bar in one colour you pick. **How good** colours each bar by how far it is from 1.0, from green at 1.0 to red at 50 % away or more, the same on both sides. Both colours and the distance can be set.
+- **Optimal line:** a line marks the optimal. It sits in the middle by default, so a bar reaching the right edge is twice the optimal. It can sit at 3/4 of the width instead, so the bars have room up to 1.33 times the optimal.
+- **Direction:** bars grow from the left by default. "Grow from the strafe side" makes right strafes grow from the right edge and left strafes from the left, towards the middle.
+- **Ticks shown:** 100 by default, 1 second at 100 tick. Ground ticks add no bar, so the bars run on across jumps. Standing still adds nothing, so the bars stay until you jump again. A map load clears them.
+- **Colours:** "Colour by" is **Plain** by default: every bar in one colour you pick. **How good** colours each bar by how far its tick was from the optimal, from green at 1.0 to red at 50 % away or more, the same for too slow and too fast.
+- Turning against the strafe (a negative ratio) gives an empty bar. Anything past the right edge is cut at the edge.
 
-Which ticks count is Strafe Review's own rule for the middle of a strafe, the same one behind its "In optimal band" number. The ticks must be in the air after a jump, at 100 u/s or more, with no wall or ramp hit, not on +left/+right, and not the first or last 2 ticks of a strafe. So the HUD is about 5 ticks behind, which can't be seen. On 1132 saved bhop runs it counts exactly the ticks Strafe Review does (`check_strafe_histogram.js`).
+Each tick is drawn one tick (10 ms) late, once the next tick says whether it was on the ground: the same rule Strafe Review uses (`check_strafe_histogram.js` compares the two on saved runs).
 
 It shows in the bhop modes only, and only for your own play: not while spectating or watching a replay.
 
 Everything about it is set in the game's **HUD customizer**, where it is listed as **Strafe Speed Histogram**:
 
-- position and width (drag it), and the height of the tallest bar;
-- the range and the bar width, in % of the optimal;
-- the window length in seconds;
-- the colours, and the font of the in-band line.
+- position and width (drag it);
+- the ticks shown and the bar height (together they give the height);
+- where the optimal sits, and the side the bars grow from;
+- the colours, the optimal line and the background.
 
-The settings are saved with your HUD preset. The customizer's switch turns it off. While the customizer is open, it shows a sample histogram so it can be placed.
+The settings are saved with your HUD preset. The customizer's switch turns it off. While the customizer is open, it shows a sample so it can be placed.
 
 ## Install
 
