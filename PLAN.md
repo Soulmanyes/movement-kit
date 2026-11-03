@@ -261,6 +261,69 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - On copies of the real `timer.xml` and `hud_default.kv3` (LF), the install applies both patches once.
 - Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. In-game test 2026-11-03 (installed from the repo): works; the owner asked for one line and the whole line in the gain colour, done the same day (`check_jhud.js` covers the owner's pick: number, speed, gain, yaw ratio on one line). After that change the owner's `panorama_reload` left JHUD invisible: the old copy's event handlers stay registered after a reload, and the two copies deleted each other's panel at every jump; also `HudCustomizer_Ready` comes only at a map load. Fixed: a load number in Panorama's global object (`MovekitJhudGen`) makes an old copy's handlers and timers do nothing, the placed panel is taken over instead of replaced, and a copy loaded while the customizer is ready registers at once. `check_jhud.js` loads the script twice in shared stubs (mutations caught: old copy still drawing, panel replaced, no register after reload, an old copy's timer hiding the new jump). Second in-game look (2026-11-03): JHUD still vanished after `panorama_reload`. Debug lines in yaw.log showed the reload re-ran the Timer layout without JHUD: a stale `custom/0-strafe-review/timer.xml` (from before Strafe Review moved onto the kit, 2026-11-02) wins on a reload, though `0-movekit` wins at game start. Rerunning `strafe-review/install.py` deleted it; after that the reload kept JHUD (load 3 and 4 took over the panel). The launch hook reinstalls JHUD from the repo at every game start, so a debug copy in the game folder is lost on restart: put debug lines in the repo file. The owner then asked for a line from the first takeoff (they had seen one in the probe): `jumpOf` is `jumpCount`, and takeoff 1 shows number and speed only, in the font colour (`check_jhud.js`; mutations caught: label `n - 1`, no takeoff-1 case). The owner checked the new numbering in game after a restart: good. CI test runs on the branch passed (hub-windows, module-release tool=jhud). Then the owner asked, before the release, for JHUD not to be coloured by default: a "Colour by" dropdown (`colorBy`, `COLOR_BY`), Off (the font colour, default) or Gain %; the gain settings (whole line, thresholds, red and green) sit under it and show only while it is Gain % (the customizer's `showWhen`, as in the game's ground-boost.ts). Saved presets without `colorBy` get Off: the customizer deep-merges a preset over hud_default.kv3. `check_jhud.js` covers it (mutations caught: default gain, colorBy ignored, no showWhen). Then the owner wanted speed colours after all, set per user, with a cutoff at 6 or 12 (CS:S servers colour by speed over the first 6 or 12 jumps), shown on every jump before the cutoff, not only at it. Owner's own wish: green when on track for 620 at jump 6, blue for 625, white for 630. Built as "Speed pace, then gain %" (`colorBy` 'pace'): `paceCut` 6 or 12, three tiers (`tierNSpeed`, `tierNColor`) and `belowColor` (own picker, owner's pick); takeoff k is on pace for speed / `PACE[cut][k - 2]` at the cutoff, the highest tier reached wins (tiers in any order); jump 1 isn't judged; after the cutoff, gain colours (owner's pick). `gainAll` off colours only the speed (pace) or the gain %. The pace curve is built in (owner's pick over editable or learned per user; learning can come later): the median share of the cutoff speed in the owner's runs that reached it, from the Strafe Review store (46 runs for 6, 14 for 12; bhop_glacial and bhop_ambience). Leave-one-out on those runs, the typical error of the projected cutoff speed: cutoff 6, jump 2 6.8 u/s, 3 3.4, 4 1.4, 5 1.2; cutoff 12, jump 2 10.0, 6 3.6, 10 1.4. The owner's tiers are 5 u/s apart, so jump 2 is a rough guess and jumps 4-5 are reliable. `check_jhud.js` covers it, and every saved jump is drawn in all three modes (mutations caught: lowest tier wins, no curve, no cutoff, no gain after the cutoff, no below colour, gainAll-off colouring the whole line). In-game look 1 (owner screenshot): the three 3-digit pace speeds were drawn with the first digit under the box's minus button once the customizer rebuilt the settings (620 read "520"); 2-digit boxes were fine, and the long tick-box label was cut off. Fix tried: every number box gets a min/max (`extra.range`, passed as `settingProps`, like the game's df-jump `maxDelay` 360 with max 1000; `check_jhud.js` checks each box has one around its default), and the label is now "Colour the whole line". In game: still cut off, so the range wasn't it (kept anyway). The customizer's number box text field is `width: fit-children; min-width: 24px` (customizer.scss) and isn't widened for 3 digits. Workaround: while the customizer is open and `HudCustomizerHandler.activeComponent` is JHUD, `fixBoxes()` sets every NumberEntry's TextEntry in `panels.activeComponentSettingsList` to width 44px (5 digits), checked every 0.25 s since the list is rebuilt on every pick with no event; it stops when the customizer closes (`check_jhud.js`; mutations caught: other components touched, never stops, never starts, wrong panel type). Owner, in game: "seems good". CI test runs passed on 9305e9e. Released 2026-11-03: main fast-forwarded to 9305e9e, tags hub-v1.3.0 (hub-windows.zip) and jhud-v1.0.0 (jhud-module.zip + .json), notes written. Open: a learned per-user (or per-map) pace curve, if the built-in one fits other players badly.
 
+## Phase 6: Strafe Speed Histogram (planned and OK'd 2026-11-03)
+
+The owner asked on 2026-11-03 for an in-game HUD element: a histogram of strafe speed. Strafe speed here means yaw speed against the optimal, the game's `yawRatio` (1 = optimal). It is separate from the viewer idea "Strafe histograms, with snapshots" (Strafe Review, to-do `strafe-review-histograms`).
+
+**Settled by the owner (2026-11-03).**
+- **Value.** `yawRatio` per air tick, binned. It is not gain % per strafe or raw mouse speed.
+- **Window.** It is rolling and stays current: only the most recent strafing counts, and older ticks drop out.
+
+**Found in the Strafe Review store (2026-11-03).** There are 1418 attempts and 1.06 M air ticks at 100+ u/s.
+- Quantiles: 1 % -1.95, 5 % -0.42, 10 % 0.22, 25 % 0.72, median 0.90, 75 % 1.01, 90 % 1.11, 95 % 1.23, 99 % 2.08.
+- 7 % of ticks are negative (turning against the strafe, mostly at the swaps), and 2 % are exactly 0 (no turn).
+- So the bars need ends that catch the rest. The bulk sits between 0.7 and 1.1.
+
+**Default look** (all of it can be changed in the HUD customizer, as with JHUD):
+- 12 bars of 0.1 from 0.4 to 1.6, plus one end bar each side ("< 0.4", "> 1.6"). That is 14 bars in all.
+- Bar height is the bar's share of the ticks in the window, scaled to the tallest bar.
+- Colours (owner, 2026-11-03): "Colour by" in the customizer, Plain (default, one colour to pick) or How good. How good shades each bar by its distance from 1.0: green at 1.0, red at the ends, both sides alike, with the two colours to pick.
+- Under the bars, one line: the share of ticks in the optimal band (0.85-1.15, Strafe Review's `BAND_LO`/`BAND_HI`), e.g. `in band 62 %`. A tick box turns it off.
+- Placement: bottom middle, about 300 x 90 in the customizer's 1920x1080 units.
+
+**Which ticks count.** The viewer's strafe-middle rule (stats.js "angle"), so the HUD's in-band % means the same as the viewer's "In optimal band" for the same strafing:
+- air (`moveStatus` 0), 100+ u/s, no collision;
+- inside a strafe, with 2 ticks skipped at each end (the HUD is 2 ticks behind, which can't be seen);
+- +left/+right ticks left out.
+
+Each game tick counts once, whatever the frame rate. The `$.Schedule(0)` loop runs once per frame, so the recorder's new-tick test is used: a key over the tick stats and velocity, numbered by `floor(GetCurrentTime() / interval)`. The bars are redrawn at most 20 times a second.
+
+**Window rule.** The last N seconds of counted ticks, 3 s by default, set in the customizer. Standing still or riding the start zone adds no ticks, so the last strafes stay on screen until new ones push them out. A map load clears it.
+
+**Shape.** Built like `jhud/`:
+- Folder `strafe-histogram/`, with `module.json` (key `strafe-histogram`, title "Strafe Speed Histogram", Linux and Windows, `needs_core` 1.4.0), `install.py`, `module_hooks.py`, `launch-hook.sh`, README and LICENSE.
+- Script `panorama/scripts/hud/movekit-strafe-histogram.ts`, panel id `MovekitStrafeHist`, files in `custom/movekit-strafe-histogram`.
+- Kit patches: the script include in `timer.xml`, and its `hud_default.kv3` entry, both as JHUD does. `HOOK_ORDER` 50.
+- JHUD's Panorama fixes, copied:
+  - the load number against old copies after `panorama_reload`;
+  - the placed panel taken over, not replaced;
+  - registering at once while the customizer is ready;
+  - `fixBoxes()` for 3-digit number boxes;
+  - a sample histogram while the customizer is open.
+- **Copied, not shared.** Panorama scripts can't import. A shared helper script would add a load-order tie between two modules, and either one can be installed alone. When a third HUD component needs them, they move into a kit-owned helper include in `0-movekit`.
+
+**Core 1.4.0: HUD cards come from `module.json`.** The HUD section's JHUD card is hard-coded today (`hud/hub_section.py` `_jhud`, `show_with`). Instead, a module lists a `hud_card` (title, one line of text) in its `module.json`, and the section shows one card per installed module that has one. JHUD's card moves there too. After that, a new HUD module needs no core release.
+
+**Steps** (each one ends released, unless it says otherwise):
+1. **6.1 Core 1.4.0.** HUD cards from `module.json`. Checks: `hud/check_hud.py` covers two fake modules with cards, one without, and none installed. JHUD's card looks the same as before. Release `hub-v1.4.0`. JHUD gets `hud_card` in `jhud-v1.0.1` (`needs_core` 1.4.0).
+2. **6.2 Module.** `strafe-histogram/check_strafe_histogram.js` runs the plain functions in node, with Panorama stubbed:
+   - tick filter, bins, window and in-band %;
+   - the same tick seen over N frames counts once;
+   - rows of stored attempts fed through the HUD code give the in-band % that `stats.js` reports for them;
+   - kv3 entry against STYLES/DEFAULTS;
+   - the reload guard.
+
+   `check_strafe_histogram.py` covers a fake game, as `check_jhud.py` does. Mutations:
+   - counting every frame;
+   - no end skip;
+   - no window drop;
+   - band edges off by one bar.
+
+   Then the owner tries it in game, before the release.
+3. **6.3 Release** `strafe-histogram-v1.0.0`, with the CI caller and the `check_modules.py` lists.
+
+**Modes (owner, 2026-11-03).** Bhop modes only (`BHOP`, `BHOP_HL1`), like JHUD. Own play only: it shows nothing while spectating or watching a replay. Whether `GetLastTickStats` follows a spectated player is untested.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
