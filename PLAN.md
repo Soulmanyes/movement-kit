@@ -1,6 +1,6 @@
 # Soulmanyes's Movement Kit: plan
 
-Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). The old repos were archived 2026-11-03. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd; 3.1 (shell), 3.2 (Gain Converter section), 3.3 (HUD section), 3.4 (Strafe Review section), 3.5 (Source Yaw logic out of the window) and 3.6 (Source Yaw section, awaiting the owner's click test) done 2026-11-02; 3.7 and 3.7b (modules) released 2026-11-02 (`hub-v1.0.0`, every tool as a module). 3.8 (retire the old windows) released 2026-11-02 (`sourceyaw-v1.8.0`, `gain-converter-v1.3.0`). 3.9 (the HUD's settings move to the kit's folder, the review page's jump-1 toggle goes) released 2026-11-02 (`hub-v1.1.0`, `strafe-review-v1.7.0`). Left: the Windows hand test.
+Status (2026-11-02): Phase 0 done locally (the three repos merged with full history, tags renamed `<tool>-v*`, privacy hooks in place; no GitHub repo yet). Phase 1 nearly done locally: Steam/game discovery, autoexec blocks, VPK reading, bind parsing and the updater are in `movekit`, release CI sits at the root, and the root has a README and a CC0 LICENSE (see "Progress"). On GitHub since 2026-11-02, public since 2026-11-02 (via `/go-public`). The live installs run from the monorepo since 2026-11-02, and both tools write `// movekit:<tool>` blocks. Bridge releases out 2026-11-02 (Source Yaw v1.5.2, Strafe Review v1.4.1; the kit's first releases sourceyaw-v1.6.0, strafe-review-v1.5.0, gain-converter-v1.1.0). The old repos were archived 2026-11-03. Phase 2 started: 2.1 (yaw.log reading, `movekit/logtail.py`) 2.2 (session core, `movekit/session.py`) and 2.3 (the Strafe Review server hosts the session and announces saved attempts) and 2.4 (the trainer and the crosshair watcher on the session, live) done. 2.5 (`movekit-run`, one launch option) done and live. 2.6 (attempt format 1 documented in `strafe-review/FORMAT.md`, reader `movekit/attempts.py`) done. Phase 3 (hub app): toolkit decided (pywebview settings window, review page stays in the browser), steps 3.1–3.8 OK'd; 3.1 (shell), 3.2 (Gain Converter section), 3.3 (HUD section), 3.4 (Strafe Review section), 3.5 (Source Yaw logic out of the window) and 3.6 (Source Yaw section, awaiting the owner's click test) done 2026-11-02; 3.7 and 3.7b (modules) released 2026-11-02 (`hub-v1.0.0`, every tool as a module). 3.8 (retire the old windows) released 2026-11-02 (`sourceyaw-v1.8.0`, `gain-converter-v1.3.0`). 3.9 (the HUD's settings move to the kit's folder, the review page's jump-1 toggle goes) released 2026-11-02 (`hub-v1.1.0`, `strafe-review-v1.7.0`). Left: the Windows hand test. Phase 4 (Panorama module kit) planned 2026-11-03, waiting for the owner's OK.
 
 ## Goal
 
@@ -128,9 +128,65 @@ Toolkit and split decided by the owner 2026-11-02; steps 3.1–3.8 OK'd the same
 
 Done when: the hub window runs on Linux and Windows with every section, the review page opens from it, and installed copies have moved onto it.
 
+## Phase 4: Panorama module kit (planned 2026-11-03, waiting for the owner's OK)
+
+The owner picked this from "Later" on 2026-11-03, as a phase of its own (not as the first step of JHUD).
+
+**Problem.** Momentum mounts the folders in `custom/` in alphabetical order (any case), and the first copy of a file wins. Every tool that changes a game HUD file solves that alone:
+- The Strafe Review recorder (`strafe-review/install.py`) writes `custom/0-strafe-review` with a `timer.xml` made on every install: the copy that would win otherwise, plus one `<include>`. That is the fix for the friend's `panoDev` (2026-10-28).
+- `~/claude/mmod-trainer-height` (no git, outside the kit) copies three files into `custom/strafe-trainer-height` with `install.sh`. Linux only, a fixed game path, no sort-order fix, no hub card.
+- A future JHUD would need the same thing a third time. Two tools patching the same file (both `timer.xml`) would hide each other's include.
+
+**Found 2026-11-03.** Diffed against the game's own files, the trainer-height mod changes one line in each:
+- `layout/hud/strafe-trainer.xml` adds `<include src="file://{resources}/styles/hud/strafe-trainer-height.scss" />` after the `main.scss` include.
+- `scripts/hud/strafe-trainer.ts` changes `resizeY: false,` to `resizeY: true,` (line 89).
+
+So both are patches, the same kind as the recorder's `timer.xml`. The game's file is patched on the player's machine. No Momentum file goes into this public repo, so there is no licence question, and a game update to those files carries over instead of being hidden by a stale copy.
+
+**Shape.**
+- `movekit/panorama.py`, stdlib only, Momentum only (`games.py` gains `panorama: bool`, as planned in Phase 1).
+- **A tool's own files** (new names: the recorder script, the scss) stay in the tool's own `custom/` folder, written by the tool as now. `0-strafe-review` keeps its name: `recorder_settings.recorder()` and the hub's HUD section find the recorder there, and the frozen hub carries its own copy of that file (3.7 note).
+- **Patched game files** go in one kit folder, `custom/0-movekit`. It sorts before `0-strafe-review`, so its copies win. Each tool's own folder holds a `movekit-panorama.json` listing its patches. A patch is `{file, find, replace}`: `find` must occur exactly once in the base file. A patch whose `replace` text is already in the base does nothing. So an old copy (a stale `0-strafe-review/timer.xml`, or `custom/strafe-trainer-height`) chosen as the base never gets a second include.
+- **`sync(game)`** reads every manifest in `custom/*/movekit-panorama.json` and rebuilds `0-movekit` from scratch. It builds in a temp folder and renames it into place, under a lock file, so a recorder install at game start and a hub install at the same moment don't lose each other's patches.
+  - For each patched file it finds the base: the first `custom/` folder in mount order that has the file, skipping `0-movekit`, else the game's own.
+  - A VPK in `custom/` that has the file gets a warning, as `install.py` prints now (VPKs aren't read).
+  - It applies every tool's patches in tool-key order.
+  - When a patch's `find` text is missing (the game changed the file), that tool's patches for that file are left out, the file falls back to the base, and `status` reports it. The game still loads.
+  - No manifests left: `0-movekit` is removed.
+- **`install(game, tool, patches)` / `uninstall(game, tool)`** write or remove the tool's manifest, then `sync`. `status(game)` lists each tool's patches as applied or skipped, plus warnings, for the hub.
+- Strafe Review already reinstalls the recorder on every start (Windows exe, Linux launch hook). That start now also runs `sync`, so another mod's update to a patched file still carries over.
+
+**Old and new versions together.** The kit is in the core, so core 1.2.0 and `needs_core` 1.2.0 for the modules that use it.
+- An old Strafe Review module on the new core keeps writing its own `timer.xml` into `0-strafe-review`. When a kit tool also patches `timer.xml`, `sync` picks that file as the base (it is first after `0-movekit`), so both includes load.
+- A new module on an old core is refused by `needs_core`.
+
+**Steps** (each one ends released, checks as before plus the new ones):
+1. **4.1 Kit.** `movekit/panorama.py` and `movekit/check_panorama.py`, with a fake game folder. The check covers:
+   - the base from a foreign folder, from the game, and a VPK warning;
+   - two fake tools patching the same file, both kept;
+   - a patch already present, applied once;
+   - a missing `find`, skipped and reported;
+   - uninstalling one tool keeps the other;
+   - `sync` run twice gives the same result;
+   - nothing left, so `0-movekit` is gone.
+
+   Mutations: drop one tool's include, ignore the "already present" rule, don't skip `0-movekit` in the base search. Each must make the check fail.
+2. **4.2 Strafe Review on the kit.** `install.py` hands its `timer.xml` include to the kit as a patch and no longer writes `timer.xml` into `0-strafe-review`; uninstall removes the manifest and syncs. The `panoDev` smoke test (`smoke_test.py`) must still end with one include. Release: core 1.2.0 (`hub-v1.2.0`), Strafe Review 1.8.0 with the bridge zip.
+3. **4.3 Strafe trainer height as a module.** New folder `trainer-height/`, copied from `~/claude/mmod-trainer-height` (copied, not moved; that folder stays until the owner says otherwise):
+   - Contents: `module.json` (key `trainer-height`, Linux and Windows), `module_hooks.py`, and the scss in `custom/movekit-trainer-height`.
+   - Two patches: the scss include after the `main.scss` include in `strafe-trainer.xml`, and `resizeY` in `strafe-trainer.ts`.
+   - Install removes the old `custom/strafe-trainer-height`.
+   - It shows as a card on the hub's Modules page. A switch in the HUD section can wait.
+   - Release: `trainer-height-v1.0.0`, new CI caller. Then the wiki page for mmod-trainer-height says it moved.
+
+**Open for the owner.**
+- The module's display name. Suggested: "Strafe Trainer Height".
+- Whether the HUD section should also list the kit's `status` (patches applied or skipped). Suggested: yes, one small card, in 4.2.
+
 ## Later / undecided
 
-- **Panorama module kit.** One installer for `custom/0-*` folders and `timer.xml` includes, shared by the recorder, `mmod-trainer-height` and a future JHUD.
+- **Panorama module kit.** Planned as Phase 4 (2026-11-03).
+- **JHUD**, a per-jump stat display. It would use the Phase 4 kit for its HUD files.
 - **Gain math in one language.** Done in 3.2: `movekit/web/gain.js`; the Python copy went with the tkinter window in 3.8.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
 
