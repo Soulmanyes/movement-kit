@@ -212,6 +212,7 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - Row 2: `85.3 % · 92 %`, gain % and sync. Gain is coloured on the drill page's scale: red at 60 %, green at 95 %. Both thresholds and both colours are customizer settings.
 - Off by default, but can be ticked: strafes, yaw ratio, efficiency, height change, distance, time change.
 - Which jumps show: from jump N, every Nth jump (the built-in panel's two settings). The default is every jump.
+- Bhop modes only (`BHOP`, `BHOP_HL1`, through the customizer's `gamemode`), like the game's Jump Stats (owner, after 5.1: not in surf). Hidden until the first jump, no placeholder text.
 - It holds for 2 s, then fades over 0.3 s. A new jump replaces it straight away. It sits in the middle of the screen, below the crosshair.
 - On once the module is installed (installing it is the opt-in). The customizer's own switch turns it off.
 
@@ -236,6 +237,14 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
    - `jhud/check_jhud.py` checks a fake game: install and uninstall, both patches applied once, Strafe Review's and Trainer Height's patches kept, a changed kv3 left out and reported. Mutations: no kv3 patch, uninstall without sync.
    - Registration: `jhud-v*` in `module-release.yml`, plus the module lists in `check_modules.py`.
    - Release: `jhud-v1.0.0`. Then the owner tries it in the game and tunes the defaults.
+
+### Phase 5.1: probe (2026-11-03, owner tested bhop_glacial and surf_ferros)
+
+- **Customizer: works.** The `hud_default.kv3` copy in `custom/movekit-jhud-probe/cfg/hud` was read: `loadComponent` joined `MovekitJhud` (`joined: true`), the panel could be dragged, and the number setting reached the script (95, then 94-91). So the settings stay in the customizer, and 5.2 goes ahead.
+- **Events.** `OnJumpStarted` + `GetLastJumpStats()` fire in bhop (mode 2) and surf (mode 1). The panel's parent from `timer.xml` is the `Hud` root.
+- **`jumpCount`** resets to 0 when the timer primes (state 1, the start zone). The event for jump N carries the air time of jump N-1: `n` 1 has gain 0 and takeoff = speed, `n` 2 has jump 1's gain (82 %). So JHUD labels a line with `n - 1` and skips `n` 1. A reset in the zone can give an `n` 1 with takeoff about 55 and `dt` 0.01: skipped the same way.
+- **Owner:** the probe showed in surf and showed its text before any jump; JHUD should do neither (see "Default look").
+- Probe removed from the live game afterwards (`probe.py --uninstall`).
 
 ## Later / undecided
 
