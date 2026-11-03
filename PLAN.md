@@ -128,7 +128,7 @@ Toolkit and split decided by the owner 2026-11-02; steps 3.1–3.8 OK'd the same
 
 Done when: the hub window runs on Linux and Windows with every section, the review page opens from it, and installed copies have moved onto it.
 
-## Phase 4: Panorama module kit (planned and OK'd 2026-11-03; 4.1 done on branch `panorama-kit`)
+## Phase 4: Panorama module kit (planned and OK'd 2026-11-03; 4.1 and 4.2 done on branch `panorama-kit`, not released yet)
 
 The owner picked this from "Later" on 2026-11-03, as a phase of its own (not as the first step of JHUD).
 
@@ -537,6 +537,18 @@ The owner picked both on 2026-11-02, before the Windows hand test. The hub shipp
 - `sync` writes nothing when the folder already holds the same files. When only `present` patches are left (the base already has them), no copy is needed and no file is written.
 - `movekit/check_panorama.py` covers the list in "Phase 4" step 1, plus CRLF and tab indents, a find/replace patch, the all-or-none rule, bad and duplicate manifests, and `status` writing nothing. Also a leftover temp folder removed, and a swap failing halfway (`Path.rename` made to fail) keeping the last good folder, with both temp folders in the game folder. Mutations caught: one tool's include dropped, the "already present" rule ignored, the kit folder allowed as the base, a failed tool's earlier patch kept, no rollback, either temp folder in `custom/`, no leftover cleanup. Every other core check passes.
 - Nothing uses it yet, so it ships with 4.2 (core 1.2.0) instead of a release of its own. The hub build bundles every `movekit/*.py` as a hidden import (`hub/build.py` `kit_modules`), so the frozen core carries it.
+
+### Phase 4.2: Strafe Review on the kit (2026-11-03, branch `panorama-kit`, not released yet)
+
+- `strafe-review/install.py` lists its include as `PATCHES` (`before: </scripts>`) and calls `panorama.install` after copying the recorder, so the kit's `timer.xml` never includes a script that isn't there yet. `base_timer` and `timer_with_recorder` are gone. The old `0-strafe-review` folder is deleted on install as before, so a stale `timer.xml` from an older version goes with it.
+- Uninstall calls `panorama.uninstall` first, then deletes the recorder. When that sync fails (OSError), the recorder folder stays and a warning is printed. The autoexec block and the launch hook are still removed.
+- A skipped patch no longer fails the install (the old code raised on a `timer.xml` without `</scripts>`). Instead it prints "the recorder won't load" to stderr, and the HUD card shows it. The review page's "Recorder installed" (`viewer/server.py`) still only checks the `.ts` file.
+- Before deleting the old code: on the real game's `timer.xml` the kit's patch gives the same text as `timer_with_recorder`, and on the live `0-strafe-review/timer.xml` it reports `present`.
+- HUD section: `panorama_status` (`game: false` when Momentum isn't found), and a "Patched game files" card listing each patch as applied, already in the file, or left out with the reason, plus the kit's warnings. Screenshot taken on a fake game with one applied and one skipped patch.
+- Versions: `CORE_VERSION` and `hub_release.VERSION` 1.2.0, Strafe Review 1.8.0 with `needs_core` 1.2.0.
+- Checks: `check_modules` (include once in `0-movekit`, none in `0-strafe-review`, `0-movekit` gone after uninstall), `hub/smoke_test.py --repo` (panoDev's `timer.xml` with one include, now in `0-movekit`; `0-movekit` gone after uninstall), `check_hud` (`panorama_status` with no patches, applied, skipped, no game). Mutations caught: no `panorama.install` call, no `panorama.uninstall` call, `panorama_status` returning nothing. Every `check_*.py`, `check_recorder.py` (1344 attempts, 0 broken) and the viewer's `check_*.js` pass. `check_css_ssj.js` needs a demo recording, so it wasn't run.
+- Still open: the Windows CI build (the first run of the `msvcrt` lock), then the merge and release.
+- The owner's live game runs this working tree (`strafe-review-run` links into it). Its next start writes `custom/0-movekit` and removes the old `timer.xml` from `0-strafe-review`.
 
 ### Notes for later steps
 
