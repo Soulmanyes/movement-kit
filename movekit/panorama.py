@@ -205,15 +205,28 @@ def _current(folder):
 
 @contextlib.contextmanager
 def _lock():
-    try:
-        import fcntl
-    except ImportError:  # Windows: installs run one at a time from the core exe
-        yield
-        return
+    """One sync at a time, across programs: the hub window and the game's launch can both run one."""
     from movekit import paths
     data = paths.data_dir("movekit")
     data.mkdir(parents=True, exist_ok=True)
-    with open(data / "panorama.lock", "w") as f:
+    with open(data / "panorama.lock", "a+") as f:
+        try:
+            import fcntl
+        except ImportError:  # Windows
+            import msvcrt
+            f.seek(0)
+            while True:
+                try:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)  # tries for 10 s, then OSError
+                    break
+                except OSError:
+                    pass
+            try:
+                yield
+            finally:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            return
         fcntl.flock(f, fcntl.LOCK_EX)
         yield
 
@@ -226,29 +239,31 @@ def sync(game):
     with _lock():
         files, report = build(game)
         dest = custom / KIT_FOLDER
+        # built in the game folder, not in custom/: the game mounts every folder in custom/, and a
+        # name starting with "." would sort before ours and win. Leftovers are from a crash.
+        for stale in Path(game).glob(".movekit-*"):
+            shutil.rmtree(stale, ignore_errors=True)
         if _current(dest) == files and (dest / NOTE).is_file() == bool(files):
             return report
         if not files:
             shutil.rmtree(dest, ignore_errors=True)
             return report
-        # built in the game folder, not in custom/: the game mounts every folder in custom/, and a
-        # name starting with "." would sort before ours and win
-        for stale in Path(game).glob(".movekit-*"):
-            shutil.rmtree(stale, ignore_errors=True)
         new = Path(tempfile.mkdtemp(dir=game, prefix=".movekit-new-"))
+        old = None
         try:
             for rel, text in files.items():
                 (new / rel).parent.mkdir(parents=True, exist_ok=True)
                 with open(new / rel, "w", encoding="utf-8", errors="surrogateescape", newline="") as f:
                     f.write(text)
             (new / NOTE).write_text(NOTE_TEXT, encoding="utf-8")
-            old = None
             if dest.exists():
                 old = Path(game) / f".movekit-old-{os.getpid()}"
                 shutil.rmtree(old, ignore_errors=True)
                 dest.rename(old)
             new.rename(dest)
         except BaseException:
+            if old is not None and old.exists() and not dest.exists():
+                old.rename(dest)  # the swap failed halfway: put the last good folder back
             shutil.rmtree(new, ignore_errors=True)
             raise
         if old is not None:

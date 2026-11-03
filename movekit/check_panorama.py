@@ -103,6 +103,32 @@ def main():
                "custom/ after sync")
         expect(sorted(p.name for p in game.iterdir()), ["custom", "panorama"], "game folder after sync")
 
+        # a leftover temp folder from a crash goes; a swap that fails halfway keeps the last good folder
+        (game / ".movekit-new-x" / "panorama").mkdir(parents=True)
+        panorama.sync(game)
+        expect((game / ".movekit-new-x").exists(), False, "leftover temp folder removed")
+        real_rename, calls = Path.rename, []
+
+        def rename(self, target):
+            calls.append((self, Path(target)))
+            if len(calls) == 2:
+                raise OSError("locked")
+            return real_rename(self, target)
+        Path.rename = rename
+        write(custom / "movekit-jhud" / panorama.MANIFEST, json.dumps({"tool": "jhud", "patches": []}))
+        try:
+            panorama.sync(game)
+            fail("a failed swap didn't raise")
+        except OSError:
+            pass
+        finally:
+            Path.rename = real_rename
+        expect(read(kit / TIMER), both, "last good folder kept after a failed swap")
+        expect(calls[0][1].parent, game, "the old folder is moved into the game folder, not custom/")
+        expect(calls[1][0].parent, game, "the new folder is built in the game folder, not custom/")
+        expect(sorted(p.name for p in game.iterdir()), ["custom", "panorama"], "game folder after a failed swap")
+        panorama.install(game, "movekit-jhud", "jhud", [{"file": TIMER, "before": "</scripts>", "line": JH}])
+
         # another mod's folder (sorts later, any case) is the base, not the game's file nor our own folder
         write(custom / "PanoDev" / TIMER, GAME_TIMER.replace("timer.ts", "dev-timer.ts"))
         report = panorama.sync(game)
