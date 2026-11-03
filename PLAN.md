@@ -396,7 +396,7 @@ A first install while the game is running fails to load the script (`Resource ..
 - **Checks.** `check_modules.check_groups` covers the order on Linux and Windows, the legacy group, an unknown group refused, install refused on the wrong OS, and a release seen from the other OS. Mutations caught (7/7): no HUD grouping, unsupported not last, install offered on the wrong OS, no install guard, other-OS modules hidden, release os dropped, no legacy groups. `check_hud.py` checks the HUD section is last in the sidebar (mutation caught). `smoke_test.py` SECTIONS order updated.
 - **Test window.** Pretending to be win32, Source Yaw shows greyed under "Not available on Windows" at the bottom.
 
-## Phase 7: First Jump HUD (owner, 2026-11-03; branch `first-jump`)
+## Phase 7: First Jump HUD (owner, 2026-11-03; released 2026-11-03 as hub-v1.6.0, strafe-review-v1.9.0, first-jump-v1.0.0)
 
 The owner asked for the jump-1 line to be "a separate hud element ... like jhud and histogram instead of being weird". Until now it was drawn by Strafe Review's recorder, at a fixed spot, and switched on in the hub's HUD section.
 
@@ -420,7 +420,7 @@ The owner asked for the jump-1 line to be "a separate hud element ... like jhud 
   - `first-jump/check_first_jump.py` covers the fake game install.
   - `hud/check_hud.py` covers the legacy toggle with a copy of the old `recorder_settings.py`. `hub/smoke_test.py --repo` expects no legacy toggle.
   - Every `check_*.py`, the node checks and the smoke test pass.
-- **Release order (when the owner OKs):** `hub-v1.6.0`, `strafe-review-v1.9.0`, `first-jump-v1.0.0`. Not tested in game yet.
+- **Released 2026-11-03.** The owner tested it in game and found it fine. `first-jump` was fast-forwarded into `main` (1a26cf8), and the tags `hub-v1.6.0`, `strafe-review-v1.9.0` and `first-jump-v1.0.0` were pushed by Claude (from now on Claude pushes the tags). All 4 CI runs passed. Each release has its files: hub-windows.zip; strafe-review module zip and json plus strafe-review-windows.zip; first-jump module zip and json.
 
 ## Later / undecided
 
