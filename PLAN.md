@@ -387,6 +387,15 @@ A first install while the game is running fails to load the script (`Resource ..
 - `main` was fast-forwarded to 1f46ce7. The owner pushed the tags `hub-v1.4.0`, `jhud-v1.1.0` and `strafe-histogram-v1.0.0`. Each release has its files (hub-windows.zip; `<tool>-module.zip` + `.json`) and notes.
 - The live game runs both modules from the checkout, as it did before the release.
 
+### Modules page groups (2026-11-03, owner; branch `modules-groups`, core 1.5.0, not released)
+
+- **Order.** `Manager.cards()` sorts: core, tools, HUD modules (installed first in each, then by title), then modules this OS can't run. The page puts a heading at each group: Tools, HUD, "Not available on <OS>". Unavailable cards are greyed (opacity 0.5), have no buttons, and say "<OS> only".
+- **`group`.** `module.json` may say `"group": "hud"`: JHUD, Strafe Speed Histogram and Strafe Trainer Height now do. Releases from before that use `LEGACY_GROUPS`, so those three modules need no new release. A release's `module.json` copy now keeps `os` and `group`.
+- **Other OS.** `known()` also lists module folders for another OS (`local()`). `install()` refuses a module whose `os` leaves this platform out.
+- **Sidebar.** The HUD section's order is 90, so it comes after the tools.
+- **Checks.** `check_modules.check_groups` covers the order on Linux and Windows, the legacy group, an unknown group refused, install refused on the wrong OS, and a release seen from the other OS. Mutations caught (7/7): no HUD grouping, unsupported not last, install offered on the wrong OS, no install guard, other-OS modules hidden, release os dropped, no legacy groups. `check_hud.py` checks the HUD section is last in the sidebar (mutation caught). `smoke_test.py` SECTIONS order updated.
+- **Test window.** Pretending to be win32, Source Yaw shows greyed under "Not available on Windows" at the bottom.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
