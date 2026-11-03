@@ -9,9 +9,10 @@
 // entry for its panel id; install.py hands the kit that entry (ENTRY there), whose dynamicStyles must
 // list every setting in STYLES below with the value in DEFAULTS (check_jhud.js checks both).
 //
-// The event for takeoff N carries the air time of jump N-1 (Phase 5.1): jumpCount 1 is a takeoff with
-// no air time yet, so it is skipped, and a line is labelled jumpCount - 1. jumpCount resets to 0 when
-// the timer primes in the start zone.
+// A line shows at every takeoff, labelled with the takeoff's number (jumpCount), like shavit-jhud. The
+// event for takeoff N carries takeoff N's speed but the air time of jump N-1 (Phase 5.1), so gain, sync
+// and the rest are the air time just before it. Takeoff 1 has no air time yet: its line is the number and
+// speed only, in the font colour. jumpCount resets to 0 when the timer primes in the start zone.
 //
 // No imports, like the Strafe Review recorder. The plain functions (above "Panorama") are run in node
 // by check_jhud.js.
@@ -137,9 +138,9 @@ function gainColor(pct: number, s: Settings): string {
 	return mixColor(s.redColor, s.greenColor, t);
 }
 
-// The jump a takeoff event describes (1 = jump 1), or 0 when it describes none
+// The takeoff number a jump event is labelled with (1 = the first takeoff), or 0 when it has none
 function jumpOf(st: Stats): number {
-	return Math.max(0, Math.floor(st.jumpCount) - 1);
+	return Math.max(0, Math.floor(st.jumpCount));
 }
 
 // Whether jump n shows: from firstJump on, every everyJump-th (0: only firstJump), like the game's Jump Stats
@@ -153,9 +154,16 @@ function shows(n: number, s: Settings): boolean {
 const signed = (v: number, digits: number) => (v >= 0 ? '+' : '') + v.toFixed(digits);
 
 // The rows to draw for a jump: one line with every field switched on, in this order, the whole line in
-// the gain colour (gainAll) or only the gain %. No fields: no rows. Kept as rows, so a layout with more
-// lines can come back without changing draw().
+// the gain colour (gainAll) or only the gain %. Takeoff 1 (no air time yet): number and speed only, in
+// the font colour. No fields: no rows. Kept as rows, so a layout with more lines can come back without
+// changing draw().
 function rows(st: Stats, n: number, s: Settings): Part[][] {
+	if (n === 1) {
+		const line: Part[] = [];
+		if (s.showNumber) line.push({ text: '1:', color: null });
+		if (s.showSpeed) line.push({ text: st.takeoffSpeed.toFixed(0), color: null });
+		return line.length ? [line] : [];
+	}
 	const g = st.speedGain * 100;
 	const gc = gainColor(g, s);
 	const c = s.gainAll ? gc : null;

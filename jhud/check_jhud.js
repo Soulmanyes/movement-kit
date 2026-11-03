@@ -6,8 +6,9 @@
 //
 // Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group) against
 // install.py's hud_default.kv3 entry (same keys, same values); jumpOf, shows, the gain colour scale and
-// the row text; the Panorama side: the customizer gets the component for bhop modes only, jumpCount 1
-// and other modes and a panel switched off in the customizer show nothing, a jump shows its rows and
+// the row text; the Panorama side: the customizer gets the component for bhop modes only, the first
+// takeoff shows its number and speed, other modes and a panel switched off in the customizer show
+// nothing, a jump shows its rows and
 // fades after holdMs, the customizer's sample while it is open; then every saved jump event in Strafe
 // Review's store (--store, default ~/.local/share/strafe-review/attempts; skipped when missing) gives
 // rows with no NaN or undefined.
@@ -129,7 +130,7 @@ expect(api.gainColor(95, S), 'rgba(123, 216, 143, 1)', 'gain at green: green');
 expect(api.gainColor(120, S), 'rgba(123, 216, 143, 1)', 'gain over green: green');
 expect(api.gainColor(77.5, S), 'rgba(189, 154, 118, 1)', 'gain half way: mixed');
 expect(api.gainColor(70, { ...S, gainRed: 90, gainGreen: 80 }), 'rgba(255, 92, 92, 1)', 'thresholds the wrong way round');
-expect([0, 1, 2, 3].map((c) => api.jumpOf({ jumpCount: c })), [0, 0, 1, 2], 'jumpOf: takeoff N carries jump N-1');
+expect([0, 1, 2, 3].map((c) => api.jumpOf({ jumpCount: c })), [0, 1, 2, 3], 'jumpOf: labelled with the takeoff number');
 const pick = (first, every) => [1, 2, 3, 4, 5, 6, 7].filter((n) => api.shows(n, { firstJump: first, everyJump: every }));
 expect(pick(1, 1), [1, 2, 3, 4, 5, 6, 7], 'shows every jump');
 expect(pick(2, 2), [2, 4, 6], 'shows from 2, every 2nd');
@@ -149,6 +150,10 @@ expect(api.rows(st, 3, all).map((row) => row.map((p) => p.text)),
 	[['3:', '509', '(+65)', '92.1 %', 'sync 100 %', '2 strafes', 'ratio 0.93', 'eff 58 %', 'h +0.0', '357.9 u', '0.75 s']], 'every field: still one line');
 const none = Object.fromEntries(Object.keys(S).map((k) => [k, k.startsWith('show') ? false : S[k]]));
 expect(api.rows(st, 3, none), [], 'no fields: no rows');
+const one = api.rows({ ...st, jumpCount: 1, speedGain: 0 }, 1, S);
+expect(one.map((row) => row.map((p) => p.text)), [['1:', '509']], 'takeoff 1: number and speed only');
+expect(one[0].map((p) => p.color), [null, null], 'takeoff 1: font colour, no gain yet');
+expect(api.rows(st, 1, { ...none, showGain: true }), [], 'takeoff 1 with only gain on: no rows');
 // the owner's pick on 2026-11-03 (number, speed, gain, yaw ratio) came out on three lines before
 expect(api.rows(st, 3, { ...none, showNumber: true, showSpeed: true, showGain: true, showYawRatio: true }).map((row) => row.map((p) => p.text)),
 	[['3:', '509', '92.1 %', 'ratio 0.93']], 'a few fields: one line');
@@ -171,9 +176,14 @@ expect(loaded.props.dynamicStyles.backgroundColor.styleProperty, 'backgroundColo
 const panel = hud.FindChildTraverse('MovekitJhud');
 expect(panel && panel.visible, false, 'hidden until a jump');
 
-stats = { ...st, jumpCount: 1 };
+stats = { ...st, jumpCount: 1, speedGain: 0 };
 fire('OnJumpStarted');
-expect(panel.visible, false, 'jumpCount 1 (no air time yet) shows nothing');
+expect(panel.visible, true, 'the first takeoff shows');
+expect(texts(panel), [['1:', '509']], 'the first takeoff: number and speed');
+if (!panel.children[0].children.every((l) => l.styleText.includes(`color: ${S.fontColor};`))) fail('the first takeoff not in the font colour');
+runSchedules();
+runSchedules();
+expect(panel.visible, false, 'the first takeoff fades');
 stats = st;
 mode = 1;
 fire('OnJumpStarted');
@@ -185,7 +195,7 @@ expect(panel.visible, false, 'switched off in the customizer shows nothing');
 panel.enabled = true;
 fire('OnJumpStarted');
 expect(panel.visible, true, 'a bhop jump shows');
-expect(texts(panel), [['3:', '509', '(+65)', '92.1 %', 'sync 100 %']], 'drawn line');
+expect(texts(panel), [['4:', '509', '(+65)', '92.1 %', 'sync 100 %']], 'drawn line');
 if (!panel.children[0].children.every((l) => l.styleText.includes(`color: ${GC};`))) fail('drawn line not all in the gain colour');
 expect(panel.style.opacity, '1', 'shown fully');
 expect(runSchedules(), [2], 'held for holdMs');
@@ -200,18 +210,18 @@ const first = schedules[0];
 schedules = [schedules[1]];
 first.fn();
 expect(panel.style.opacity, '1', 'an old jump\'s timer leaves the new one');
-expect(texts(panel)[0][0], '4:', 'the newer jump drawn');
+expect(texts(panel)[0][0], '5:', 'the newer jump drawn');
 schedules = [];
 
 // the customizer: a sample to drag while it is open, hidden when it closes
 fire('HudCustomizer_Opened');
 expect(panel.visible, true, 'sample shown in the customizer');
-expect(texts(panel)[0], ['6:', '642', '(+48)', '87.4 %', 'sync 93 %'], 'sample line');
+expect(texts(panel)[0], ['7:', '642', '(+48)', '87.4 %', 'sync 93 %'], 'sample line');
 expect(schedules.length, 0, 'sample is held');
 fire('OnJumpStarted');
-expect(texts(panel)[0][0], '6:', 'jumps don\'t replace the sample while editing');
+expect(texts(panel)[0][0], '7:', 'jumps don\'t replace the sample while editing');
 loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, false);
-expect(texts(panel)[0], ['6:', '(+48)', '87.4 %', 'sync 93 %'], 'a changed setting redraws the sample');
+expect(texts(panel)[0], ['7:', '(+48)', '87.4 %', 'sync 93 %'], 'a changed setting redraws the sample');
 loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, true);
 fire('HudCustomizer_Closed');
 expect(panel.visible, false, 'hidden when the customizer closes');
@@ -240,7 +250,7 @@ expect(api2.settings.showSpeed, false, 'the new copy gets the saved settings');
 stats = { ...st, jumpCount: 6 };
 fire('OnJumpStarted');
 expect(panel.visible, true, 'shows after a reload');
-expect(texts(panel), [['5:', '(+65)', '92.1 %', 'sync 100 %']], 'drawn once, by the new copy with its settings');
+expect(texts(panel), [['6:', '(+65)', '92.1 %', 'sync 100 %']], 'drawn once, by the new copy with its settings');
 expect(schedules.length, 1, 'only the new copy schedules a fade');
 oldTimers.forEach((x) => x.fn());
 expect([panel.visible, panel.style.opacity], [true, '1'], 'the old copy\'s pending timer leaves the new jump');
