@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Checks jhud/panorama/scripts/hud/movekit-jhud.ts in node, with Panorama stubbed (types stripped, as
-// strafe-review/viewer/check_line.js does).
+// first-jump/check_parity.js does).
 //
 // Usage: node jhud/check_jhud.js [--store DIR]   (exits 1 on the first failure)
 //
