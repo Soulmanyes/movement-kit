@@ -2,7 +2,7 @@
 
 Per-tick strafe recording and review for [Momentum Mod](https://momentum-mod.org/). A small HUD script records every attempt, and a page in your browser shows each jump as a graph, lists the mistakes it finds, and compares your strafing with optimal movement and with replays.
 
-![The main page: a finished run with its run stats, above the graph of its jumps](docs/screenshot.png)
+![The main page: a finished run's graphs (jumps, yaw speed, angle, gain, keys, speed and missed ticks)](docs/screenshot.png)
 
 The review page has three parts:
 
