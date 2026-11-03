@@ -5,7 +5,7 @@
   "os": ["linux", "win32"],
   "tag_prefix": "trainer-height-v",
   "version_from": "install.py",
-  "needs_core": "1.2.0",
+  "needs_core": "1.2.1",
   "needs": [],
   "data": []
 }
