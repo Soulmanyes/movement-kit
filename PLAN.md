@@ -246,6 +246,13 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - **Owner:** the probe showed in surf and showed its text before any jump; JHUD should do neither (see "Default look").
 - Probe removed from the live game afterwards (`probe.py --uninstall`).
 
+### Phase 5.2: kit for `cfg/hud/` (2026-11-03, built, not released)
+
+- `movekit/panorama.py`: a patch's file may be `cfg/hud/*.kv3` as well as `panorama/...`. The base search is the same (a `custom/` folder in mount order, else the game's own). Only `*_default.kv3` should be patched, since the game writes its presets into `cfg/hud` itself.
+- `check_panorama.py`: a kv3 patch from the game's file and from a mod's copy in `custom/` (entry once), gone with its tool; `cfg/hud/notes.txt` and `cfg/hud/../autoexec.kv3` refused. Mutation: allowing any `cfg/` path fails the check.
+- HUD section: `show_with` adds `jhud`, `get` returns `jhud` (installed), and a JHUD card (shown only when installed) points at Momentum's HUD customizer. The jump-1 line's "off by default" note moved into its own card, since JHUD is on once installed. `check_hud` covers `jhud` and `show_with`.
+- Every `check_*.py` and `hub/smoke_test.py --repo` pass (`strafe-review/check_hub_section.py` not run: it needs the live viewer stopped, and nothing it covers changed).
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
