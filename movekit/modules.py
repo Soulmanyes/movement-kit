@@ -12,9 +12,11 @@ A module is a tool folder with a module.json:
                                                 movekit.paths' data_dir (data:) or config_dir (config:)
      "standalone": ["old_window.py"],           files that run on their own, never in the core (an
                                                 old window), so check_modules' import rule skips them
-     "hud_card": {"title": "...", "text": "..."}}
+     "hud_card": {"title": "...", "text": "..."},
                                                 optional: a card on the hub's HUD section, for modules
                                                 set up in Momentum's own HUD customizer (JHUD, ...)
+     "group": "hud"}                            optional, "tool" (default) or "hud": the Modules page lists
+                                                the HUD modules after the tools
 
 and, if it changes anything outside its own folder, a module_hooks.py with any of:
 
@@ -74,7 +76,7 @@ from pathlib import Path
 
 from movekit import paths, updater
 
-CORE_VERSION = "1.4.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
+CORE_VERSION = "1.5.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
 CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
@@ -83,6 +85,9 @@ API = f"https://api.github.com/repos/{REPO}/releases?per_page=100"
 AGENT = "movement-kit-modules"
 CHECK_EVERY = 6 * 3600  # seconds between automatic looks at GitHub
 MANIFEST = "module.json"
+GROUPS = ("tool", "hud")
+# modules released before module.json had "group"
+LEGACY_GROUPS = {"jhud": "hud", "trainer-height": "hud", "strafe-histogram": "hud"}
 HOOKS = "module_hooks.py"
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 DATA_RE = re.compile(r"^(data|config):([A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*)$")
@@ -165,6 +170,8 @@ def read_manifest(folder):
     if card is not None and not (isinstance(card, dict) and set(card) == {"title", "text"}
                                  and all(isinstance(v, str) and v for v in card.values())):
         raise ValueError("hud_card must be {\"title\": text, \"text\": text}")
+    if m.get("group") is not None and m["group"] not in GROUPS:  # left unset: LEGACY_GROUPS, else "tool"
+        raise ValueError(f"group must be one of {', '.join(GROUPS)}")
     return m
 
 
@@ -352,9 +359,27 @@ class Manager:
         """The module folders the hub should load sections from."""
         return [self.folder(k) for k in self.installed()]
 
+    def local(self):
+        """{key: manifest} of every module folder in the kit root with a good module.json, for any OS."""
+        out = {}
+        for folder in sorted(p for p in self.kit.iterdir() if p.is_dir()) if self.kit.is_dir() else ():
+            if (folder / MANIFEST).is_file():
+                try:
+                    m = read_manifest(folder)
+                except ValueError:
+                    continue
+                out[m["key"]] = m
+        return out
+
+    def supports(self, manifest):
+        """True when the manifest's os list covers this platform (no list known: True)."""
+        oses = manifest.get("os")
+        return not oses or any(self.platform.startswith(o) for o in oses)
+
     def known(self):
-        """Keys the hub can offer: installed modules plus releases seen on GitHub."""
-        keys = set(self.available())
+        """Keys the hub can offer: installed modules plus releases seen on GitHub, and module folders
+        here for another OS (shown greyed out)."""
+        keys = set(self.available()) | set(self.local())
         if not self.checkout:
             keys |= {k for k in self.state.get("latest", {}) if k != CORE}
         return sorted(keys)
@@ -426,6 +451,10 @@ class Manager:
             out["needs_core"] = m["needs_core"]
         if isinstance(m.get("needs"), list) and all(isinstance(k, str) for k in m["needs"]):
             out["needs"] = m["needs"]
+        if isinstance(m.get("os"), list) and all(isinstance(o, str) for o in m["os"]):
+            out["os"] = m["os"]
+        if m.get("group") in GROUPS:
+            out["group"] = m["group"]
         return out
 
     # one card's facts
@@ -445,10 +474,12 @@ class Manager:
                                          "The hub window, the HUD settings and the launch option."}
         else:
             remote = (latest or {}).get("manifest") or {}
-            manifest = self.available().get(key) or {"title": remote.get("title", key),
-                                                     "summary": remote.get("summary", ""),
-                                                     "needs": remote.get("needs", [])}
+            manifest = self.available().get(key) or self.local().get(key) or {
+                "title": remote.get("title", key), "summary": remote.get("summary", ""),
+                "needs": remote.get("needs", []), "os": remote.get("os"), "group": remote.get("group")}
             installed = key in self.installed()
+        supported = key == CORE or self.supports(manifest)
+        group = "core" if key == CORE else manifest.get("group") or LEGACY_GROUPS.get(key, "tool")
         version = self.version(key) if installed else None
         update = bool(installed and latest and newer(latest["tag"], version))
         # a waiting mark counts only for the release that set it; a newer one may not need it
@@ -465,8 +496,9 @@ class Manager:
             "installed": installed, "version": version,
             "auto": bool(entry.get("auto")),
             "latest": latest, "update": update, "can_update": can_update,
-            "can_install": not installed and (self.checkout and key in self.available()
-                                              or bool(latest and latest.get("asset") and not waiting)),
+            "can_install": not installed and supported and (
+                self.checkout and key in self.available() or bool(latest and latest.get("asset") and not waiting)),
+            "group": group, "supported": supported, "os": list(manifest.get("os") or []),
             "can_rollback": (not self.checkout and installed and key != CORE
                              and (self.data / "previous" / key).is_dir()),
             "previous": entry.get("previous") if not self.checkout else None,
@@ -485,9 +517,13 @@ class Manager:
         return None
 
     def cards(self):
-        """The core's card, then one per module the hub can offer."""
+        """The core's card, then one per module the hub can offer: the tools, then the HUD modules,
+        installed ones first, each by title; the ones that don't run on this OS last."""
         self._merge_auto()
-        return [self.info(CORE)] + [self.info(k) for k in self.known()]
+        mods = [self.info(k) for k in self.known()]
+        mods.sort(key=lambda c: (not c["supported"], c["group"] == "hud", not c["installed"], c["title"].lower(),
+                                 c["key"]))
+        return [self.info(CORE)] + mods
 
     def note(self, name, value):
         """Keep a top-level flag in the state file (the core's one-time steps)."""
@@ -572,6 +608,9 @@ class Manager:
         its install hook from the checkout and show it again)."""
         if key in self.installed():
             raise RuntimeError(f"{key} is already installed")
+        known = self.local().get(key) or (self.state.get("latest", {}).get(key) or {}).get("manifest") or {}
+        if not self.supports(known):
+            raise RuntimeError(f"{key} doesn't run on this OS ({', '.join(known['os'])} only)")
         if self.checkout:
             if key not in self.available():
                 raise RuntimeError(f"{key} isn't in this checkout")

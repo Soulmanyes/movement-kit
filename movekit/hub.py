@@ -232,7 +232,7 @@ class Bridge:
     def _cards(self):
         m = self._manager
         return {"cards": m.cards(), "busy": self._busy, "checked": m.state.get("checked"),
-                "auto_results": self._last, "checkout": m.checkout}
+                "auto_results": self._last, "checkout": m.checkout, "platform": m.platform}
 
     def _auto_update(self):
         """Run at start in a thread: the auto-update of every module whose switch is on."""

@@ -31,6 +31,8 @@ It downloads the newest hub release, copies the core (`movekit/` and `hud/`) to 
 
 Then open the hub. It starts on the Modules page:
 
+- The cards come in groups: the core, the tools, then the HUD modules (the ones set up in Momentum's HUD editor), installed ones first. Tools that don't run on your OS are listed greyed out at the bottom, with no Install button.
+
 - **Install** on a tool's card downloads it and runs its installer (Strafe Review needs Momentum Mod installed; Source Yaw needs its system packages, see its README).
 - **Update** shows when a new version is out, with **What's new** for its release notes. **Update all** at the top updates every card that has one.
 - **Roll back** returns to the version before the last update.

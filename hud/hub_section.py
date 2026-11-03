@@ -113,7 +113,7 @@ SECTION = {
     "os": ["linux", "win32"],
     "page": "hub/index.html",
     "api": {"get": get, "set_line": set_line, "panorama_status": panorama_status},
-    "order": 20,
+    "order": 90,  # after the tools (owner, 2026-11-03: HUD below the other things)
     # the jump-1 line is drawn by Strafe Review's recorder; a module's hud_card (JHUD, ...) only points
     # at the game's HUD customizer; the patched files card is for every tool that patches a game file.
     # The modules don't need each other.

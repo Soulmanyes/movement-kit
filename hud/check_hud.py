@@ -100,6 +100,7 @@ def main():
         expect([p for p in problems if p[0] == "hud"], [], "hud problems")
         if "hud" not in [s.key for s in sections]:
             fail("discovery didn't find the hud section")
+        expect([s.key for s in sections][-1], "hud", "the HUD section comes after the tools in the sidebar")
         bridge = hub.Bridge(sections, problems)
         # a checkout counts its module folders as installed, so the cards come from their module.json files
         jcard = json.loads((KIT / "jhud" / "module.json").read_text())["hud_card"]

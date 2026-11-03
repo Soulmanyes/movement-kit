@@ -109,3 +109,6 @@ button.danger { border-color: var(--warn); color: var(--warn); }
 .mod-confirm .row { display: flex; gap: 8px; }
 .mod-error { margin-top: 8px; color: var(--warn); }
 .mod-busy { color: var(--accent); }
+.mod-group { margin: 22px 0 10px; }
+.mod-unavailable { opacity: 0.5; }
+.mod-unavailable h2 { color: var(--muted); }

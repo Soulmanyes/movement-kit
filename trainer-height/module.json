@@ -7,5 +7,6 @@
   "version_from": "install.py",
   "needs_core": "1.2.1",
   "needs": [],
-  "data": []
+  "data": [],
+  "group": "hud"
 }

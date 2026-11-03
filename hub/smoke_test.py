@@ -49,7 +49,7 @@ HERE = Path(__file__).resolve().parent
 KIT_REPO = HERE.parent
 WIN = sys.platform == "win32"
 REPO = sys.argv[1:2] == ["--repo"]
-SECTIONS = ["strafe-review", "hud", "gain-converter"]  # sidebar order with both modules installed
+SECTIONS = ["strafe-review", "gain-converter", "hud"]  # sidebar order with both modules installed
 SMOKE_ID = "smoketest1"
 FAKE_TIMER = """<root>
 \t<scripts>

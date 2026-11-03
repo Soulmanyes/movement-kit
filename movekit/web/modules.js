@@ -165,6 +165,23 @@
 		return node;
 	}
 
+	const OS_NAMES = { linux: "Linux", win32: "Windows", darwin: "macOS" };
+	const osName = (p) => OS_NAMES[Object.keys(OS_NAMES).find((k) => (p || "").startsWith(k))] || p;
+
+	function groupOf(c, platform) {
+		if (!c.supported) return `Not available on ${osName(platform)}`;
+		return c.group === "hud" ? "HUD" : "Tools";
+	}
+
+	// A module this OS can't run: its title and summary, greyed, with the OSes it runs on and no buttons
+	function unavailable(c) {
+		const only = c.os.map(osName).join(" and ");
+		return el("div", { className: "card mod-unavailable" },
+			el("div", { className: "mod-head" }, el("h2", { textContent: c.title })),
+			c.summary ? el("div", { className: "mod-summary", textContent: c.summary }) : "",
+			el("div", { className: "mod-status muted", textContent: only ? `${only} only` : "Not for this OS" }));
+	}
+
 	function busyLabel(name) {
 		return { install: "Installing…", update: "Updating…", rollback: "Rolling back…", uninstall: "Uninstalling…",
 			set_auto: "Saving…", check: "Checking…", update_all: "Updating…" }[name] || "Working…";
@@ -197,11 +214,17 @@
 			list.append(el("div", { className: "card muted",
 				textContent: "No modules installed yet. Install the ones you use below; the rest never download." }));
 		}
-		for (const c of cards) if (c.key !== "core" && c.installed) list.append(card(c, busyName, busyKey));
-		const rest = cards.filter((c) => c.key !== "core" && !c.installed);
-		if (rest.length) {
-			list.append(el("h2", { textContent: "Not installed", style: "margin-top: 22px" }));
-			for (const c of rest) list.append(card(c, busyName, busyKey));
+		// Python sends them in order (Manager.cards): tools, then HUD modules, installed first, then the ones
+		// this OS can't run; a heading starts each group
+		let shown = null;
+		for (const c of cards) {
+			if (c.key === "core") continue;
+			const group = groupOf(c, state.platform);
+			if (group !== shown) {
+				list.append(el("h2", { className: "mod-group", textContent: group }));
+				shown = group;
+			}
+			list.append(c.supported ? card(c, busyName, busyKey) : unavailable(c));
 		}
 		if (cards.length === 1 && !state.checkout) {
 			list.append(el("div", { className: "card muted",

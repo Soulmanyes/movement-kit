@@ -473,6 +473,63 @@ def check_checkout():
     expect(sorted(mgr.installed()), ["alpha"], "installed again")
 
 
+def check_groups():
+    """The Modules page's order: tools, then HUD modules, installed first, by title; modules this OS
+    can't run last, with no Install. group in module.json, LEGACY_GROUPS for releases without it, os and
+    group kept from a release's module.json copy."""
+    root = TMP / "groups"
+    (root / ".git").mkdir(parents=True)
+
+    def mod(key, title, oses, group=None):
+        m = {"key": key, "title": title, "os": oses, "tag_prefix": f"{key}-v", "version_from": "tool.py",
+             "needs_core": "1.0.0"}
+        if group:
+            m["group"] = group
+        (root / key).mkdir()
+        (root / key / "module.json").write_text(json.dumps(m))
+        (root / key / "tool.py").write_text('VERSION = "1.0.0"\n')
+
+    mod("zeta", "Zeta", ["linux", "win32"])
+    mod("alpha", "Alpha", ["linux", "win32"])
+    mod("hudb", "B Hud", ["linux", "win32"], "hud")
+    mod("huda", "A Hud", ["linux", "win32"], "hud")
+    mod("jhud", "JHUD", ["linux", "win32"])  # no group: LEGACY_GROUPS says hud
+    mod("lin", "Linux Tool", ["linux"])
+    mod("linhud", "Linux Hud", ["linux"], "hud")
+    (root / "bad").mkdir()
+    (root / "bad" / "module.json").write_text(json.dumps({"key": "bad", "title": "B", "os": ["linux"],
+        "tag_prefix": "bad-v", "version_from": "tool.py", "needs_core": "1.0.0", "group": "fancy"}))
+    (root / "bad" / "tool.py").write_text('VERSION = "1.0.0"\n')
+    raises(lambda: modules.read_manifest(root / "bad"), "group must be", "an unknown group")
+    for plat, want in [("linux", ["alpha", "lin", "zeta", "huda", "hudb", "jhud", "linhud"]),
+                       ("win32", ["alpha", "zeta", "huda", "hudb", "jhud", "lin", "linhud"])]:
+        mgr = modules.Manager(kit_root=root, data=TMP / f"groups-{plat}", api="http://127.0.0.1:9/none", platform=plat)
+        cards = mgr.cards()
+        expect([c["key"] for c in cards], ["core"] + want, f"card order on {plat}")
+        expect({c["key"]: c["group"] for c in cards}["jhud"], "hud", "no group in an old JHUD: hud by LEGACY_GROUPS")
+        expect({c["key"]: c["group"] for c in cards}["zeta"], "tool", "no group: a tool")
+    expect([(c["key"], c["supported"], c["can_install"], c["os"]) for c in cards if c["key"] in ("lin", "alpha")],
+           [("alpha", True, False, ["linux", "win32"]), ("lin", False, False, ["linux"])],
+           "on Windows: the Linux tool unsupported, no Install (alpha is installed: a checkout)")
+    raises(lambda: mgr.install("lin"), "doesn't run on this OS", "install of a Linux-only module on Windows")
+    mgr.uninstall("alpha", delete_data=False)
+    expect([c["key"] for c in mgr.cards()][:3], ["core", "zeta", "alpha"], "installed tools before the rest")
+    expect(modules.LEGACY_GROUPS, {k: "hud" for k in ("jhud", "trainer-height", "strafe-histogram")}, "legacy groups")
+    for key in modules.LEGACY_GROUPS:
+        expect(modules.read_manifest(KIT / key).get("group"), "hud", f"{key}/module.json says hud itself")
+    # a release's module.json copy keeps os and group, so a card can say so before it is installed
+    gh = GitHub()
+    gh.release("omega-v1.0.0", "omega-module.zip", module_zip("omega", "1.0.0"),
+               manifest={"title": "Omega", "summary": "s", "needs_core": "1.0.0", "os": ["linux"], "group": "hud"})
+    rmgr = modules.Manager(kit_root=TMP / "groups-rkit", data=TMP / "groups-rdata", api=gh.base + "/releases",
+                           platform="win32")
+    rmgr.check(force=True)
+    c = rmgr.info("omega")
+    expect((c["group"], c["supported"], c["can_install"], c["os"]), ("hud", False, False, ["linux"]),
+           "a Linux-only release seen from Windows")
+    raises(lambda: rmgr.install("omega"), "doesn't run on this OS", "install of a Linux-only release on Windows")
+
+
 def fake_momentum(where):
     game = where / "momentum"
     (game / "cfg").mkdir(parents=True)
@@ -596,6 +653,7 @@ def main():
     check_own_modules()
     check_manager()
     check_checkout()
+    check_groups()
     check_bridge()
     check_strafe_review_hooks()
     shutil.rmtree(TMP, ignore_errors=True)
