@@ -71,7 +71,7 @@ from pathlib import Path
 
 from movekit import paths, updater
 
-CORE_VERSION = "1.3.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
+CORE_VERSION = "1.4.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
 CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
@@ -157,6 +157,11 @@ def read_manifest(folder):
         raise ValueError(f"data entries must be in the module's own folder ({m['key']})")
     if not all(isinstance(f, str) and (folder / f).is_file() for f in m["standalone"]):
         raise ValueError("standalone must list files in the module's folder")
+    # optional: a card on the hub's HUD section, for modules set up in the game's own HUD customizer
+    card = m.get("hud_card")
+    if card is not None and not (isinstance(card, dict) and set(card) == {"title", "text"}
+                                 and all(isinstance(v, str) and v for v in card.values())):
+        raise ValueError("hud_card must be {\"title\": text, \"text\": text}")
     return m
 
 

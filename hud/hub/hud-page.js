@@ -1,6 +1,6 @@
 // The HUD section: in-game display settings (hud/hub_section.py). The jump-1 line is drawn by
-// Strafe Review's recorder; saving it also writes it into the installed recorder. JHUD's card only
-// shows when it is installed: its settings live in the game's HUD customizer.
+// Strafe Review's recorder; saving it also writes it into the installed recorder. Modules set up in the
+// game's HUD customizer (JHUD, ...) get a card each from their module.json's hud_card, while installed.
 "use strict";
 
 (() => {
@@ -21,7 +21,19 @@
 		try {
 			const st = await hub.call("get");
 			$("hud-line-card").hidden = !st.strafeReview;
-			$("hud-jhud-card").hidden = !st.jhud;
+			$("hud-cards").replaceChildren(...st.cards.map((c) => {
+				const card = document.createElement("div");
+				card.className = "card hud-item";
+				card.id = "hud-card-" + c.key;
+				const title = document.createElement("div");
+				title.className = "hud-title";
+				title.textContent = c.title;
+				const text = document.createElement("div");
+				text.className = "muted";
+				text.textContent = c.text;
+				card.append(title, text);
+				return card;
+			}));
 			box.checked = st.inGameLine;
 			box.disabled = false;
 			note(RECORDER[st.recorder] || "");

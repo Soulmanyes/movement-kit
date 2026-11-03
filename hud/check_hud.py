@@ -7,6 +7,7 @@ Covers: the store (defaults, a round trip, unknown keys kept, wrong types and un
 a stored value of the wrong type read as the default, a broken file), Strafe Review's
 recorder_settings (rewrite both ways, False when the recorder isn't installed), the hub section
 found by discovery and called through the bridge (get with no game, not installed and installed;
+module cards from hud_card, the legacy JHUD card and when the section shows;
 set_line writing the recorder; panorama_status with no
 patches, applied, skipped and no game; a non-bool refused), loading it leaving no bare steam, install or
 recorder_settings module behind, and install.apply_settings reading the same store.
@@ -100,10 +101,12 @@ def main():
         if "hud" not in [s.key for s in sections]:
             fail("discovery didn't find the hud section")
         bridge = hub.Bridge(sections, problems)
-        jhud = (KIT / "jhud" / "module.json").is_file()  # a checkout counts its module folders as installed
+        # a checkout counts its module folders as installed, so JHUD's card comes from its module.json
+        jcard = json.loads((KIT / "jhud" / "module.json").read_text())["hud_card"]
+        jhud = [{"key": "jhud", **jcard}]
         settings.save("inGameLine", False)
         expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True,
-                                                            "jhud": jhud}},
+                                                            "cards": jhud}},
                "get, no game")
         expect(bridge.call("hud", "set_line", {"on": True}),
                {"ok": True, "result": {"inGameLine": True, "applied": False}}, "set_line, no game")
@@ -112,16 +115,30 @@ def main():
         expect(bridge.call("hud", "get")["result"]["recorder"], "not installed", "get, no recorder")
         os.environ["MOMENTUM_DIR"] = str(game)
         expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "strafeReview": True,
-                                                       "jhud": jhud},
+                                                       "cards": jhud},
                "get, installed")
         # the section shows for Strafe Trainer Height alone too; the jump-1 line's card then hides
-        expect(sections[[s.key for s in sections].index("hud")].show_with, ["strafe-review", "trainer-height", "jhud"],
-               "hud shows with any HUD module")
+        hud_sec = sections[[s.key for s in sections].index("hud")]
+        expect(hud_sec.show_with, ["strafe-review", "trainer-height"], "hud shows with the modules it has cards for")
+        # and with any module that has a hud_card (JHUD, the Strafe Speed Histogram, ...), or an old
+        # JHUD from before hud_card
+        card = {"title": "Zeta", "text": "set in the customizer"}
+        for found, want in [({}, False), ({"gain-converter": {}}, False), ({"jhud": {}}, True),
+                            ({"new-hud": {"hud_card": card}}, True)]:
+            expect(hub._shown(hud_sec, found), want, f"hud section shown with {sorted(found)}")
+        sec = hub.local_import(KIT / "hud" / "hub_section.py", "hub_section")
+        expect(sec.cards({"b": {"hud_card": card}, "jhud": {}, "c": {"hud_card": {**card, "title": "alpha"}},
+                          "gain-converter": {}}),
+               [{"key": "c", "title": "alpha", "text": card["text"]},
+                {"key": "jhud", **sec.LEGACY_CARDS["jhud"]},
+                {"key": "b", **card}], "cards: own, legacy, none, by title")
+        expect(sec.cards({"jhud": {"hud_card": card}}), [{"key": "jhud", **card}], "a module's own card beats the legacy one")
+        expect(sec.LEGACY_CARDS["jhud"], jcard, "the legacy JHUD card says what JHUD's module.json says")
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
         expect(bridge.call("hud", "get")["result"]["strafeReview"], False, "get, Strafe Review uninstalled")
         state.write_text(json.dumps({"modules": {"jhud": {"removed": True}}}))
-        expect(bridge.call("hud", "get")["result"]["jhud"], False, "get, JHUD uninstalled")
+        expect(bridge.call("hud", "get")["result"]["cards"], [], "get, JHUD uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
         expect(ts.read_text(), TS.replace("false", "true"), "recorder after set_line(True)")

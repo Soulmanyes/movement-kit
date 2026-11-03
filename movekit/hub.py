@@ -11,6 +11,8 @@ hub_section.py that sets
       "api":   {"convert": convert},    # plain functions: JSON-able keyword args in, JSON-able out
       "order": 20,                      # optional, sidebar position (then title)
       "show_with": ["strafe-review"],   # optional: shown only while one of these modules is installed
+      "show_if": fn,                    # optional: fn({key: manifest} of installed modules) -> bool,
+                                        # also shown while it says True (an error counts as False)
   }
 
 Sections come from two places (3.7b in PLAN.md): the core's own folders (hud/; any folder at the kit
@@ -73,6 +75,7 @@ class Section:
         self.api = dict(spec["api"])
         self.order = spec.get("order", 100)
         self.show_with = list(spec.get("show_with", []))
+        self.show_if = spec.get("show_if")
         self.lock = threading.Lock()
 
     def info(self):
@@ -119,6 +122,8 @@ def _check(spec, folder):
     show = spec.get("show_with", [])
     if not isinstance(show, (list, tuple)) or not all(isinstance(k, str) and KEY_RE.match(k) for k in show):
         return "show_with must list module keys"
+    if spec.get("show_if") is not None and not callable(spec["show_if"]):
+        return "show_if must be a function"
     page = (folder / str(spec["page"])).resolve()
     if not page.is_relative_to(folder.resolve()) or not page.is_file():
         return f"page {spec['page']!r} is not a file in the folder"
@@ -167,15 +172,29 @@ def core_folders(root=KIT):
             if p.is_dir() and not (p / "module.json").is_file()]
 
 
+def _shown(section, installed):
+    """installed: {key: manifest}. A section with neither show_with nor show_if always shows."""
+    if not section.show_with and section.show_if is None:
+        return True
+    if set(installed) & set(section.show_with):
+        return True
+    if section.show_if is None:
+        return False
+    try:
+        return bool(section.show_if(installed))
+    except Exception:  # noqa: BLE001 - a broken test hides the section, never the window
+        return False
+
+
 def kit_sections(manager, root=KIT, platform=sys.platform):
     """discover() over the core's folders and the installed modules, leaving out sections whose
-    show_with names no installed module."""
+    show_with names no installed module and whose show_if doesn't say True."""
     roots = manager.roots()
     folders = core_folders(root) + [f for f in roots if f.resolve() not in
                                     {c.resolve() for c in core_folders(root)}]
     sections, problems = discover(root, platform, folders)
-    installed = set(manager.installed())
-    sections = [s for s in sections if not s.show_with or installed & set(s.show_with)]
+    installed = manager.installed()
+    sections = [s for s in sections if _shown(s, installed)]
     problems += [(f, f"module.json: {e}") for f, e in manager.problems()]
     return sections, problems
 

@@ -192,6 +192,14 @@ def check_own_modules():
             "key": "alpha", "title": "A", "os": ["linux"], "tag_prefix": "alpha-v",
             "version_from": "tool.py", "needs_core": "1.0.0", "data": [data_entry]}))
         raises(lambda: modules.read_manifest(bad), "data entries", f"data entry {data_entry}")
+    base = {"key": "alpha", "title": "A", "os": ["linux"], "tag_prefix": "alpha-v",
+            "version_from": "tool.py", "needs_core": "1.0.0"}
+    for card in ("JHUD", {"title": "A"}, {"title": "A", "text": ""}, {"title": "A", "text": "t", "x": "y"},
+                 {"title": 1, "text": "t"}):
+        (bad / "module.json").write_text(json.dumps({**base, "hud_card": card}))
+        raises(lambda: modules.read_manifest(bad), "hud_card", f"hud_card {card!r}")
+    (bad / "module.json").write_text(json.dumps({**base, "hud_card": {"title": "A", "text": "t"}}))
+    expect(modules.read_manifest(bad)["hud_card"], {"title": "A", "text": "t"}, "a good hud_card")
 
 
 # fixture modules and a fake GitHub
@@ -527,6 +535,14 @@ def check_bridge():
     (core / "hud" / "hub_section.py").write_text(
         "SECTION = {'key': 'hud', 'title': 'HUD', 'os': ['linux', 'win32'], 'page': 'page.html', "
         "'api': {}, 'show_with': ['alpha']}\n")
+    # show_if gets the installed modules' manifests; one that raises hides its section
+    for key, test in (("extra", "lambda found: found.get('alpha', {}).get('key') == 'alpha'"),
+                      ("boom", "lambda found: 1 / 0")):
+        (core / key).mkdir()
+        (core / key / "page.html").write_text("<!DOCTYPE html><title>x</title>")
+        (core / key / "hub_section.py").write_text(
+            f"SECTION = {{'key': '{key}', 'title': '{key}', 'os': ['linux', 'win32'], 'page': 'page.html', "
+            f"'api': {{}}, 'show_if': {test}}}\n")
     mgr = modules.Manager(kit_root=TMP / "bkit", data=TMP / "bdata", api=gh.base + "/releases")
     served = {}
     bridge = hub.Bridge([], (), mgr, core, served)
@@ -541,9 +557,9 @@ def check_bridge():
     expect(r["ok"], True, f"install through the bridge: {r}")
     card = next(c for c in r["result"]["cards"] if c["key"] == "alpha")
     expect((card["installed"], card["version"], card["auto"]), (True, "1.1.0", False), "alpha's card after install")
-    expect(sorted(s["key"] for s in bridge.sections()["sections"]), ["alpha", "hud"],
-           "sections after install (HUD shown with alpha)")
-    expect(sorted(served), ["alpha", "hud"], "the page server's sections after install")
+    expect(sorted(s["key"] for s in bridge.sections()["sections"]), ["alpha", "extra", "hud"],
+           "sections after install (HUD shown with alpha, extra by its show_if)")
+    expect(sorted(served), ["alpha", "extra", "hud"], "the page server's sections after install")
     expect(bridge.call("alpha", "hello"), {"ok": True, "result": "1.1.0"}, "alpha's section call")
     r = bridge.modules("set_auto", {"key": "alpha", "value": True})
     expect(next(c for c in r["result"]["cards"] if c["key"] == "alpha")["auto"], True, "auto via the bridge")
