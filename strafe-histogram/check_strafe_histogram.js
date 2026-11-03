@@ -114,7 +114,7 @@ function loadScript() {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${src}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, fitLayout, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
 	rowStyle, settings };`, ctx);
 	return ctx.__api;
 }
@@ -281,6 +281,33 @@ expect(timer.parent.children.filter((c) => c.id === 'MovekitStrafeHist').length,
 jump(1300, 10);
 expect([shownRows(P).length, P.children.length], [10, 2], 'after the reload: the new copy built its own rows, once');
 expect(schedules.length, 1, 'one loop running after the reload');
+
+// a stale layout after an update + panorama_reload: the real customizer throws for a setting with no value
+// (customizer.ts Component constructor); that setting is left out instead, and the bars still draw
+const realLoad = (p, props) => {
+	const values = GLOBAL.HudCustomizerHandler.presetLayout[p.id].dynamicStyles;
+	for (const [id, st] of Object.entries(props.dynamicStyles)) {
+		if (st.type !== 0 && values[id] === undefined) throw new Error(`Could not load dynamic style value for ${id}`);
+	}
+	loaded = { p, props };
+	loads++;
+};
+const stale = Object.fromEntries(Object.entries(api.DEFAULTS).filter(([k]) => k !== 'swapSides'));
+GLOBAL.HudCustomizerHandler.presetLayout = { MovekitStrafeHist: { dynamicStyles: stale } };
+GLOBAL.HudCustomizerHandler.loadComponent = realLoad;
+loadScript();
+expect(loads, 3, 'stale layout: still registered');
+expect(['swapSides' in loaded.props.dynamicStyles, loaded.props.dynamicStyles.bars.children.map((c) => c.styleID).includes('swapSides')],
+	[false, false], 'stale layout: the new setting left out, and out of its group');
+expect('fromSides' in loaded.props.dynamicStyles, true, 'stale layout: the rest kept');
+jump(1400, 10);
+expect([P.visible, shownRows(P).length], [true, 10], 'stale layout: the bars draw');
+// a customizer that throws anyway: the bars still draw
+GLOBAL.HudCustomizerHandler.loadComponent = () => { throw new Error('boom'); };
+loadScript();
+jump(1500, 10);
+expect([P.visible, shownRows(P).length], [true, 10], 'a throwing customizer: the bars still draw');
+expect(api.fitLayout({ dynamicStyles: { a: { type: 1 } } }, null), { dynamicStyles: { a: { type: 1 } } }, 'no layout known: nothing left out');
 
 // ---- the store: the HUD's ground rule against the viewer's ----
 if (!fs.existsSync(store)) {

@@ -362,6 +362,18 @@ How it works:
 
 A first install while the game is running fails to load the script (`Resource ... failed to load`, a parse error in `timer.xml`). The game mounts `custom/*` folders only at start, so a game restart is needed; the READMEs now say so. A possible core fix: tool scripts live in `0-movekit`, which is already mounted. Not done; the owner hasn't decided.
 
+### Phase 6.2c: in-game fixes (2026-11-03, owner testing)
+
+- **Number boxes:** a min over 0 snapped half-typed values back (couldn't type 200 ticks). Every box now has min 0, like the game's own, and the scripts clamp the value where it is used. Rows: max 9999 in the box, 1000 in use, step 10. JHUD's boxes changed the same way.
+- **strafeRight** is 1, -1 or 0, not a bool, so `!!` sent every bar right. Now `> 0`; the test sends the game's values.
+- **Sides:** by default right strafes come from the left and left strafes from the right. "Swap the sides" (`swapSides`) turns that round.
+- **After an update and `panorama_reload` it vanished.** The customizer throws when a setting has no value in the layout loaded at map start (`customizer.ts`, Component constructor: "Could not load dynamic style value"), and the throw stopped the script before its loop started. Three changes, in JHUD too:
+  - `fitLayout()` leaves out settings the loaded layout has no value for, until the next map load.
+  - `register()` catches and logs.
+  - The histogram's loop starts before registering.
+
+  Tests copy the real throw. Mutations caught (6/6): no fit, throw passed on, no loop, group children kept, and JHUD's no fit and throw passed on.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

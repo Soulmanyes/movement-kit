@@ -96,7 +96,7 @@ function loadScript() {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${src}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, PACE, parseColor, mixColor, gainColor, paceColor, lineColor, jumpOf, shows, rows, settings, NONE };`, ctx);
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, PACE, fitLayout, parseColor, mixColor, gainColor, paceColor, lineColor, jumpOf, shows, rows, settings, NONE };`, ctx);
 	return ctx.__api;
 }
 const api = loadScript();
@@ -324,6 +324,17 @@ runSchedules();
 runSchedules();
 expect(panel.visible, false, 'the new copy fades it');
 expect(hud.children.filter((c) => c.id === 'MovekitJhud').length, 1, 'one JHUD panel');
+
+// a stale layout after an update + panorama_reload: a setting with no value is left out of the customizer
+// (the real one throws for it), the rest kept; nothing left out when the layout can't be read
+const fp = { dynamicStyles: { g: { type: 0, children: [{ styleID: 'a' }, { styleID: 'b' }] }, a: { type: 1 }, b: { type: 2 } } };
+const fit = api.fitLayout(fp, { a: 1 });
+expect([Object.keys(fit.dynamicStyles), fit.dynamicStyles.g.children.map((c) => c.styleID)], [['g', 'a'], ['a']],
+	'stale layout: the missing setting left out, and out of its group');
+expect(api.fitLayout(fp, null), fp, 'no layout known: nothing left out');
+// a customizer that throws: the script still loads, JHUD isn't lost for the session
+GLOBAL.HudCustomizerHandler.loadComponent = () => { throw new Error('Could not load dynamic style value for x'); };
+loadScript();
 
 // ---- saved jump events ----
 let n = 0;

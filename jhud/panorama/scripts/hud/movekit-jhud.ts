@@ -400,9 +400,33 @@ function fixBoxes() {
 	$.Schedule(BOX_FIX_S, fixBoxes);
 }
 
+// The customizer throws when a setting has no value in the layout it loaded at the map start
+// (customizer.ts Component constructor), and a throw here stops the whole script. After an update and a
+// panorama_reload, the loaded layout is the old hud_default.kv3, without the new settings (seen 2026-11-03:
+// swapSides). So settings the layout has no value for are left out of the customizer until the next map load,
+// where they keep their defaults. values: the loaded layout's dynamicStyles for this panel, or null (unknown:
+// nothing left out).
+function fitLayout(props: Record<string, any>, values: Record<string, unknown> | null): Record<string, any> {
+	if (!values) return props;
+	const keep = (id: string) => props.dynamicStyles[id].type === NONE || values[id] !== undefined;
+	const dynamicStyles: Record<string, any> = {};
+	for (const [id, style] of Object.entries(props.dynamicStyles as Record<string, any>)) {
+		if (!keep(id)) continue;
+		dynamicStyles[id] = style.children ? { ...style, children: style.children.filter((c: any) => props.dynamicStyles[c.styleID] && keep(c.styleID)) } : style;
+	}
+	return { ...props, dynamicStyles };
+}
+
 function register() {
 	const h = GLOBAL['HudCustomizerHandler'];
-	if (h) h.loadComponent(getPanel(), customizerProps());
+	if (!h) return;
+	const layout = h.constructor?.presetLayout ?? h.presetLayout;
+	const values = layout ? (layout[ID]?.dynamicStyles ?? {}) : null;
+	try {
+		h.loadComponent(getPanel(), fitLayout(customizerProps(), values));
+	} catch (e) {
+		$.Msg(`${ID}: the HUD customizer refused the panel (${e}); it shows with its defaults`);
+	}
 }
 
 $.RegisterForUnhandledEvent('HudCustomizer_Ready', () => {
