@@ -12,11 +12,11 @@
 <main id="hub-main">
 	<h1>HUD</h1>
 	<p class="muted">What the kit's tools show in game.</p>
-	<div id="hud-line-card" class="card hud-item">
-		<label class="hud-toggle"><input id="hud-line" type="checkbox" disabled> Show the jump-1 line in game</label>
-		<div class="muted">After jump 1 lands: landing speed, gain %, gain per strafe and the biggest mistake,
-		at the top middle of the screen. Drawn by Strafe Review's recorder in Momentum Mod. Off by default,
-		so it never covers your own HUD.</div>
+	<div id="hud-line-card" class="card hud-item" hidden>
+		<label class="hud-toggle"><input id="hud-line" type="checkbox" disabled> Show the old jump-1 line in game</label>
+		<div class="muted">Your Strafe Review is older than 1.9.0 and draws the jump-1 line itself. Since 1.9.0
+		that line is the First Jump HUD module, set up in the game's HUD customizer. Update Strafe Review on
+		the Modules page and this switch goes away; until then it turns the old line on or off.</div>
 		<div id="hud-line-note" class="hud-note"></div>
 	</div>
 	<div id="hud-cards"></div>

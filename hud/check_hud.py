@@ -4,13 +4,13 @@
 Usage: python hud/check_hud.py   (exits 1 on the first failure)
 
 Covers: the store (defaults, a round trip, unknown keys kept, wrong types and unknown keys refused,
-a stored value of the wrong type read as the default, a broken file), Strafe Review's
-recorder_settings (rewrite both ways, False when the recorder isn't installed), the hub section
-found by discovery and called through the bridge (get with no game, not installed and installed;
-module cards from hud_card, the legacy JHUD card and when the section shows;
-set_line writing the recorder; panorama_status with no
-patches, applied, skipped and no game; a non-bool refused), loading it leaving no bare steam, install or
-recorder_settings module behind, and install.apply_settings reading the same store.
+a stored value of the wrong type read as the default, a broken file), the hub section found by
+discovery and called through the bridge (get with no game, not installed and installed; module cards
+from hud_card, the legacy JHUD card and when the section shows; the legacy jump-1 line toggle only
+while a Strafe Review from before 1.9.0 is installed (a copy of its recorder_settings.py, LEGACY_SETTINGS
+below, in a fake kit), set_line writing its recorder; panorama_status with no patches, applied, skipped
+and no game; a non-bool refused), loading it leaving no bare steam, install or recorder_settings module
+behind, and Strafe Review's install.py and recorder no longer carrying the line's setting.
 XDG_DATA_HOME, LOCALAPPDATA and MOMENTUM_DIR point into the temp folder, so the real settings and
 game are never touched.
 """
@@ -23,6 +23,30 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 TS = "// recorder\nconst SHOW_LINE = false;\nlet x = 1;\n"
+# strafe-review/recorder_settings.py as Strafe Review 1.8.0 shipped it (the part the HUD section uses)
+LEGACY_SETTINGS = '''import re
+from pathlib import Path
+
+FOLDER = "0-strafe-review"
+RECORDER = Path("panorama") / "scripts" / "hud" / "strafe-review.ts"
+SHOW_LINE = re.compile(r"^const SHOW_LINE = (true|false);", re.MULTILINE)
+
+
+def recorder(game):
+    return Path(game) / "custom" / FOLDER / RECORDER
+
+
+def apply(game, show_line):
+    from movekit.files import write_atomic
+
+    ts = recorder(game)
+    try:
+        text = ts.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    write_atomic(ts, SHOW_LINE.sub(f"const SHOW_LINE = {'true' if show_line else 'false'};", text))
+    return True
+'''
 
 
 def fail(msg):
@@ -83,17 +107,16 @@ def main():
             except err:
                 pass
 
-        # Strafe Review's recorder_settings, loaded the way the section loads it
-        rec = hub.local_import(KIT / "strafe-review" / "recorder_settings.py", "recorder_settings")
+        # an old Strafe Review's recorder_settings, in a fake kit folder
+        legacy = tmp / "oldkit" / "strafe-review" / "recorder_settings.py"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(LEGACY_SETTINGS)
         game = tmp / "game"
-        expect(rec.apply(game, True), False, "apply with no recorder")
-        ts = rec.recorder(game)
+        ts = game / "custom" / "0-strafe-review" / "panorama" / "scripts" / "hud" / "strafe-review.ts"
         ts.parent.mkdir(parents=True)
         ts.write_text(TS)
-        expect(rec.apply(game, True), True, "apply on an installed recorder")
-        expect(ts.read_text(), TS.replace("false", "true"), "recorder after apply(True)")
-        rec.apply(game, False)
-        expect(ts.read_text(), TS, "recorder after apply(False)")
+        if (KIT / "strafe-review" / "recorder_settings.py").exists():
+            fail("the checkout's Strafe Review still has recorder_settings.py")
 
         # the section, through discovery and the bridge
         sections, problems = hub.discover(KIT)
@@ -107,22 +130,30 @@ def main():
         manifests = {p.parent.name: json.loads(p.read_text()) for p in KIT.glob("*/module.json")}
         jhud = sorted(({"key": k, **m["hud_card"]} for k, m in manifests.items() if "hud_card" in m),
                       key=lambda c: (c["title"].lower(), c["key"]))
-        expect([c["key"] for c in jhud], ["jhud", "strafe-histogram"], "the checkout's HUD cards")
+        expect([c["key"] for c in jhud], ["first-jump", "jhud", "strafe-histogram"], "the checkout's HUD cards")
         settings.save("inGameLine", False)
-        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True,
+        hud_sec = sections[[s.key for s in sections].index("hud")]
+        live = hud_sec.api["get"].__globals__  # the section as discovery loaded it
+        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "legacyLine": False,
                                                             "cards": jhud}},
-               "get, no game")
+               "get, a current Strafe Review: no legacy toggle")
+        os.environ["MOMENTUM_DIR"] = str(game)
+        expect(bridge.call("hud", "get")["result"]["recorder"], "not installed", "get, a current Strafe Review: no legacy recorder")
+        os.environ["MOMENTUM_DIR"] = str(tmp / "nogame")
+        live["_recorder_file"] = lambda: legacy
+        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "legacyLine": True,
+                                                            "cards": jhud}},
+               "get, an old Strafe Review, no game")
         expect(bridge.call("hud", "set_line", {"on": True}),
                {"ok": True, "result": {"inGameLine": True, "applied": False}}, "set_line, no game")
         os.environ["MOMENTUM_DIR"] = str(tmp / "bare")
         (tmp / "bare").mkdir()
         expect(bridge.call("hud", "get")["result"]["recorder"], "not installed", "get, no recorder")
         os.environ["MOMENTUM_DIR"] = str(game)
-        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "strafeReview": True,
+        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "legacyLine": True,
                                                        "cards": jhud},
-               "get, installed")
+               "get, an old Strafe Review, installed")
         # the section shows for Strafe Trainer Height alone too; the jump-1 line's card then hides
-        hud_sec = sections[[s.key for s in sections].index("hud")]
         expect(hud_sec.show_with, ["strafe-review", "trainer-height"], "hud shows with the modules it has cards for")
         # and with any module that has a hud_card (JHUD, the Strafe Speed Histogram, ...), or an old
         # JHUD from before hud_card
@@ -140,8 +171,8 @@ def main():
         expect(sec.LEGACY_CARDS["jhud"], jcard, "the legacy JHUD card says what JHUD's module.json says")
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
-        expect(bridge.call("hud", "get")["result"]["strafeReview"], False, "get, Strafe Review uninstalled")
-        state.write_text(json.dumps({"modules": {"jhud": {"removed": True}, "strafe-histogram": {"removed": True}}}))
+        expect(bridge.call("hud", "get")["result"]["legacyLine"], False, "get, the old Strafe Review uninstalled")
+        state.write_text(json.dumps({"modules": {k: {"removed": True} for k in ("jhud", "strafe-histogram", "first-jump")}}))
         expect(bridge.call("hud", "get")["result"]["cards"], [], "get, the card modules uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
@@ -172,13 +203,15 @@ def main():
             if name in sys.modules:
                 fail(f"loading the hud section left a bare {name!r} module")
 
-        # Strafe Review's install reads the same store (its own process: it puts collector/ on the path)
-        settings.save("inGameLine", False)
-        code = "import sys; sys.path.insert(0, sys.argv[1]); import install; print(install.apply_settings(sys.argv[2]))"
+        # Strafe Review's install no longer writes the line's setting (its own process: it puts collector/
+        # on the path), and its recorder has no line
+        code = "import sys; sys.path.insert(0, sys.argv[1]); import install; print(hasattr(install, 'apply_settings'))"
         out = subprocess.run([sys.executable, "-c", code, str(KIT / "strafe-review"), str(game)],
                              check=False, capture_output=True, text=True, env=os.environ)
-        expect((out.returncode, out.stdout.strip()), (0, "True"), f"install.apply_settings ({out.stderr.strip()})")
-        expect(ts.read_text(), TS, "recorder after install.apply_settings with the line off")
+        expect((out.returncode, out.stdout.strip()), (0, "False"), f"install.apply_settings gone ({out.stderr.strip()})")
+        recorder = (KIT / "strafe-review" / "recorder" / "panorama" / "scripts" / "hud" / "strafe-review.ts").read_text()
+        expect("SHOW_LINE" in recorder or "inGameLine" in (KIT / "strafe-review" / "install.py").read_text(), False,
+               "Strafe Review carries no jump-1 line setting")
     print("check_hud: all good")
 
 

@@ -56,8 +56,8 @@ Attempts are saved in %LOCALAPPDATA%\strafe-review\attempts. The hub's own messa
 %LOCALAPPDATA%\strafe-review\strafe-review.log.
 
 The jump-1 line in game (landing speed, gain %, per strafe, biggest mistake, top middle of the
-screen) is off by default. Turn it on in the hub's HUD section, then type panorama_reload in the
-game console.
+screen) is the First Jump HUD module. Install it on the Modules page, restart the game, and set it
+up in the game's HUD customizer, where it is listed as First Jump.
 
 
 Test checklist

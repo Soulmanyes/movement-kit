@@ -285,17 +285,17 @@ def main():
             fail(f"the Strafe Review module isn't in {kit}")
         if not (ours / "scripts" / "hud" / "strafe-review.ts").is_file():
             fail("the module's install hook didn't put the recorder in")
-        calls = ["hud.get", 'hud.set_line:{"on": false}']
+        calls = ["hud.get"]
         r = core.run("--check-sections", tmp / "sections.json", *calls)
         found = json.loads((tmp / "sections.json").read_text()) if (tmp / "sections.json").is_file() else {}
-        hud, line = (found.get("calls", {}).get(c, {}) for c in calls)
+        hud = found.get("calls", {}).get("hud.get", {})
         if r.returncode != 0 or found.get("sections") != SECTIONS or found.get("problems"):
             fail(f"--check-sections: exit {r.returncode}, {found}, stderr {r.stderr[-400:]!r}")
-        if not (hud.get("ok") and hud["result"].get("recorder") == "installed"
-                and line.get("ok") and line["result"].get("applied") is True):
+        # a current Strafe Review has no jump-1 line of its own (First Jump HUD draws it), so no toggle
+        if not (hud.get("ok") and hud["result"].get("legacyLine") is False):
             fail(f"HUD section calls: {found.get('calls')}")
         print(f"   ok: both modules installed from the fake GitHub; sections {', '.join(SECTIONS)}; the HUD"
-              " section writes into the installed recorder")
+              " section answers, with no legacy jump-1 toggle")
 
         print("1. Open review (the module's --collect)")
         first = subprocess.Popen([*cmd, "--run-script", str(kit / "strafe-review" / "strafe_review.py"),

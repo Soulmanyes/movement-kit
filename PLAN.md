@@ -396,6 +396,32 @@ A first install while the game is running fails to load the script (`Resource ..
 - **Checks.** `check_modules.check_groups` covers the order on Linux and Windows, the legacy group, an unknown group refused, install refused on the wrong OS, and a release seen from the other OS. Mutations caught (7/7): no HUD grouping, unsupported not last, install offered on the wrong OS, no install guard, other-OS modules hidden, release os dropped, no legacy groups. `check_hud.py` checks the HUD section is last in the sidebar (mutation caught). `smoke_test.py` SECTIONS order updated.
 - **Test window.** Pretending to be win32, Source Yaw shows greyed under "Not available on Windows" at the bottom.
 
+## Phase 7: First Jump HUD (owner, 2026-11-03; branch `first-jump`)
+
+The owner asked for the jump-1 line to be "a separate hud element ... like jhud and histogram instead of being weird". Until now it was drawn by Strafe Review's recorder, at a fixed spot, and switched on in the hub's HUD section.
+
+- **Look (owner's picks, 2026-11-03).** Same content as the old line: the landing speed and gain %, a box per strafe with its gain %, that strafe's top loss cause under it, and the biggest jump-1 mistake. Bhop modes only, like JHUD. The strafe boxes use the 3 gain bands of JHUD and the histogram (amber < 86.5, green to 92, blue above) instead of the old red-to-green fade.
+- **Module `first-jump/`.** It has `module.json` (key `first-jump`, title "First Jump HUD", group `hud`, `hud_card`, both OSes, `needs_core` 1.5.0), plus `install.py` (1.0.0, `HOOK_ORDER` 60), `module_hooks.py`, `launch-hook.sh`, README and LICENSE. The script is `movekit-first-jump.ts`, with panel id `MovekitFirstJump`, files in `custom/movekit-first-jump`, and the customizer name "First Jump". The kv3 entry puts it at the top middle (offset 600/20, width 720).
+- **Self-contained.** The script records its own rows: Strafe Review's sampler and columns, the 2 s ring before the timer start, own runs only, and a 0.5 s tail after the stop. The jump-1 maths moved over unchanged (`parseRows` to `jump1Mistakes`). It logs `FJLINE <started> <json>`, with the map in the JSON. It doesn't need Strafe Review, and Strafe Review doesn't need it.
+- **Settings in the customizer.**
+  - Font, font size, font colour and background.
+  - Strafe boxes: font size, width and text colour.
+  - The 5 row switches.
+  - Gain thresholds and band colours, and the cause box colour.
+  - Hold time (4000 ms) and fade time (300 ms).
+  - Number boxes have min 0 and are clamped in code. `fitLayout` and the widened number boxes work as in JHUD.
+- **Strafe Review 1.9.0.** The recorder loses the line: `SHOW_LINE`, `SHOW` and the analysis are gone. A small `showNote` keeps the replay rescan's "replay saved" note. `recorder_settings.py` and `install.apply_settings` are gone too. `needs_core` is 1.6.0, so an older core never gets a Strafe Review it can't show the toggle for.
+- **HUD section (core 1.6.0).**
+  - The jump-1 toggle is legacy. It shows only while an installed Strafe Review still has `recorder_settings.py` (before 1.9.0), so that old line can still be turned off. Otherwise it would show twice next to First Jump HUD.
+  - `get()` returns `legacyLine` instead of `strafeReview`. `inGameLine` stays in `hud/settings.py` for the old `install.py`.
+- **Checks.**
+  - `first-jump/check_first_jump.js` covers the settings against the kv3 entry, the bands, the drawn parts and the Panorama side on a made-up run fed tick by tick. 10 mutations were tried and all 10 were caught: replay, spectating, the delay rows, the tail rule, once per run, the reload loop, the ring, the gamemode, switched off, and a dropped target.
+  - `first-jump/check_parity.js` was `strafe-review/viewer/check_line.js`. It runs 1116 saved own attempts tick by tick (1118 at `--interval 0.015`) against the viewer: 0 differ. `--log` reads both `SRLINE` and `FJLINE`. Its 387 DIFFs on old SRLINE lines are the same with the old check_line.js, from viewer changes made after those lines were logged.
+  - `first-jump/check_first_jump.py` covers the fake game install.
+  - `hud/check_hud.py` covers the legacy toggle with a copy of the old `recorder_settings.py`. `hub/smoke_test.py --repo` expects no legacy toggle.
+  - Every `check_*.py`, the node checks and the smoke test pass.
+- **Release order (when the owner OKs):** `hub-v1.6.0`, `strafe-review-v1.9.0`, `first-jump-v1.0.0`. Not tested in game yet.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

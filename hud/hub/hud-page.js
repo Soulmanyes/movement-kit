@@ -1,6 +1,7 @@
-// The HUD section: in-game display settings (hud/hub_section.py). The jump-1 line is drawn by
-// Strafe Review's recorder; saving it also writes it into the installed recorder. Modules set up in the
-// game's HUD customizer (JHUD, ...) get a card each from their module.json's hud_card, while installed.
+// The HUD section: in-game display settings (hud/hub_section.py). Modules set up in the game's HUD
+// customizer (JHUD, First Jump HUD, ...) get a card each from their module.json's hud_card, while
+// installed. Legacy: a Strafe Review before 1.9.0 draws the jump-1 line itself; its toggle shows only
+// then, and saving it also writes it into the installed recorder.
 "use strict";
 
 (() => {
@@ -20,7 +21,7 @@
 		const box = $("hud-line");
 		try {
 			const st = await hub.call("get");
-			$("hud-line-card").hidden = !st.strafeReview;
+			$("hud-line-card").hidden = !st.legacyLine;
 			$("hud-cards").replaceChildren(...st.cards.map((c) => {
 				const card = document.createElement("div");
 				card.className = "card hud-item";

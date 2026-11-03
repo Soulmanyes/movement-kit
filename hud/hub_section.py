@@ -1,19 +1,28 @@
 """The HUD section (movekit/hub.py): in-game display settings, whichever tool draws them.
 
-The store is hud/settings.py. Each setting is written into the game by the tool that draws it:
-the jump-1 line by Strafe Review's recorder (recorder_settings.py in the Strafe Review module, loaded
-by path so its folder never goes on sys.path). The HUD is part of the core; the module may be
-installed or not (movekit/modules.py), so the file is looked up on each call. Modules whose settings
-live in Momentum's own HUD customizer get a card from their module.json's hud_card.
+Modules whose settings live in Momentum's own HUD customizer (JHUD, First Jump HUD, ...) get a card
+from their module.json's hud_card.
+
+Legacy: Strafe Review before 1.9.0 draws the jump-1 line itself, switched by a setting in
+hud/settings.py that its recorder_settings.py writes into the installed recorder (loaded by path, so
+its folder never goes on sys.path). While such a Strafe Review is installed the section keeps that
+toggle, so the old line can still be turned off (it would show twice next to First Jump HUD, the module
+that draws it now). The module may be installed or not (movekit/modules.py), so the file is looked up
+on each call.
 """
 from hud import settings
 from movekit import games, modules, panorama, steam
 from movekit.hub import local_import
 
 
+def _recorder_file():
+    return modules.default_kit_root() / "strafe-review" / "recorder_settings.py"
+
+
 def _recorder():
-    """Strafe Review's recorder_settings module, or None when Strafe Review isn't installed."""
-    file = modules.default_kit_root() / "strafe-review" / "recorder_settings.py"
+    """The recorder_settings module of a Strafe Review from before 1.9.0, or None (not installed, or
+    a newer one: its recorder has no jump-1 line any more)."""
+    file = _recorder_file()
     return local_import(file, "recorder_settings") if file.is_file() else None
 
 
@@ -41,10 +50,9 @@ def _manifests():
     return found
 
 
-def _line_tool(found):
-    """True when Strafe Review, which draws the jump-1 line, is installed (the HUD section also shows
-    for the other HUD modules alone, and then the line's card is hidden)."""
-    return "strafe-review" in found
+def _legacy_line(found):
+    """True when a Strafe Review from before 1.9.0, which draws the jump-1 line itself, is installed."""
+    return "strafe-review" in found and _recorder_file().is_file()
 
 
 # Cards for modules released before module.json had hud_card (JHUD 1.0.0), so they keep theirs
@@ -75,7 +83,8 @@ def _game():
 
 
 def _status():
-    """"installed", "not installed" (the recorder isn't in the game) or "no game" (Momentum not found)."""
+    """The legacy recorder: "installed", "not installed" (not in the game, or no legacy Strafe Review)
+    or "no game" (Momentum not found)."""
     game, rec = _game(), _recorder()
     if game is None:
         return "no game"
@@ -84,12 +93,12 @@ def _status():
 
 def get():
     found = _manifests()
-    return {**settings.load(), "recorder": _status(), "strafeReview": _line_tool(found), "cards": cards(found)}
+    return {**settings.load(), "recorder": _status(), "legacyLine": _legacy_line(found), "cards": cards(found)}
 
 
 def set_line(on):
-    """Save the jump-1 line setting and write it into the installed recorder.
-    applied: False when the recorder or the game isn't there; it applies once the recorder is installed."""
+    """Legacy (Strafe Review before 1.9.0): save the jump-1 line setting and write it into the
+    installed recorder. applied: False when the recorder or the game isn't there."""
     if not isinstance(on, bool):
         raise TypeError("on must be true or false")
     settings.save("inGameLine", on)
@@ -114,9 +123,9 @@ SECTION = {
     "page": "hub/index.html",
     "api": {"get": get, "set_line": set_line, "panorama_status": panorama_status},
     "order": 90,  # after the tools (owner, 2026-11-03: HUD below the other things)
-    # the jump-1 line is drawn by Strafe Review's recorder; a module's hud_card (JHUD, ...) only points
-    # at the game's HUD customizer; the patched files card is for every tool that patches a game file.
-    # The modules don't need each other.
+    # a module's hud_card (JHUD, First Jump HUD, ...) only points at the game's HUD customizer; the
+    # patched files card is for every tool that patches a game file; an old Strafe Review keeps its
+    # jump-1 line toggle. The modules don't need each other.
     "show_with": ["strafe-review", "trainer-height"],
     "show_if": lambda found: bool(cards(found)),
 }
