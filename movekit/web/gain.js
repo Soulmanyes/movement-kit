@@ -8,7 +8,9 @@ const gain = (() => {
 	const K = 1.45; // each measured pair gives K between 1.41 and 1.54
 	const cssToMom = (c) => 100 * (1 - (1 - c / 100) ** K);
 	const momToCss = (m) => 100 * (1 - (1 - m / 100) ** (1 / K));
-	return { K, cssToMom, momToCss };
+	// gain-converter 1.3.0 and older draw these as dots: kept empty so their graph still works on a newer hub
+	const MEASURED = [];
+	return { K, MEASURED, cssToMom, momToCss };
 })();
 
 if (typeof module !== "undefined") module.exports = gain;
