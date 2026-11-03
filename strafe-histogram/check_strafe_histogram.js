@@ -191,7 +191,7 @@ expect(P.visible, false, 'hidden when the customizer closes');
 // one game tick, seen over `frames` frames with the same values
 function tick(t, ratio, right, vz, frames = 3) {
 	time = t * 0.01 + 0.001;
-	tickStats = { speedGain: 1, idealGain: 1, yawRatio: ratio, strafeRight: right ? 1 : 0 };
+	tickStats = { speedGain: 1, idealGain: 1, yawRatio: ratio, strafeRight: right ? 1 : -1 }; // the game's: 1, -1 or 0
 	vel = { x: 300 + t, y: 0, z: vz };
 	for (let f = 0; f < frames; f++) {
 		frame();

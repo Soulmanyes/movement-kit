@@ -291,7 +291,8 @@ function sample() {
 		if (!onGround(pending.vz, prevVz, vel.z)) addRow(pending.ratio, pending.right);
 		prevVz = pending.vz;
 	}
-	pending = { ratio: stats.yawRatio, right: !!stats.strafeRight, vz: vel.z };
+	// strafeRight is 1 (right), -1 (left) or 0 (no key), not a bool (the recorder's 'right' column)
+	pending = { ratio: stats.yawRatio, right: stats.strafeRight > 0, vz: vel.z };
 }
 
 function loop() {
