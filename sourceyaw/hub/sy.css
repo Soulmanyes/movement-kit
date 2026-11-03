@@ -104,6 +104,8 @@ button:disabled:hover { border-color: var(--border); }
 	border-radius: 6px;
 }
 .sy-entry.start { border-color: var(--accent); }
+/* the list not used in game while the lists aren't separate: still editable, greyed out */
+#sy-entries.sy-inactive .sy-entry { opacity: 0.45; }
 .sy-move { display: flex; flex-direction: column; gap: 2px; }
 .sy-move button { padding: 0 6px; font-size: 10px; line-height: 14px; }
 .sy-entry input[type="radio"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }

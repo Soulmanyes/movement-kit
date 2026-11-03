@@ -171,16 +171,28 @@ def prefix_value(name, table, default=None):
 
 
 def surf_on(data):
-    return bool(data.get("surf"))
+    """Both lists in game: a surf list is saved and "separate" is on."""
+    return bool(data.get("surf")) and bool(data.get("separate", True))
+
+
+def active_mode(data):
+    """With one list in game: the list it uses. The other one stays saved, unused."""
+    return "surf" if data.get("active") == "surf" and data.get("surf") else "bhop"
+
+
+def saved_lists(data):
+    """Every saved {entries, start}: the bhop list (the profile's own entries), then the surf list."""
+    return [data] + ([data["surf"]] if data.get("surf") else [])
 
 
 def mode_lists(data):
-    """[(mode, letter, {entries, start})]: the bhop list (the profile's own entries), then the
-    surf list when there is one. letter names its aliases and colour cfgs (yaw_b1, b1.cfg)."""
-    out = [("bhop", "b", data)]
+    """[(mode, letter, {entries, start}, surf_tokens)] of the lists in game. Both: the bhop list,
+    then the surf list; letter names their aliases and colour cfgs (yaw_b1, b1.cfg). One: the
+    active list, as 1.8.0 wrote it (c1.cfg, YAW_ tokens)."""
     if surf_on(data):
-        out.append(("surf", "s", data["surf"]))
-    return out
+        return [("bhop", "b", data, False), ("surf", "s", data["surf"], True)]
+    mode = active_mode(data)
+    return [(mode, "c", data if mode == "bhop" else data["surf"], False)]
 
 
 def auto_on(data):
@@ -392,9 +404,9 @@ def load_settings(game="css"):
     data.setdefault("mode_key", "")
     data.setdefault("auto_mode", True)
     data.setdefault("map_modes", dict(DEFAULT_MAP_MODES))
-    if surf_on(data):
+    if data.get("surf"):
         data["surf"]["start"] = start_index(data["surf"])
-    for _, _, lst in mode_lists(data):
+    for lst in saved_lists(data):
         for entry in lst["entries"]:
             if not entry.get("color"):
                 original = data.get("original_color")
@@ -423,18 +435,14 @@ def validate(data):
     problems = []
     if data["key"] not in VALID_KEYS:
         problems.append(f"'{data['key']}' is not a key name CS:S knows")
-    if not data["entries"]:
-        problems.append("Add at least one yawspeed")
-    tokens = [token(e["speed"]) for e in data["entries"]]
-    if len(set(tokens)) != len(tokens):
-        problems.append("Each yawspeed must be different")
-    if surf_on(data):
-        surf = data["surf"]["entries"]
-        if not surf:
-            problems.append("Add at least one surf yawspeed")
-        tokens = [token(e["speed"]) for e in surf]
+    for mode, _, lst, _ in mode_lists(data):
+        what = " surf" if surf_on(data) and mode == "surf" else ""
+        if not lst["entries"]:
+            problems.append(f"Add at least one{what} yawspeed")
+        tokens = [token(e["speed"]) for e in lst["entries"]]
         if len(set(tokens)) != len(tokens):
-            problems.append("Each surf yawspeed must be different")
+            problems.append(f"Each{what} yawspeed must be different")
+    if surf_on(data):
         key = data.get("mode_key") or ""
         if key:
             if key not in VALID_KEYS:
@@ -484,12 +492,12 @@ def write_crosshairs(data, reset_current):
     CROSSHAIRS.mkdir(parents=True, exist_ok=True)
     for old in CROSSHAIRS.glob("*.png"):
         old.unlink()
-    for mode, _, lst in mode_lists(data):
+    for n, (_, _, lst, surf_tokens) in enumerate(mode_lists(data)):
         for i, entry in enumerate(lst["entries"]):
             im = recolor(base, entry["color"])
-            im.save(CROSSHAIRS / f"{token(entry['speed'], mode == 'surf')}.png")
-            # the game starts on the bhop list
-            if mode == "bhop" and i == start_index(data) and (reset_current or not CURRENT.exists()):
+            im.save(CROSSHAIRS / f"{token(entry['speed'], surf_tokens)}.png")
+            # the game starts on the first list (bhop, or the one list in game)
+            if n == 0 and i == start_index(lst) and (reset_current or not CURRENT.exists()):
                 tmp = CURRENT.with_name(CURRENT.name + ".tmp.png")
                 im.save(tmp)
                 tmp.replace(CURRENT)
@@ -574,7 +582,7 @@ def _yaws_cfg_modes(data, unbind, game):
             lines += ["// the strafe trainer and the list switcher read map loads from yaw.log",
                       "con_logfile yaw.log"]
     starts = {}
-    for mode, letter, lst in mode_lists(data):
+    for mode, letter, lst, _ in mode_lists(data):
         entries = lst["entries"]
         starts[mode] = f"yaw_{letter}{start_index(lst) + 1}"
         lines += ["", f"// {mode} yawspeeds"]
@@ -619,7 +627,8 @@ def _yaws_cfg_modes(data, unbind, game):
 def yaws_cfg(data, unbind=(), game="css"):
     if surf_on(data):
         return _yaws_cfg_modes(data, unbind, game)
-    entries = data["entries"]
+    lst = mode_lists(data)[0][2]  # the one list in game
+    entries = lst["entries"]
     cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
     lines = [f"{YAWS_HEADER} Change it in the app, edits here are overwritten."]
     if GAMES[game]["colors"] == "krosshair":
@@ -637,7 +646,7 @@ def yaws_cfg(data, unbind=(), game="css"):
     for i, entry in enumerate(entries):
         lines.append(_set_alias(f"yaw_set{i + 1}", entry, f"yaw_set{(i + 1) % len(entries) + 1}", False,
                                 f"c{i + 1}" if cvar_colors else None))
-    start = start_index(data)
+    start = start_index(lst)
     first = fmt_speed(entries[start]["speed"])
     lines += [
         "",
@@ -737,10 +746,9 @@ def write_color_cfgs(data, game_dir):
     original = data.get("original_color") or "0 255 0 255"
     alpha = original.split()[3] if len(original.split()) > 3 else "255"
     # c<i> with one list; b<i> and s<i> with a bhop and a surf list
-    for _, letter, lst in mode_lists(data):
-        name = letter if surf_on(data) else "c"
+    for _, letter, lst, _ in mode_lists(data):
         for i, entry in enumerate(lst["entries"]):
-            write_text_atomic(folder / f"{name}{i + 1}.cfg",
+            write_text_atomic(folder / f"{letter}{i + 1}.cfg",
                               f'cl_crosshair_color "{hex_to_rgba(entry["color"], alpha)}"\n')
 
 

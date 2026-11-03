@@ -106,8 +106,10 @@ before writing its own, and uninstalling puts it back.
   already bound to something else, the app tells you what.
 - **Yawspeeds:** add, remove or drag them into order. Each one has a crosshair colour and a
   sound, which you can preview from the dropdown. The ticked one is set when the game starts.
-- **Separate surf yawspeeds:** adds a second list. The **Bhop** and **Surf** tabs pick which list
-  you edit. The game starts on the bhop list.
+- **Bhop and Surf tabs:** two saved lists. The tabs pick which list you edit.
+  - With **Separate surf yawspeeds** off, the game uses one list. The other is greyed out but
+    stays saved, and **Use … instead** swaps which one the game uses.
+  - With it on, both lists are in game, and the game starts on the bhop list.
   - **Mode key:** each press switches to the other list's ticked yawspeed.
   - **Auto by map prefix:** on a `bhop_` map the bhop list is used, on a `surf_` map the surf list.
     The switch happens on your first press of the cycle key after the map loads: that press

@@ -59,11 +59,12 @@
 				<button id="sy-add" title="Add a yawspeed">+ Add</button>
 			</div>
 			<div class="sy-row">
-				<label class="sy-label" for="sy-surf-on">Separate surf yawspeeds<div class="muted">A bhop list and a surf list; the mode key or the map picks one</div></label>
+				<label class="sy-label" for="sy-surf-on">Separate surf yawspeeds<div id="sy-surf-note" class="muted"></div></label>
 				<input id="sy-surf-on" type="checkbox" class="sy-switch">
 			</div>
-			<div class="sy-row" data-surf>
-				<div class="sy-label">Editing</div>
+			<div class="sy-row">
+				<div class="sy-label">Editing<div id="sy-active-note" class="muted"></div></div>
+				<button id="sy-swap" title="Use the other list in game"></button>
 				<div id="sy-tabs" class="sy-seg">
 					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
 					<button id="sy-tab-surf" data-tab="surf">Surf</button>

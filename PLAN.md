@@ -469,6 +469,12 @@ The owner wants separate bhop and surf yawspeeds in both games. They picked "bot
     - `movekit/check_session.py` covers the new tokens.
     - `check_settings_api.py` covers collect with a surf list.
     - Every `check_*.py` and `hub/smoke_test.py --repo` pass.
+  - Owner (2026-11-03): turning "Separate surf yawspeeds" off must not delete the surf list. The other list is greyed out, with a button to swap which one is used.
+    - Built as `separate` and `active` in the profile. `surf_on()` is a saved surf list plus `separate`. `active_mode()` gives the one list in game while not separate. `mode_lists()` gives that list as 1.8.0 wrote it (`c<i>.cfg`, `YAW_` tokens). `saved_lists()` covers every saved list, so colours get filled in for both.
+    - The page always shows the Bhop / Surf tabs. While not separate, the unused list's rows are dimmed but still editable, and "Use <list> instead" swaps them.
+    - `check_modes.py` checks that yaws.cfg with either list active matches 1.8.0's yawcore given that list (48 cases), plus validate, colour cfgs and the hub's save and load. `--mutations`: 11 of 11 caught.
+  - `trainer.map_tickrate` now goes through `yawcore.prefix_value`, which lowercases the map name as well as the prefix (before, only the prefix was lowercased). This is a small behaviour change for map names with capitals.
+  - The `I001` (import order) findings in trainer.py and crosshair_watch.py, deliberate because movekit must come after yawcore, now carry `noqa` (owner's OK).
   - Not yet checked: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
 
 ## Later / undecided

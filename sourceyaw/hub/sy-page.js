@@ -18,7 +18,8 @@
 	// both lists; entries/start above are the open tab's, put back by keepTab()
 	let lists = { bhop: null, surf: null };
 	let tab = "bhop";
-	let surfOn = false;
+	let surfOn = false;  // both lists in game
+	let active = "bhop"; // with one list in game, the one it uses
 	let modeKey = "";    // switches between the bhop and surf lists, "" for none
 	let key = "";        // the cycle key
 	let offsetKey = "";  // the trainer's offset key, "" for none
@@ -177,7 +178,15 @@
 		lists[tab] = { entries, start };
 	}
 
+	// a first surf list starts as a copy of the bhop list
+	function ensureSurf() {
+		keepTab();
+		if (!lists.surf)
+			lists.surf = { entries: lists.bhop.entries.map((e) => ({ ...e })), start: lists.bhop.start };
+	}
+
 	function openTab(name) {
+		if (name === "surf") ensureSurf();
 		keepTab();
 		tab = name;
 		({ entries, start } = lists[tab]);
@@ -186,23 +195,40 @@
 		refreshPreviews();
 	}
 
+	const LIST_NAME = { bhop: "Bhop", surf: "Surf" };
+	const other = (mode) => (mode === "bhop" ? "surf" : "bhop");
+
 	function showLists() {
 		document.querySelectorAll("[data-surf]").forEach((n) => { n.hidden = !surfOn; });
 		document.querySelectorAll("#sy-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
-		$("sy-entries-note").textContent = !surfOn
-			? "Cycled in this order. The ticked one is set when the game starts."
-			: tab === "bhop"
-				? "Bhop list, cycled in this order. The ticked one is set when the game starts or the list is picked."
-				: "Surf list, cycled in this order. The ticked one is set when the list is picked.";
+		$("sy-surf-note").textContent = surfOn
+			? "Both lists in game; the mode key or the map picks one"
+			: "Off: only one list is used in game, the other stays saved";
+		$("sy-active-note").textContent = surfOn ? "" : `In game: the ${LIST_NAME[active].toLowerCase()} list`;
+		$("sy-swap").hidden = surfOn;
+		$("sy-swap").textContent = `Use ${LIST_NAME[other(active)].toLowerCase()} instead`;
+		const unused = !surfOn && tab !== active;
+		$("sy-entries").classList.toggle("sy-inactive", unused);
+		$("sy-entries-note").textContent = unused
+			? `Not used in game. Press "Use ${tab} instead" to use this list.`
+			: !surfOn
+				? "Cycled in this order. The ticked one is set when the game starts."
+				: tab === "bhop"
+					? "Bhop list, cycled in this order. The ticked one is set when the game starts or the list is picked."
+					: "Surf list, cycled in this order. The ticked one is set when the list is picked.";
 	}
 
 	$("sy-surf-on").onchange = () => {
 		surfOn = $("sy-surf-on").checked;
-		keepTab();
-		// a first surf list starts as a copy of the bhop list
-		if (surfOn && !lists.surf)
-			lists.surf = { entries: lists.bhop.entries.map((e) => ({ ...e })), start: lists.bhop.start };
-		if (!surfOn && tab !== "bhop") openTab("bhop");
+		if (surfOn) ensureSurf();
+		showLists();
+		changed();
+	};
+	$("sy-swap").onclick = () => {
+		active = other(active);
+		if (active === "surf") ensureSurf();
+		// show the list now in use
+		if (tab !== active) openTab(active);
 		else showLists();
 		changed();
 	};
@@ -480,8 +506,8 @@
 		const copyList = (l) => ({ entries: l.entries.map((e) => ({ ...e })), start: l.start });
 		const bhop = copyList(lists.bhop);
 		return { key, crosshair: $("sy-crosshair").checked, start: bhop.start, base, entries: bhop.entries,
-			trainer: trainerForm(), surf: surfOn ? copyList(lists.surf) : null, mode_key: modeKey,
-			auto_mode: $("sy-auto").checked };
+			trainer: trainerForm(), surf: lists.surf ? copyList(lists.surf) : null, separate: surfOn, active,
+			mode_key: modeKey, auto_mode: $("sy-auto").checked };
 	}
 
 	$("sy-apply").onclick = async () => {
@@ -503,9 +529,10 @@
 			bhop: { entries: st.entries.map((e) => ({ ...e })), start: st.start },
 			surf: st.surf ? { entries: st.surf.entries.map((e) => ({ ...e })), start: st.surf.start } : null,
 		};
-		surfOn = !!st.surf;
-		tab = "bhop";
-		({ entries, start } = lists.bhop);
+		surfOn = st.separate;
+		active = st.active;
+		tab = surfOn ? "bhop" : active;
+		({ entries, start } = lists[tab]);
 		modeKey = st.mode_key;
 		$("sy-surf-on").checked = surfOn;
 		$("sy-auto").checked = st.auto_mode;
@@ -531,7 +558,9 @@
 		showKeys();
 		showNotes(st.notes);
 		showLists();
-		drawEntries(st.previews);
+		// st.previews are the bhop list's
+		if (tab === "bhop") drawEntries(st.previews);
+		else { drawEntries(); refreshPreviews(); }
 		fillTrainer();
 		showTrainerStatus();
 		showLaunch(st.launch);

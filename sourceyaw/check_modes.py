@@ -162,6 +162,14 @@ def check_unchanged(core):
                 # keys the new version knows but a profile without a surf list ignores
                 data.update(mode_key="g", auto_mode=True, map_modes={"bhop_": "bhop"})
                 expect(core.yaws_cfg(data, (), game), old.yaws_cfg(data, (), game), "mode keys ignored without surf")
+                # a saved surf list that isn't separate: only the active list, written as 1.8.0 did
+                surf = {"entries": entries(30, 120), "start": 1}
+                data.update(surf=surf, separate=False, active="bhop")
+                expect(core.yaws_cfg(data, (), game), old.yaws_cfg(data, (), game), "surf saved, bhop active")
+                data["active"] = "surf"
+                as_old = dict(data, entries=surf["entries"], start=surf["start"])
+                expect(core.yaws_cfg(data, (), game), old.yaws_cfg(as_old, (), game), "surf saved, surf active")
+                cases += 2
     print(f"ok   yaws.cfg without a surf list same as {OLD_TAG} ({cases} cases)")
 
 
@@ -241,6 +249,11 @@ def check_validate(core):
                     trainer={"enabled": True, "offset_key": "k"}),
            ["The mode key must differ from the offset key"], "mode key = offset key")
     expect(problems(mode_key="nope"), [], "mode key ignored without a surf list")
+    expect(problems(surf={"entries": [], "start": 0}, separate=False), [], "unused empty surf list is fine")
+    expect(problems(surf={"entries": [], "start": 0}, separate=False, active="surf"),
+           ["Add at least one yawspeed"], "active surf list empty")
+    expect(problems(surf={"entries": entries(30), "start": 0}, separate=False, mode_key="q"), [],
+           "mode key ignored while not separate")
     print("ok   validate")
 
 
@@ -298,7 +311,14 @@ def check_files(core, tmp):
     expect(colors, ["c1.cfg", "c2.cfg", "c3.cfg"], "b/s colour cfgs gone without a surf list")
     expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").exists(), False, "auto cfg gone without a surf list")
     expect("AUTO=0" in core.WATCH_ENV.read_text(), True, "watch.env AUTO off")
+    data.update(surf={"entries": entries(30, 120), "start": 0}, separate=False, active="surf")
+    core.apply(data, game_dir, game="momentum")
+    colors = {p.name: p.read_text() for p in (game_dir / "cfg" / core.COLOR_DIR).iterdir()}
+    expect(colors, {"c1.cfg": 'cl_crosshair_color "255 0 0 255"\n', "c2.cfg": 'cl_crosshair_color "0 255 0 255"\n'},
+           "one list in game: the active surf list's colours as c<i>")
+    expect(core.load_settings("momentum")["surf"]["entries"][1]["speed"], 120, "unused list saved")
     data["surf"] = {"entries": entries(30), "start": 0}
+    data["separate"] = True
     core.apply(data, game_dir, game="momentum")
     core.remove_from_game(game_dir, "momentum")
     expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").exists(), False, "remove_from_game deletes the auto cfg")
@@ -328,7 +348,7 @@ def check_hub(tmp):
     form = {"key": st["key"], "crosshair": st["crosshair"], "start": st["start"], "base": st["base"],
             "entries": st["entries"], "trainer": st["trainer"],
             "surf": {"entries": [{"speed": 30, "color": "#123456", "sound": ""}], "start": 0},
-            "mode_key": "g", "auto_mode": False}
+            "separate": True, "active": "bhop", "mode_key": "g", "auto_mode": False}
     got = section.apply("momentum", form)
     expect(got["saved"], True, f"apply with a surf list ({got['messages']})")
     st = section.load("momentum")
@@ -337,9 +357,17 @@ def check_hub(tmp):
            "surf list, mode key and auto kept through apply and load")
     expect(st["notes"]["mode"]["warn"], False, "mode key note")
     expect(section.key_notes("momentum", "q", "", "q")["mode"]["warn"], True, "mode key = cycle key warns")
-    form["surf"] = None
+    st = section.load("momentum")
+    expect((st["separate"], st["active"]), (True, "bhop"), "separate kept")
+    form.update(separate=False, active="surf")
     section.apply("momentum", form)
-    expect(section.load("momentum")["surf"], None, "surf list off")
+    st = section.load("momentum")
+    expect((st["separate"], st["active"], len(st["surf"]["entries"])), (False, "surf", 1),
+           "separate off keeps the surf list, surf active")
+    form.update(surf=None, separate=True, active="bhop")
+    section.apply("momentum", form)
+    st = section.load("momentum")
+    expect((st["surf"], st["separate"]), (None, False), "no surf list: not separate")
     print("ok   hub section keeps the surf list, mode key and auto switch")
 
 
@@ -381,6 +409,12 @@ MUTATIONS = [
     ("mode key unbound by apply", "yawcore.py",
      "ours = {data[\"key\"], offsets_key_of(data), mode_key_of(data)}", "ours = {data[\"key\"], offsets_key_of(data)}"),
     ("stale b/s colour cfgs kept", "yawcore.py", 'folder.glob("[bcs]*.cfg")', 'folder.glob("c*.cfg")'),
+    ("separate ignored", "yawcore.py",
+     'return bool(data.get("surf")) and bool(data.get("separate", True))', 'return bool(data.get("surf"))'),
+    ("active list ignored", "yawcore.py",
+     'return "surf" if data.get("active") == "surf" and data.get("surf") else "bhop"', 'return "bhop"'),
+    ("hub drops separate", "hub_section.py",
+     'separate=bool(form.get("separate")) and surf is not None', 'separate=surf is not None'),
 ]
 
 

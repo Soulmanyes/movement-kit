@@ -18,7 +18,7 @@ that key (see /etc/sourceyaw-inputd.conf).
   trainer.py GAME --binds    print which keys do what, then exit
 """
 
-import array
+import array  # noqa: I001 - movekit must come after yawcore (see below)
 import fcntl
 import glob
 import math
