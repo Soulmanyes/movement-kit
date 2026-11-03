@@ -16,6 +16,15 @@ def _recorder():
     return local_import(file, "recorder_settings") if file.is_file() else None
 
 
+def _line_tool():
+    """True when Strafe Review, which draws the jump-1 line, is installed (the HUD section also shows
+    for Strafe Trainer Height alone, and then the line's card is hidden)."""
+    try:
+        return "strafe-review" in modules.Manager().installed()
+    except Exception:  # noqa: BLE001 - an unreadable state file: go by the folder, as _recorder does
+        return _recorder() is not None
+
+
 def _game():
     """Momentum's game folder, or None; MOMENTUM_DIR is taken as given, so check it's there."""
     game = steam.game_dir(games.MOMENTUM)
@@ -31,7 +40,7 @@ def _status():
 
 
 def get():
-    return {**settings.load(), "recorder": _status()}
+    return {**settings.load(), "recorder": _status(), "strafeReview": _line_tool()}
 
 
 def set_line(on):
@@ -61,5 +70,7 @@ SECTION = {
     "page": "hub/index.html",
     "api": {"get": get, "set_line": set_line, "panorama_status": panorama_status},
     "order": 20,
-    "show_with": ["strafe-review"],  # the jump-1 line is drawn by Strafe Review's recorder
+    # the jump-1 line is drawn by Strafe Review's recorder; the patched files card is for every tool
+    # that patches a game file. The two modules don't need each other.
+    "show_with": ["strafe-review", "trainer-height"],
 }

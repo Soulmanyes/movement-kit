@@ -101,14 +101,23 @@ def main():
             fail("discovery didn't find the hud section")
         bridge = hub.Bridge(sections, problems)
         settings.save("inGameLine", False)
-        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game"}}, "get, no game")
+        expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True}},
+               "get, no game")
         expect(bridge.call("hud", "set_line", {"on": True}),
                {"ok": True, "result": {"inGameLine": True, "applied": False}}, "set_line, no game")
         os.environ["MOMENTUM_DIR"] = str(tmp / "bare")
         (tmp / "bare").mkdir()
         expect(bridge.call("hud", "get")["result"]["recorder"], "not installed", "get, no recorder")
         os.environ["MOMENTUM_DIR"] = str(game)
-        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed"}, "get, installed")
+        expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed", "strafeReview": True},
+               "get, installed")
+        # the section shows for Strafe Trainer Height alone too; the jump-1 line's card then hides
+        expect(sections[[s.key for s in sections].index("hud")].show_with, ["strafe-review", "trainer-height"],
+               "hud shows with either module")
+        state = tmp / "data" / "movekit" / "modules.json"
+        state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
+        expect(bridge.call("hud", "get")["result"]["strafeReview"], False, "get, Strafe Review uninstalled")
+        state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
         expect(ts.read_text(), TS.replace("false", "true"), "recorder after set_line(True)")
         # the kit's patched files card: none yet, then the recorder's include applied, then one that

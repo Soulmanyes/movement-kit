@@ -19,6 +19,7 @@
 		const box = $("hud-line");
 		try {
 			const st = await hub.call("get");
+			$("hud-line-card").hidden = !st.strafeReview;
 			box.checked = st.inGameLine;
 			box.disabled = false;
 			note(RECORDER[st.recorder] || "");
