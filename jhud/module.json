@@ -1,0 +1,11 @@
+{
+  "key": "jhud",
+  "title": "JHUD",
+  "summary": "After every bhop jump in Momentum Mod: the jump's speed, gain % and sync in the middle of the screen, coloured by how good it was.",
+  "os": ["linux", "win32"],
+  "tag_prefix": "jhud-v",
+  "version_from": "install.py",
+  "needs_core": "1.3.0",
+  "needs": [],
+  "data": []
+}

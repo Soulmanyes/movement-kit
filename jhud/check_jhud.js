@@ -1,0 +1,232 @@
+#!/usr/bin/env node
+// Checks jhud/panorama/scripts/hud/movekit-jhud.ts in node, with Panorama stubbed (types stripped, as
+// strafe-review/viewer/check_line.js does).
+//
+// Usage: node jhud/check_jhud.js [--store DIR]   (exits 1 on the first failure)
+//
+// Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group) against
+// install.py's hud_default.kv3 entry (same keys, same values); jumpOf, shows, the gain colour scale and
+// the row text; the Panorama side: the customizer gets the component for bhop modes only, jumpCount 1
+// and other modes and a panel switched off in the customizer show nothing, a jump shows its rows and
+// fades after holdMs, the customizer's sample while it is open; then every saved jump event in Strafe
+// Review's store (--store, default ~/.local/share/strafe-review/attempts; skipped when missing) gives
+// rows with no NaN or undefined.
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const zlib = require('zlib');
+const { stripTypeScriptTypes } = require('module');
+
+const TS = path.join(__dirname, 'panorama/scripts/hud/movekit-jhud.ts');
+const INSTALL = path.join(__dirname, 'install.py');
+const args = process.argv.slice(2);
+const at = args.indexOf('--store');
+const store = at >= 0 ? args[at + 1] : path.join(process.env.HOME || '', '.local/share/strafe-review/attempts');
+
+function fail(msg) {
+	console.error('FAIL: ' + msg);
+	process.exit(1);
+}
+function expect(got, want, what) {
+	const g = JSON.stringify(got);
+	const w = JSON.stringify(want);
+	if (g !== w) fail(`${what}:\n got  ${g}\n want ${w}`);
+}
+
+// ---- Panorama stubs ----
+class FakePanel {
+	constructor(type, parent, id, props) {
+		this.type = type;
+		this.id = id;
+		this.text = props && props.text;
+		this.styleText = (props && props.style) || '';
+		this.style = {};
+		this.children = [];
+		this.visible = true;
+		this.enabled = true;
+		this.valid = true;
+		this.parent = parent;
+		if (parent) parent.children.push(this);
+	}
+	IsValid() { return this.valid; }
+	GetParent() { return this.parent; }
+	FindChildTraverse(id) {
+		for (const c of this.children) {
+			if (c.id === id) return c;
+			const f = c.FindChildTraverse(id);
+			if (f) return f;
+		}
+		return null;
+	}
+	DeleteAsync() { this.valid = false; this.parent.children = this.parent.children.filter((c) => c !== this); }
+	RemoveAndDeleteChildren() { this.children = []; }
+}
+const hud = new FakePanel('Hud', null, 'Hud');
+const timer = new FakePanel('MomHudTimer', hud, 'Timer');
+const handlers = {};
+let schedules = [];
+let mode = 2;
+let stats = null;
+let loaded = null;
+const ctx = {
+	$: {
+		GetContextPanel: () => timer,
+		CreatePanel: (type, parent, id, props) => new FakePanel(type, parent, id, props),
+		RegisterForUnhandledEvent: (ev, fn) => { (handlers[ev] = handlers[ev] || []).push(fn); },
+		Schedule: (s, fn) => { schedules.push({ s, fn }); },
+		Msg: () => {}
+	},
+	GameModeAPI: { GetCurrentGameMode: () => mode },
+	MomentumMovementAPI: { GetLastJumpStats: () => stats },
+	UiToolkitAPI: { GetGlobalObject: () => ({ HudCustomizerHandler: { loadComponent: (p, props) => { loaded = { p, props }; } } }) },
+	console
+};
+vm.createContext(ctx);
+const src = stripTypeScriptTypes(fs.readFileSync(TS, 'utf8'), { mode: 'strip' });
+vm.runInContext(`${src}
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, parseColor, mixColor, gainColor, jumpOf, shows, rows, settings, NONE };`, ctx);
+const api = ctx.__api;
+const fire = (ev) => (handlers[ev] || []).forEach((fn) => fn());
+const texts = (p) => p.children.map((line) => line.children.map((l) => l.text));
+const runSchedules = () => { const s = schedules; schedules = []; s.forEach((x) => x.fn()); return s.map((x) => x.s); };
+
+// ---- settings against install.py's kv3 entry ----
+const ids = api.STYLES.filter((r) => r[2] !== api.NONE).map((r) => r[0]);
+expect([...ids].sort(), Object.keys(api.DEFAULTS).sort(), 'every setting row has a default and back');
+const grouped = api.STYLES.filter((r) => r[2] === api.NONE).flatMap((r) => r[3]);
+expect([...grouped].sort(), [...ids].sort(), 'every setting sits in exactly one group');
+const py = fs.readFileSync(INSTALL, 'utf8');
+const entry = /ENTRY = """([\s\S]*?)"""/.exec(py);
+if (!entry) fail('ENTRY not found in install.py');
+const dyn = /dynamicStyles = \s*\{([\s\S]*?)\}/.exec(entry[1]);
+const kv = {};
+for (const m of dyn[1].matchAll(/^\s*(\w+) = (.+?)\s*$/gm)) {
+	const v = m[2];
+	kv[m[1]] = v === 'true' ? true : v === 'false' ? false : /^"/.test(v) ? v.slice(1, -1) : Number(v);
+}
+expect(kv, Object.fromEntries(Object.keys(kv).map((k) => [k, api.DEFAULTS[k]])), 'kv3 values = DEFAULTS');
+expect(Object.keys(kv).sort(), Object.keys(api.DEFAULTS).sort(), 'kv3 keys = DEFAULTS keys');
+if (!/^    MovekitJhud = \n/.test(entry[1])) fail('kv3 entry is not for the panel id MovekitJhud');
+
+// ---- plain functions ----
+const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)', upColor: 'rgba(24, 150, 211, 1)', downColor: 'rgba(255, 106, 106, 1)' };
+expect(api.parseColor('rgba(1, 2, 3, 0.5)'), [1, 2, 3, 0.5], 'parse rgba');
+expect(api.parseColor('#ff8000'), [255, 128, 0, 1], 'parse hex');
+expect(api.parseColor('blue'), null, 'parse junk');
+expect(api.gainColor(40, S), 'rgba(255, 92, 92, 1)', 'gain under red: red');
+expect(api.gainColor(60, S), 'rgba(255, 92, 92, 1)', 'gain at red: red');
+expect(api.gainColor(95, S), 'rgba(123, 216, 143, 1)', 'gain at green: green');
+expect(api.gainColor(120, S), 'rgba(123, 216, 143, 1)', 'gain over green: green');
+expect(api.gainColor(77.5, S), 'rgba(189, 154, 118, 1)', 'gain half way: mixed');
+expect(api.gainColor(70, { ...S, gainRed: 90, gainGreen: 80 }), 'rgba(255, 92, 92, 1)', 'thresholds the wrong way round');
+expect([0, 1, 2, 3].map((c) => api.jumpOf({ jumpCount: c })), [0, 0, 1, 2], 'jumpOf: takeoff N carries jump N-1');
+const pick = (first, every) => [1, 2, 3, 4, 5, 6, 7].filter((n) => api.shows(n, { firstJump: first, everyJump: every }));
+expect(pick(1, 1), [1, 2, 3, 4, 5, 6, 7], 'shows every jump');
+expect(pick(2, 2), [2, 4, 6], 'shows from 2, every 2nd');
+expect(pick(3, 0), [3], 'every 0: only the first');
+expect(pick(0, 1), [1, 2, 3, 4, 5, 6, 7], 'first 0 counts as 1');
+const st = { jumpCount: 4, takeoffSpeed: 508.81, jumpSpeedDelta: 65.28, speedGain: 0.92076, strafeSync: 1, strafeCount: 2,
+	yawRatio: 0.9319, efficiency: 0.5817, heightDelta: -0.04, distance: 357.89, timeDelta: 0.75 };
+const r = api.rows(st, 3, S);
+expect(r.map((row) => row.map((p) => p.text)), [['3:', '509', '(+65)'], ['92.1 %', 'sync 100 %']], 'default rows');
+expect(r[0][2].color, S.upColor, 'speed up: up colour');
+expect(r[0][0].color, null, 'number: font colour');
+expect(api.rows({ ...st, jumpSpeedDelta: -3.4 }, 3, S)[0][2], { text: '(-3)', color: S.downColor }, 'speed down');
+const all = Object.fromEntries(Object.keys(S).map((k) => [k, k.startsWith('show') ? true : S[k]]));
+expect(api.rows(st, 3, all)[2].map((p) => p.text), ['2 strafes', 'ratio 0.93', 'eff 58 %', 'h +0.0', '357.9 u', '0.75 s'], 'extras row');
+const none = Object.fromEntries(Object.keys(S).map((k) => [k, k.startsWith('show') ? false : S[k]]));
+expect(api.rows(st, 3, none), [], 'no fields: no rows');
+expect(api.rows(st, 3, { ...none, showGain: true }).length, 1, 'only gain: one row');
+
+// ---- Panorama side ----
+fire('HudCustomizer_Ready');
+if (!loaded) fail('the customizer got no component');
+expect(loaded.p.id, 'MovekitJhud', 'component panel id');
+expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
+expect(Object.keys(loaded.props.dynamicStyles).sort(), api.STYLES.map((x) => x[0]).sort(), 'every row in the customizer');
+// the customizer calls back each setting with its saved value (shared "$" values come resolved)
+for (const [id, value] of Object.entries(S)) {
+	const d = loaded.props.dynamicStyles[id];
+	if (d.callbackFunc) d.callbackFunc(loaded.p, value);
+}
+expect(api.settings.fontColor, S.fontColor, 'callback stores the setting');
+expect(loaded.props.dynamicStyles.backgroundColor.styleProperty, 'backgroundColor', 'background on the panel itself');
+const panel = hud.FindChildTraverse('MovekitJhud');
+expect(panel && panel.visible, false, 'hidden until a jump');
+
+stats = { ...st, jumpCount: 1 };
+fire('OnJumpStarted');
+expect(panel.visible, false, 'jumpCount 1 (no air time yet) shows nothing');
+stats = st;
+mode = 1;
+fire('OnJumpStarted');
+expect(panel.visible, false, 'surf shows nothing');
+mode = 2;
+panel.enabled = false;
+fire('OnJumpStarted');
+expect(panel.visible, false, 'switched off in the customizer shows nothing');
+panel.enabled = true;
+fire('OnJumpStarted');
+expect(panel.visible, true, 'a bhop jump shows');
+expect(texts(panel), [['3:', '509', '(+65)'], ['92.1 %', 'sync 100 %']], 'drawn rows');
+if (!/color: rgba\(24, 150, 211, 1\)/.test(panel.children[0].children[2].styleText)) fail('speed change not in the up colour');
+expect(panel.style.opacity, '1', 'shown fully');
+expect(runSchedules(), [2], 'held for holdMs');
+expect([panel.style.opacity, panel.style.transitionDuration], ['0', '0.3s'], 'fading over fadeMs');
+runSchedules();
+expect(panel.visible, false, 'hidden after the fade');
+// a new jump while one is held replaces it, and the old timer doesn't hide the new one
+fire('OnJumpStarted');
+stats = { ...st, jumpCount: 5 };
+fire('OnJumpStarted');
+const first = schedules[0];
+schedules = [schedules[1]];
+first.fn();
+expect(panel.style.opacity, '1', 'an old jump\'s timer leaves the new one');
+expect(texts(panel)[0][0], '4:', 'the newer jump drawn');
+schedules = [];
+
+// the customizer: a sample to drag while it is open, hidden when it closes
+fire('HudCustomizer_Opened');
+expect(panel.visible, true, 'sample shown in the customizer');
+expect(texts(panel)[0], ['6:', '642', '(+48)'], 'sample rows');
+expect(schedules.length, 0, 'sample is held');
+fire('OnJumpStarted');
+expect(texts(panel)[0][0], '6:', 'jumps don\'t replace the sample while editing');
+loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, false);
+expect(texts(panel)[0], ['6:', '(+48)'], 'a changed setting redraws the sample');
+loaded.props.dynamicStyles.showSpeed.callbackFunc(loaded.p, true);
+fire('HudCustomizer_Closed');
+expect(panel.visible, false, 'hidden when the customizer closes');
+mode = 1;
+fire('HudCustomizer_Opened');
+expect(panel.visible, false, 'no sample outside bhop');
+fire('HudCustomizer_Closed');
+mode = 2;
+
+// ---- saved jump events ----
+let n = 0;
+if (fs.existsSync(store)) {
+	const allOn = { ...all };
+	for (const m of fs.readdirSync(store)) {
+		const dir = path.join(store, m);
+		if (!fs.statSync(dir).isDirectory()) continue;
+		for (const f of fs.readdirSync(dir)) {
+			if (!f.endsWith('.json.gz')) continue;
+			const a = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(dir, f))).toString());
+			for (const e of a.events || []) {
+				if (e.kind !== 'jump') continue;
+				const s = { jumpCount: e.n, takeoffSpeed: e.takeoff, jumpSpeedDelta: e.delta, speedGain: e.gain,
+					strafeSync: e.sync, strafeCount: e.strafes, yawRatio: e.ratio, efficiency: e.eff,
+					heightDelta: e.height, distance: e.distance, timeDelta: e.timeDelta ?? 0 };
+				const j = api.jumpOf(s);
+				if (j < 1) continue;
+				const out = JSON.stringify(api.rows(s, j, allOn));
+				if (/NaN|undefined|Infinity/.test(out)) fail(`${f} jump ${e.n}: ${out}`);
+				n++;
+			}
+		}
+	}
+}
+console.log(`check_jhud: all good (${n} saved jumps drawn${n ? '' : '; no store'})`);
