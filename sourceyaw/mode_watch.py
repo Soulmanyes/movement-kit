@@ -31,19 +31,29 @@ class Watcher:
         self.path = Path(path)
         self.map_modes = map_modes
         self.mode = mode  # yaws.cfg starts the game on the bhop list
-        self.armed = None
+
+    @property
+    def armed(self):
+        """The list the file arms now, or None. Read from the file each time: the hub's Apply
+        empties it behind the watcher's back."""
+        try:
+            text = self.path.read_text().strip()
+        except OSError:
+            return None
+        return text.removeprefix("sourceyaw_arm_") or None
 
     def _write(self, arm):
-        if arm == self.armed:
+        if arm == self.armed and self.path.exists():
             return
         tmp = self.path.with_name(self.path.name + ".tmp")
         tmp.write_text(f"sourceyaw_arm_{arm}\n" if arm else "")
         tmp.replace(self.path)
-        self.armed = arm
 
     def clear(self):
-        self.armed = "?"  # unknown: always write
-        self._write(None)
+        if self.path.parent.is_dir():
+            tmp = self.path.with_name(self.path.name + ".tmp")
+            tmp.write_text("")
+            tmp.replace(self.path)
 
     def handle(self, event):
         """Updates the file for one session event; returns the arm written, "" for a clear, else None."""

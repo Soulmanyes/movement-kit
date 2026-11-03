@@ -271,6 +271,10 @@ def check_watcher(watch, tmp):
     w.handle(ev("map_loaded", name="bhop_x"))
     expect(w.handle(ev("token", name="SY_MODE_SURF")), "", "mode key to the same list still clears")
     expect(w.mode, "surf", "mode from the token")
+    w.handle(ev("map_loaded", name="bhop_x"))
+    path.write_text("")  # the hub's Apply mid-game
+    expect(w.handle(ev("map_loaded", name="bhop_y")), "bhop", "re-arms after the file was emptied elsewhere")
+    expect(path.read_text(), "sourceyaw_arm_bhop\n", "arm written again")
     print("ok   mode watcher")
 
 
