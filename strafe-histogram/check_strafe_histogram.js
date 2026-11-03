@@ -143,6 +143,8 @@ for (const [id, , type, , extra] of api.STYLES) {
 	if (type !== 1) continue;
 	if (!extra || !extra.range) fail(`number box ${id} has no range`);
 	if (!(extra.range.min <= api.DEFAULTS[id] && api.DEFAULTS[id] <= extra.range.max)) fail(`${id}'s default is outside its range`);
+	// the NumberEntry clamps on every keystroke, so a min over 0 snaps a half-typed value back (2 on the way to 200)
+	if (extra.range.min !== 0) fail(`number box ${id}: min ${extra.range.min}, not 0`);
 }
 
 // ---- plain functions ----
@@ -226,6 +228,16 @@ cb('barColor', 'rgba(1, 2, 3, 1)');
 jump(400, 4);
 expect([rowsOf(P).length, shownRows(P).length, rowsOf(P)[99].style.backgroundColor], [100, 100, 'rgba(1, 2, 3, 1)'],
 	'a new bar colour: rows kept, new rows in it');
+for (const v of [0, 2, 20, 200, 5000]) cb('rows', v);
+jump(450, 4);
+expect(rowsOf(P).length, 1000, 'rows typed past 1000: capped at 1000');
+cb('rows', 2);
+jump(460, 4);
+expect(rowsOf(P).length, 10, 'a half-typed 2: 10 rows, no error');
+cb('rowHeight', 0);
+jump(470, 4);
+expect(P.style.height, '10px', 'bar height 0: 1 px');
+cb('rowHeight', 2);
 cb('rows', 50);
 jump(500, 4);
 expect([rowsOf(P).length, shownRows(P).length], [50, 4], 'fewer ticks shown: built again, empty');

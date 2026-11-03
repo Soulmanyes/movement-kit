@@ -119,14 +119,16 @@ const COLOR_BY = [
 type Extra = {
 	options?: { label: string; value: string }[];
 	showWhen?: Record<string, string[]>;
-	range?: { min: number; max: number };
+	range?: { min: number; max: number; increment?: number };
 };
+// A box's min is 0 and its max roomy: the NumberEntry clamps on every keystroke, so a min of 10 snaps "2"
+// (on the way to 200) back to 10 (owner, 2026-11-03). The real limits are applied here (rowCount, rowPx).
 const PLAIN = ['plain'];
 const GOOD = ['good'];
 const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides']],
-	['rows', 'Ticks shown', NUMBER_ENTRY, undefined, { range: { min: 10, max: 1000 } }],
-	['rowHeight', 'Bar height (px)', NUMBER_ENTRY, undefined, { range: { min: 1, max: 20 } }],
+	['rows', 'Ticks shown (10-1000)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 9999, increment: 10 } }],
+	['rowHeight', 'Bar height (px, 1-20)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 99 } }],
 	['optimalAt', 'Optimal at', DROPDOWN, undefined, { options: OPTIMAL_AT }],
 	['fromSides', 'Grow from the strafe side (right strafes from the right)', CHECKBOX],
 	['colours', 'Colours', NONE, ['colorBy', 'showMarker', 'markerColor', 'backgroundColor']],
@@ -135,7 +137,7 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['barColor', 'Bar colour', COLOR_PICKER],
 	['goodColor', 'At optimal', COLOR_PICKER],
 	['badColor', 'Far from optimal', COLOR_PICKER],
-	['badPct', 'Fully "far" at (% away)', NUMBER_ENTRY, undefined, { range: { min: 1, max: 1000 } }],
+	['badPct', 'Fully "far" at (% away)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 1000 } }],
 	['showMarker', 'Line at the optimal', CHECKBOX],
 	['markerColor', 'Line colour', COLOR_PICKER],
 	['backgroundColor', 'Background colour', COLOR_PICKER]
@@ -192,10 +194,12 @@ function getPanel(): GenericPanel {
 }
 
 function rowCount(s: Settings): number {
-	return Math.max(10, Math.min(1000, Math.round(+s.rows) || 100));
+	const n = Math.round(+s.rows);
+	return isFinite(n) ? Math.max(10, Math.min(1000, n)) : 100;
 }
 function rowPx(s: Settings): number {
-	return Math.max(1, Math.min(20, Math.round(+s.rowHeight) || 2));
+	const h = Math.round(+s.rowHeight);
+	return isFinite(h) ? Math.max(1, Math.min(20, h)) : 2;
 }
 
 // What the built rows depend on (each row's width, side and colour are set when it is painted)

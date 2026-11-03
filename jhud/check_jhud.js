@@ -211,6 +211,8 @@ for (const [id, , type] of api.STYLES) {
 	if (type !== 1) continue;
 	const sp = loaded.props.dynamicStyles[id].settingProps;
 	if (!sp || !(sp.min <= S[id] && S[id] <= sp.max)) fail(`number box ${id}: no min/max around its default (${JSON.stringify(sp)})`);
+	// the NumberEntry clamps on every keystroke, so a min over 0 snaps a half-typed value back
+	if (sp.min !== 0) fail(`number box ${id}: min ${sp.min}, not 0`);
 }
 expect(loaded.props.dynamicStyles.paceCut.options.map((o) => o.value), ['6', '12'], 'cutoff 6 or 12');
 expect(loaded.props.dynamicStyles.colours.children.map((c) => c.styleID), ['colorBy'], 'the colours group holds colorBy');

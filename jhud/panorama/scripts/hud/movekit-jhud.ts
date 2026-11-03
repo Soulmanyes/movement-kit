@@ -104,7 +104,9 @@ const PACE: Record<string, number[]> = {
 
 // The customizer's rows: [id, name, type, children, extra]. Groups (NONE) only fold their children; other
 // rows show a child only while their value is one of extra.showWhen[child]. extra.options: a dropdown's choices.
-// extra.range: a number box's min and max (the game's own boxes set one too).
+// extra.range: a number box's min and max (the game's own boxes set one too). The min is 0: the NumberEntry
+// clamps on every keystroke, so a higher min snaps a half-typed value back (owner, 2026-11-03, the histogram's
+// rows box). The real limits are applied where the value is used (font size 6+, from jump 1+).
 type Extra = {
 	options?: { label: string; value: string }[];
 	showWhen?: Record<string, string[]>;
@@ -116,7 +118,7 @@ const PACE_ONLY = ['pace'];
 const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['fontStyling', 'Font', NONE, ['font', 'fontSize', 'fontColor', 'backgroundColor']],
 	['font', 'Font', FONT_PICKER],
-	['fontSize', 'Font size', NUMBER_ENTRY, undefined, { range: { min: 6, max: 72 } }],
+	['fontSize', 'Font size', NUMBER_ENTRY, undefined, { range: { min: 0, max: 99 } }],
 	['fontColor', 'Font colour', COLOR_PICKER],
 	['backgroundColor', 'Background colour', COLOR_PICKER],
 	['fields', 'Fields', NONE, ['showNumber', 'showSpeed', 'showDelta', 'showGain', 'showSync', 'showStrafes',
@@ -153,7 +155,7 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['redColor', 'Red (bad gain)', COLOR_PICKER],
 	['greenColor', 'Green (good gain)', COLOR_PICKER],
 	['jumps', 'Which jumps', NONE, ['firstJump', 'everyJump']],
-	['firstJump', 'From jump', NUMBER_ENTRY, undefined, { range: { min: 1, max: 999 } }],
+	['firstJump', 'From jump', NUMBER_ENTRY, undefined, { range: { min: 0, max: 999 } }],
 	['everyJump', 'Every Nth jump (0: only the first)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 999 } }],
 	['timing', 'Timing', NONE, ['holdMs', 'fadeMs']],
 	['holdMs', 'Shown for (ms)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 10000 } }],
