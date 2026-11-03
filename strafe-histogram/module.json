@@ -1,0 +1,15 @@
+{
+  "key": "strafe-histogram",
+  "title": "Strafe Speed Histogram",
+  "summary": "While you bhop in Momentum Mod: a histogram of how fast you turn against the optimal over the middle of your strafes in the last few seconds, and the share in the optimal band.",
+  "os": ["linux", "win32"],
+  "tag_prefix": "strafe-histogram-v",
+  "version_from": "install.py",
+  "needs_core": "1.4.0",
+  "needs": [],
+  "data": [],
+  "hud_card": {
+    "title": "Strafe Speed Histogram",
+    "text": "While you bhop: bars of how fast you turn compared with the optimal (1.0) over the middle of your strafes in the last few seconds of strafing, and the share inside the optimal band (85-115 %). Its position, width, range, bar colours and window length are set in Momentum Mod's own HUD customizer, where it is listed as Strafe Speed Histogram, and saved with your HUD preset. Turn it off there too."
+  }
+}

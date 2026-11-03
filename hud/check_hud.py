@@ -101,9 +101,12 @@ def main():
         if "hud" not in [s.key for s in sections]:
             fail("discovery didn't find the hud section")
         bridge = hub.Bridge(sections, problems)
-        # a checkout counts its module folders as installed, so JHUD's card comes from its module.json
+        # a checkout counts its module folders as installed, so the cards come from their module.json files
         jcard = json.loads((KIT / "jhud" / "module.json").read_text())["hud_card"]
-        jhud = [{"key": "jhud", **jcard}]
+        manifests = {p.parent.name: json.loads(p.read_text()) for p in KIT.glob("*/module.json")}
+        jhud = sorted(({"key": k, **m["hud_card"]} for k, m in manifests.items() if "hud_card" in m),
+                      key=lambda c: (c["title"].lower(), c["key"]))
+        expect([c["key"] for c in jhud], ["jhud", "strafe-histogram"], "the checkout's HUD cards")
         settings.save("inGameLine", False)
         expect(bridge.call("hud", "get"), {"ok": True, "result": {"inGameLine": False, "recorder": "no game", "strafeReview": True,
                                                             "cards": jhud}},
@@ -137,8 +140,8 @@ def main():
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
         expect(bridge.call("hud", "get")["result"]["strafeReview"], False, "get, Strafe Review uninstalled")
-        state.write_text(json.dumps({"modules": {"jhud": {"removed": True}}}))
-        expect(bridge.call("hud", "get")["result"]["cards"], [], "get, JHUD uninstalled")
+        state.write_text(json.dumps({"modules": {"jhud": {"removed": True}, "strafe-histogram": {"removed": True}}}))
+        expect(bridge.call("hud", "get")["result"]["cards"], [], "get, the card modules uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
         expect(ts.read_text(), TS.replace("false", "true"), "recorder after set_line(True)")

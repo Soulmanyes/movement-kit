@@ -177,13 +177,13 @@ def check_own_modules():
                     if name not in ALLOWED and name not in own:
                         fail(f"{file.relative_to(KIT)}:{line} imports {name}, which the core exe "
                              "doesn't carry")
-    expect(sorted(found), ["gain-converter", "jhud", "sourceyaw", "strafe-review", "trainer-height"], "the kit's modules")
+    expect(sorted(found), ["gain-converter", "jhud", "sourceyaw", "strafe-histogram", "strafe-review", "trainer-height"], "the kit's modules")
     # discovery from the checkout finds every module's folder (the manager itself, next)
     mgr = modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="linux")
     expect(mgr.problems(), [], "problems in the kit's module.json files")
     expect(sorted(mgr.available()), sorted(found), "modules available on Linux")
     expect(sorted(modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="win32").available()),
-           ["gain-converter", "jhud", "strafe-review", "trainer-height"], "modules available on Windows")
+           ["gain-converter", "jhud", "strafe-histogram", "strafe-review", "trainer-height"], "modules available on Windows")
     bad = TMP / "bad" / "alpha"
     bad.mkdir(parents=True)
     (bad / "tool.py").write_text('VERSION = "1.0.0"\n')
