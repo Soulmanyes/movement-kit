@@ -253,6 +253,15 @@ The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-
 - HUD section: `show_with` adds `jhud`, `get` returns `jhud` (installed), and a JHUD card (shown only when installed) points at Momentum's HUD customizer. The jump-1 line's "off by default" note moved into its own card, since JHUD is on once installed. `check_hud` covers `jhud` and `show_with`.
 - Every `check_*.py` and `hub/smoke_test.py --repo` pass (`strafe-review/check_hub_section.py` not run: it needs the live viewer stopped, and nothing it covers changed).
 
+### Phase 5.3: JHUD module (2026-11-03, built, not released)
+
+- `jhud/`: `module.json` (`needs_core` 1.3.0), `install.py` (VERSION 1.0.0, kv3 `ENTRY`), `module_hooks.py`, `launch-hook.sh` (order 40), `panorama/scripts/hud/movekit-jhud.ts`, README, LICENSE. Core bumped to 1.3.0 (`hub_release.py`, `modules.py`). `jhud-v*` in `module-release.yml`; `check_modules` lists it (both OSes). The release zip holds only the module files.
+- The script registers its own events once (not through the customizer's `events`, which `loadComponent` would add again at every map load), shows nothing while the customizer has the panel switched off (`panel.enabled`) or outside bhop, and shows a held sample while the customizer is open.
+- `check_jhud.js`: settings vs kv3 entry, colour scale, `jumpOf`/`shows`, rows, the Panorama flow with stubs, and 8621 saved jump events drawn with no NaN. Mutations caught (7/7): no mode check, `jumpOf` off by one, customizer switch ignored, an old timer fading a new jump, every 0 showing all, no sample redraw, a kv3 default drifting.
+- `check_jhud.py`: fake game, both patches once, another tool's include kept, a mod's kv3 as the base, a changed kv3 left out and reported, failed sync keeps the script, hooks. Mutations caught (3/3): no kv3 patch, script removed on a failed sync, no hook unregister.
+- On copies of the real `timer.xml` and `hud_default.kv3` (LF), the install applies both patches once.
+- Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. Not yet: an in-game test, the CI test runs, the release.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
