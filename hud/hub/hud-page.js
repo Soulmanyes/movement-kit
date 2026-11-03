@@ -27,6 +27,39 @@
 		}
 	}
 
+	const STATE = { applied: "applied", present: "already in the file", skipped: "left out" };
+
+	async function patches() {
+		const list = $("hud-patches");
+		const out = $("hud-patches-note");
+		try {
+			const st = await hub.call("panorama_status");
+			list.replaceChildren(...st.patches.map((p) => {
+				const li = document.createElement("li");
+				const name = document.createElement("span");
+				name.textContent = `${p.tool}: ${p.file.split("/").pop()}`;
+				const state = document.createElement("span");
+				state.className = "hud-state " + p.state;
+				state.textContent = STATE[p.state] || p.state;
+				li.append(name, state);
+				if (p.reason) {
+					const why = document.createElement("div");
+					why.className = "muted";
+					why.textContent = p.reason;
+					li.append(why);
+				}
+				return li;
+			}));
+			out.textContent = !st.game ? "Momentum Mod wasn't found."
+				: st.warnings.length ? st.warnings.join("\n")
+				: st.patches.length ? "" : "No installed tool changes a game file.";
+			out.className = "hud-note " + (st.game && st.warnings.length ? "error" : "muted");
+		} catch (e) {
+			out.textContent = "Couldn't read the patched files: " + e.message;
+			out.className = "hud-note error";
+		}
+	}
+
 	$("hud-line").addEventListener("change", async (ev) => {
 		const box = ev.target;
 		box.disabled = true;
@@ -43,4 +76,5 @@
 	});
 
 	load();
+	patches();
 })();

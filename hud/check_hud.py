@@ -7,7 +7,8 @@ Covers: the store (defaults, a round trip, unknown keys kept, wrong types and un
 a stored value of the wrong type read as the default, a broken file), Strafe Review's
 recorder_settings (rewrite both ways, False when the recorder isn't installed), the hub section
 found by discovery and called through the bridge (get with no game, not installed and installed;
-set_line writing the recorder; a non-bool refused), loading it leaving no bare steam, install or
+set_line writing the recorder; panorama_status with no
+patches, applied, skipped and no game; a non-bool refused), loading it leaving no bare steam, install or
 recorder_settings module behind, and install.apply_settings reading the same store.
 XDG_DATA_HOME, LOCALAPPDATA and MOMENTUM_DIR point into the temp folder, so the real settings and
 game are never touched.
@@ -39,7 +40,7 @@ def main():
         os.environ["MOMENTUM_DIR"] = str(tmp / "nogame")  # no such folder yet: "no game"
         sys.path.insert(0, str(KIT))
         from hud import settings
-        from movekit import hub
+        from movekit import hub, panorama
 
         # the store
         expect(settings.file(), tmp / "data" / "movekit" / "hud.json", "settings file")
@@ -110,6 +111,25 @@ def main():
         expect(bridge.call("hud", "get")["result"], {"inGameLine": True, "recorder": "installed"}, "get, installed")
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
         expect(ts.read_text(), TS.replace("false", "true"), "recorder after set_line(True)")
+        # the kit's patched files card: none yet, then the recorder's include applied, then one that
+        # doesn't fit (the game's timer.xml has no </scripts>) reported as skipped
+        expect(bridge.call("hud", "panorama_status")["result"], {"game": True, "patches": [], "warnings": []},
+               "panorama_status, no patches")
+        timer = game / "panorama" / "layout" / "hud" / "timer.xml"
+        timer.parent.mkdir(parents=True)
+        timer.write_text("<root>\n\t<scripts>\n\t</scripts>\n</root>\n")
+        rec_patch = [{"file": "panorama/layout/hud/timer.xml", "before": "</scripts>", "line": "<include x />"}]
+        panorama.install(game, "0-strafe-review", "strafe-review", rec_patch)
+        rows = bridge.call("hud", "panorama_status")["result"]["patches"]
+        expect([(r["tool"], r["state"]) for r in rows], [("strafe-review", "applied")], "panorama_status, applied")
+        timer.write_text("<root></root>\n")
+        rows = bridge.call("hud", "panorama_status")["result"]["patches"]
+        expect([(r["tool"], r["state"], bool(r["reason"])) for r in rows], [("strafe-review", "skipped", True)],
+               "panorama_status, skipped")
+        panorama.uninstall(game, "0-strafe-review")
+        os.environ["MOMENTUM_DIR"] = str(tmp / "missing")
+        expect(bridge.call("hud", "panorama_status")["result"]["game"], False, "panorama_status, no game")
+        os.environ["MOMENTUM_DIR"] = str(game)
         bad = bridge.call("hud", "set_line", {"on": "yes"})
         expect(bad["ok"], False, "set_line with a non-bool")
         expect(settings.get("inGameLine"), True, "store after a refused set_line")

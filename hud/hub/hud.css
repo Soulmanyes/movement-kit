@@ -3,3 +3,12 @@
 .hud-toggle input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .hud-note:empty { display: none; }
 .hud-note { font-size: 13px; }
+.hud-title { font-weight: 600; font-size: 15px; }
+.hud-patches { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hud-patches:empty { display: none; }
+.hud-patches li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.hud-patches li .muted { flex-basis: 100%; font-size: 13px; }
+.hud-state { font-size: 13px; }
+.hud-state.applied, .hud-state.present { color: var(--good); }
+.hud-state.skipped { color: var(--warn); }
+.hud-note { white-space: pre-line; }

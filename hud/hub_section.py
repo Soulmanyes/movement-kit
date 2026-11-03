@@ -6,7 +6,7 @@ by path so its folder never goes on sys.path). The HUD is part of the core; the 
 installed or not (movekit/modules.py), so the file is looked up on each call.
 """
 from hud import settings
-from movekit import games, modules, steam
+from movekit import games, modules, panorama, steam
 from movekit.hub import local_import
 
 
@@ -45,12 +45,21 @@ def set_line(on):
     return {**settings.load(), "applied": applied}
 
 
+def panorama_status():
+    """The kit's patched HUD files (movekit/panorama.py): each tool's patches as applied, present or
+    skipped, plus warnings. game: False when Momentum isn't found."""
+    game = _game()
+    if game is None:
+        return {"game": False, "patches": [], "warnings": []}
+    return {"game": True, **panorama.status(game)}
+
+
 SECTION = {
     "key": "hud",
     "title": "HUD",
     "os": ["linux", "win32"],
     "page": "hub/index.html",
-    "api": {"get": get, "set_line": set_line},
+    "api": {"get": get, "set_line": set_line, "panorama_status": panorama_status},
     "order": 20,
     "show_with": ["strafe-review"],  # the jump-1 line is drawn by Strafe Review's recorder
 }
