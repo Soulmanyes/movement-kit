@@ -459,7 +459,7 @@ The owner wants separate bhop and surf yawspeeds in both games. They picked "bot
   - Cleanup of the colour cfgs and the auto file.
   - Mutations: the arm landing one past the start, the watcher writing on a same-mode map, a shared token for both lists.
 - **Release.** hub-v1.7.0 (core 1.7.0) and sourceyaw-v1.9.0.
-- **Probe (2026-11-03).** CS:S on a public server (bhop_bfur): `bind p "exec sy_probe"` printed PROBE_A, and after the file was changed with the game running, PROBE_B. So exec re-reads the file on every press. No "execing" line shows in the console or log. Order, same server: `alias sy_t "exec sy_probe; echo AFTER"` printed PROBE_B before AFTER on every press, so the exec'd file runs before the rest of the alias, as the console model in `check_modes.py` assumes. Momentum is still to probe (both tests).
+- **Probe (2026-11-03).** CS:S on a public server (bhop_bfur): `bind p "exec sy_probe"` printed PROBE_A, and after the file was changed with the game running, PROBE_B. So exec re-reads the file on every press. No "execing" line shows in the console or log. Order, same server: `alias sy_t "exec sy_probe; echo AFTER"` printed PROBE_B before AFTER on every press, so the exec'd file runs before the rest of the alias, as the console model in `check_modes.py` assumes. Momentum (2026-11-03): both pass too (PROBE_A then AFTER; after the file change, PROBE_B then AFTER). Its echoes reach yaw.log with a `[vstdlib] ` prefix, which the token scanner allows.
 - **Built (2026-11-03).**
   - Everything as above. `_set_alias` and `_key_lines` are shared by the one-list and two-list yaws.cfg.
   - `mode_watch.py` is installed by `install.sh`.
