@@ -11,7 +11,8 @@ What the demo gives (measured 2026-10-28 on one 100-tick bhop server):
   client frame rate, so the order is used, not the label. A zero origin is skipped. Velocity = origin
   change / tick interval.
 - Usercmd frames carry the commands (angles, forward/side move, buttons), one per tick. Packet k goes with
-  command k + lag; the lag is fitted with CS:S air physics (add up to 30 u/s along wishdir).
+  command k + lag; the lag is fitted with CS:S air physics (add up to 30 u/s along wishdir), per block of
+  packets, since it can step mid-demo. A row where it steps is left out (a gap for the viewer).
 - Now and then a packet repeats the previous origin mid-air and the next one moves two ticks: both ticks are
   rebuilt from the air physics and the two-tick move.
 """
@@ -22,6 +23,7 @@ import sys
 
 INTERVAL = 0.01
 AIR_ADD = 30.0
+LAG_BLOCK = 200  # packets per block for the local command offset
 
 
 class Bits:
@@ -121,18 +123,19 @@ def air_move(v0, w):
     return v0[0] + add * u[0], v0[1] + add * u[1]
 
 
-def fit_lag(vel, cmds):
-    """Command offset whose wishdir best predicts each air tick's velocity change: (lag, median error u/s)."""
+def fit_lag(vel, cmds, lo=2, hi=None):
+    """Command offset whose wishdir best predicts each air tick's velocity change over packets lo..hi:
+    (lag, median error u/s), or None with too few air ticks."""
     best = None
     for lag in range(-15, 16):
         errs = []
-        for k in range(2, len(vel)):
+        for k in range(max(lo, 2), min(hi or len(vel), len(vel))):
             v0, v1, i = vel[k - 1], vel[k], k + lag
             if abs(v1[2] - v0[2] + 8) > 1 or not 0 <= i < len(cmds) or not unit(wish(cmds[i])):
                 continue  # air ticks with a key only (gravity takes 8 u/s off vz per tick)
             px, py = air_move(v0, wish(cmds[i]))
             errs.append(math.hypot(v1[0] - px, v1[1] - py))
-        if errs:
+        if len(errs) >= 20:
             errs.sort()
             if best is None or errs[len(errs) // 2] < best[1]:
                 best = (lag, errs[len(errs) // 2])
@@ -147,17 +150,27 @@ def main():
         tuple((origins[k][j] - origins[k - 1][j]) / INTERVAL for j in range(3)) for k in range(1, len(origins))
     ]
     lag, err = fit_lag(vel, cmds)
+    # the offset can step mid-demo (2026-11-03 demo: -1 to -2 when a player joined), so it is fitted per
+    # block of packets over a window around it; blocks with too few air ticks keep the last one
+    lags = []
+    cur = lag
+    for b in range(0, len(vel), LAG_BLOCK):
+        f = fit_lag(vel, cmds, b - LAG_BLOCK, b + 2 * LAG_BLOCK)
+        if f and f[1] < 1:
+            cur = f[0]
+        lags += [cur] * LAG_BLOCK
+    steps = sorted({x for x in lags})
     fixed = 0
     for k in range(2, len(vel) - 1):
         v0, v1, v2 = vel[k - 1], vel[k], vel[k + 1]
-        if v1 == (0.0, 0.0, 0.0) and v0[2] != 0 and abs(v2[2] - 2 * v0[2]) < 40 and 0 <= k + lag < len(cmds):
-            a = (*air_move(v0, wish(cmds[k + lag])), v0[2] - 8)
+        if v1 == (0.0, 0.0, 0.0) and v0[2] != 0 and abs(v2[2] - 2 * v0[2]) < 40 and 0 <= k + lags[k] < len(cmds):
+            a = (*air_move(v0, wish(cmds[k + lags[k]])), v0[2] - 8)
             vel[k], vel[k + 1] = a, tuple(v2[j] - a[j] for j in range(3))
             fixed += 1
     rows = []
     for k in range(1, len(vel)):
-        i = k + lag
-        if not 0 <= i < len(cmds):
+        i = k + lags[k]
+        if not 0 <= i < len(cmds) or (k > 1 and lags[k] != lags[k - 1]):
             continue
         c, v = cmds[i], vel[k]
         wx, wy = wish(c)
@@ -181,7 +194,7 @@ def main():
     }
     with open(sys.argv[2], "w") as f:
         json.dump(out, f)
-    print(f"{head['map']}: {len(origins)} packets, {len(cmds)} commands, lag {lag} (median error {err:.3f} u/s), "
+    print(f"{head['map']}: {len(origins)} packets, {len(cmds)} commands, lag {lag} (median error {err:.3f} u/s, per block {steps}), "
           f"{fixed} stalled packets rebuilt, {len(rows)} rows")
 
 
