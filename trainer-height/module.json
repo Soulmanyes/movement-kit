@@ -1,0 +1,11 @@
+{
+  "key": "trainer-height",
+  "title": "Strafe Trainer Height",
+  "summary": "Lets you drag Momentum Mod's strafe trainer taller in the HUD editor, with the bar filling it.",
+  "os": ["linux", "win32"],
+  "tag_prefix": "trainer-height-v",
+  "version_from": "install.py",
+  "needs_core": "1.2.0",
+  "needs": [],
+  "data": []
+}

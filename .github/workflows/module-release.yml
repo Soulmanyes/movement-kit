@@ -11,7 +11,7 @@ on:
         description: The tool's folder, "strafe-review"
         required: true
   push:
-    tags: ["strafe-review-v*", "gain-converter-v*", "sourceyaw-v*"]
+    tags: ["strafe-review-v*", "gain-converter-v*", "sourceyaw-v*", "trainer-height-v*"]
 permissions:
   contents: write
 jobs:

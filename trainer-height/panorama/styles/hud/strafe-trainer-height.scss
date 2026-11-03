@@ -1,0 +1,13 @@
+// strafe-trainer-height: the bar fills the element's height minus the 32px label rows above and below,
+// so the stock height of 80px gives the stock 16px bar.
+.strafetrainer .strafetrainer__bar-wrapper {
+	height: 100%;
+	padding-top: 32px;
+	padding-bottom: 32px;
+	margin-bottom: 0px;
+	transform: none;
+}
+
+.strafetrainer .strafetrainer__background {
+	height: 100%;
+}
