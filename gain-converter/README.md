@@ -15,7 +15,7 @@ It's an estimate. The two games score gain differently, so no exact conversion e
 - CS:S (SSJ) scores each tick by how far your angle is from the best one. Being off costs you linearly.
 - Momentum compares the speed you gained with the most you could have gained. Being off a little costs you very little.
 
-The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top replays on bhop_ambience that were measured both ways with [Strafe Review](../strafe-review/) (the white dots), and it matches them to within about 1 point. Jumps with very uneven strafes can land a few points off.
+The curve is `Momentum = 1 − (1 − CS:S)^1.45`. It's fitted to runs and top replays on bhop_ambience that were measured both ways with [Strafe Review](../strafe-review/) (the white dots), and it matches them to within about 1 point. It converts single jumps. Dead ticks (a strafe key held while the mouse isn't turning) gain nothing in either game, but they pull Momentum lower than the curve predicts, so a jump with several of them, jump 1 and whole runs often read 3-5 points under it in Momentum.
 
 ## Install
 

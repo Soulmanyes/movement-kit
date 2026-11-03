@@ -28,7 +28,9 @@
 	<div class="gc-result"><div id="gc-result"></div><div id="gc-sub" class="muted"></div></div>
 	<div class="card gc-graph"><svg id="gc-graph" role="img" aria-label="Momentum and CS:S gain curves"></svg></div>
 	<p class="muted gc-note">An estimate: the two games score gain differently, so no exact conversion exists.
-	The curve is fitted to measured runs (white dots). Click or drag on the graph to pick a value.</p>
+	The curve is fitted to measured runs (white dots). Click or drag on the graph to pick a value.<br>
+	It converts single jumps. Ticks where a strafe key is held but the mouse isn't turning gain nothing in either game,
+	and they pull Momentum lower than the curve: jump 1 and whole runs often read 3-5 points under it.</p>
 </main>
 <script src="gain-page.js"></script>
 </body>
