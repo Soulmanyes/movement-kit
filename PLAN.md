@@ -191,10 +191,56 @@ So both are patches, the same kind as the recorder's `timer.xml`. The game's fil
 
 **Settled by the owner (2026-11-03).** The steps go ahead as written. The module is called "Strafe Trainer Height". The HUD section gets one small card listing the kit's `status` (each patch applied, present or skipped, with the reason), in 4.2.
 
+## Phase 5: JHUD (planned and OK'd 2026-11-03, branch `jhud`)
+
+The owner picked JHUD on 2026-11-03. Owner notes from 2026-10-29 are in `strafe-review/PLAN.md` ("JHUD-style HUD element").
+
+**What it adds over the game's own Jump Stats.** Momentum's Jump Stats (`jump-stats.ts`) is a scrolling table, in bhop mode only, with no colours. JHUD is one jump at a time in the middle of the screen, coloured by thresholds, held for a moment and then faded out, in the style of the CS:S shavit-jhud.
+
+**Settled by the owner (2026-11-03).**
+- **Numbers.** The game's own `MomentumMovementAPI.GetLastJumpStats()`, with no Strafe Review maths. Its gain % is sum(`speedGain`) / sum(`idealGain`) over the air time, the same number Strafe Review shows (71.0 % both ways, Phase 2 notes). Two things can still differ from the jump-1 line. The game numbers jumps by its own `jumpCount`; when that resets is checked in 5.1. The stats also arrive when the next jump takes off (`OnJumpStarted`), not 3 ticks after landing.
+- **Settings in the game's HUD customizer.** Position, size, font, colours, field tick boxes, colour thresholds and which jumps show all sit there, saved per gamemode preset like the built-in panels. The hub's HUD section only shows that JHUD is installed and the kit status. If 5.1 finds that a kit panel can't join the customizer, the fallback is every setting in the hub's HUD section, written into the installed script as `recorder_settings.py` does.
+
+**Found in the game files (2026-11-03).**
+- `OnJumpStarted` is a global event: `strafe-trainer.ts` uses it through `unhandledEvents`. So JHUD needs no `<MomHudJumpStats>` panel.
+- `registerHUDCustomizerComponent(panel, props)` loads a component only when `defaultLayout[panel.id]` exists (`customizer.ts` `Component.register`). `defaultLayout` is `hud_default.kv3` merged with `<gamemode>_default.kv3`, both read with `loadLayout` from `/cfg/hud`. Presets merge over it, so one entry in `hud_default.kv3` covers every preset.
+- `gameinfo.txt` mounts `momentum/custom/*` as `game+mod`. Whether `loadLayout` reads `cfg/hud/hud_default.kv3` from a `custom/` folder is not known yet (5.1).
+- `movekit/panorama.py` allows only `panorama/` files today (`Patch` check).
+
+**Default look** (all of it can be changed in the customizer):
+- Row 1: `6: 1234 (+12)`, the jump number, takeoff speed and speed change. The change uses the customizer's shared `gainColor` / `lossColor`.
+- Row 2: `85.3 % · 92 %`, gain % and sync. Gain is coloured on the drill page's scale: red at 60 %, green at 95 %. Both thresholds and both colours are customizer settings.
+- Off by default, but can be ticked: strafes, yaw ratio, efficiency, height change, distance, time change.
+- Which jumps show: from jump N, every Nth jump (the built-in panel's two settings). The default is every jump.
+- It holds for 2 s, then fades over 0.3 s. A new jump replaces it straight away. It sits in the middle of the screen, below the crosshair.
+- On once the module is installed (installing it is the opt-in). The customizer's own switch turns it off.
+
+**Shape.**
+- New module folder `jhud/`, built like `trainer-height/`: `module.json` (key `jhud`, title "JHUD", Linux and Windows, `needs_core` 1.3.0), `install.py`, `module_hooks.py`, `launch-hook.sh` (syncs the kit at game start, order 30), README, LICENSE.
+- Own files in `custom/movekit-jhud`: `panorama/scripts/hud/movekit-jhud.ts` and an scss. The script creates its panel (`MovekitJhud`) itself under the HUD root and registers it with the customizer.
+- Kit patches:
+  - `panorama/layout/hud/timer.xml`: `before: "</scripts>"`, the script include, the same host file as Strafe Review.
+  - `cfg/hud/hud_default.kv3`: `find: "    CustomizerSettings = "`, which occurs once, and `replace` with the `MovekitJhud` block in front of it.
+- The old-Strafe-Review caveat (Phase 4, "Old and new versions together") applies. A Strafe Review module older than 1.8.0 can keep a stale JHUD include for one game start after JHUD is uninstalled. Modules can't need each other (owner, 4.3), so that is left as is: the next start repairs it, and a missing include only logs an error.
+
+**Steps** (each one ends released, unless it says otherwise):
+1. **5.1 Probe (in game, not released).** A throwaway probe, installed into the live game through the kit as tool `jhud-probe` and removed afterwards. It needs the owner to start the game, so the files are built and checked on a copy first. It answers:
+   - Does `hud_default.kv3` in a `custom/` folder reach the customizer, so `MovekitJhud` shows in its list and can be dragged, and a saved preset keeps it?
+   - Does `OnJumpStarted` + `GetLastJumpStats()` fire in bhop and surf? When does `jumpCount` reset: at the start zone, at the timer start, or at a reset?
+   - Logs to `yaw.log` as `[panorama] JHUDPROBE ...`.
+
+   If the kv3 isn't read from `custom/`, stop and switch to the hub-settings fallback (ask the owner).
+2. **5.2 Kit for `cfg/hud/`.** `panorama.py` also allows `cfg/hud/*.kv3`, with the base taken from the game's `cfg/hud` when no `custom/` folder has the file. `check_panorama.py` gets a kv3 case plus a mutation (the path check removed). The hub's HUD section gets JHUD in `show_with` and a JHUD card. Release: core 1.3.0 (`hub-v1.3.0`).
+3. **5.3 JHUD module.** As in "Shape".
+   - The display logic is plain functions: which jumps show, row text, colour for a value. `jhud/check_jhud.js` runs them in node with Panorama stubbed (as `check_line.js` does), on hand-made stats and on the `jump` events in saved attempts.
+   - `jhud/check_jhud.py` checks a fake game: install and uninstall, both patches applied once, Strafe Review's and Trainer Height's patches kept, a changed kv3 left out and reported. Mutations: no kv3 patch, uninstall without sync.
+   - Registration: `jhud-v*` in `module-release.yml`, plus the module lists in `check_modules.py`.
+   - Release: `jhud-v1.0.0`. Then the owner tries it in the game and tunes the defaults.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
-- **JHUD**, a per-jump stat display. It would use the Phase 4 kit for its HUD files.
+- **JHUD**, a per-jump stat display. Planned as Phase 5 (2026-11-03).
 - **Gain math in one language.** Done in 3.2: `movekit/web/gain.js`; the Python copy went with the tkinter window in 3.8.
 - Windows strafe trainer, and the CS:S version of Strafe Review. Both get easier once the game adapters exist.
 
