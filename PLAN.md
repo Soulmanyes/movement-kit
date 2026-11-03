@@ -387,7 +387,7 @@ A first install while the game is running fails to load the script (`Resource ..
 - `main` was fast-forwarded to 1f46ce7. The owner pushed the tags `hub-v1.4.0`, `jhud-v1.1.0` and `strafe-histogram-v1.0.0`. Each release has its files (hub-windows.zip; `<tool>-module.zip` + `.json`) and notes.
 - The live game runs both modules from the checkout, as it did before the release.
 
-### Modules page groups (2026-11-03, owner; branch `modules-groups`, core 1.5.0, not released)
+### Modules page groups (2026-11-03, owner; released 2026-11-03 as hub-v1.5.0)
 
 - **Order.** `Manager.cards()` sorts: core, tools, HUD modules (installed first in each, then by title), then modules this OS can't run. The page puts a heading at each group: Tools, HUD, "Not available on <OS>". Unavailable cards are greyed (opacity 0.5), have no buttons, and say "<OS> only".
 - **`group`.** `module.json` may say `"group": "hud"`: JHUD, Strafe Speed Histogram and Strafe Trainer Height now do. Releases from before that use `LEGACY_GROUPS`, so those three modules need no new release. A release's `module.json` copy now keeps `os` and `group`.
