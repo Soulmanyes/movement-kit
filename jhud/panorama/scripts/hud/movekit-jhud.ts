@@ -2,8 +2,9 @@
 // timer.xml patch (movekit/panorama.py).
 //
 // After every bhop jump: the jump's number, speed and speed change, gain % and sync on one line in the
-// middle of the screen, the whole line coloured by gain; held for a moment, then faded out. The numbers are the
-// game's own (MomentumMovementAPI.GetLastJumpStats(), as its Jump Stats panel shows them).
+// middle of the screen, in the font colour, coloured by gain, or by speed pace (colorBy); held for a moment,
+// then faded out.
+// The numbers are the game's own (MomentumMovementAPI.GetLastJumpStats(), as its Jump Stats panel shows them).
 //
 // Settings live in Momentum's HUD customizer. It loads a component only when hud_default.kv3 has an
 // entry for its panel id; install.py hands the kit that entry (ENTRY there), whose dynamicStyles must
@@ -23,6 +24,7 @@ const GAMEMODES = [2, 3]; // Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/
 const NONE = 0;
 const NUMBER_ENTRY = 1;
 const CHECKBOX = 2;
+const DROPDOWN = 4;
 const COLOR_PICKER = 5;
 const FONT_PICKER = 7;
 
@@ -64,6 +66,15 @@ const DEFAULTS: Settings = {
 	gainGreen: 95,
 	redColor: 'rgba(255, 92, 92, 1)',
 	greenColor: 'rgba(123, 216, 143, 1)',
+	colorBy: 'off',
+	paceCut: '6',
+	tier1Speed: 620,
+	tier1Color: 'rgba(123, 216, 143, 1)',
+	tier2Speed: 625,
+	tier2Color: 'rgba(92, 160, 255, 1)',
+	tier3Speed: 630,
+	tier3Color: 'rgba(255, 255, 255, 1)',
+	belowColor: 'rgba(255, 92, 92, 1)',
 	gainAll: true,
 	firstJump: 1,
 	everyJump: 1,
@@ -71,11 +82,41 @@ const DEFAULTS: Settings = {
 	fadeMs: 300
 };
 
-// The customizer's rows: [id, name, type, children]. Groups (NONE) only fold their children.
-const STYLES: [string, string, number, string[]?][] = [
+// How a line is coloured (colorBy): 'off' is the font colour. A new way is one more option here and one
+// more case in lineColor().
+const COLOR_BY = [
+	{ label: 'Off (font colour)', value: 'off' },
+	{ label: 'Gain %', value: 'gain' },
+	{ label: 'Speed pace, then gain %', value: 'pace' }
+];
+const PACE_CUTS = [
+	{ label: 'Jump 6', value: '6' },
+	{ label: 'Jump 12', value: '12' }
+];
+// Speed pace: takeoff k's speed as a share of the cutoff jump's speed, PACE[cut][k - 2] for k = 2..cut. The
+// median of the owner's saved runs that reached the cutoff (2026-11-03, bhop_glacial and bhop_ambience;
+// 46 runs for 6, 14 for 12). Projected from jump 4 on, the cutoff speed is typically within 1.5 u/s at
+// cutoff 6; jump 2 is only a rough guess (7 u/s). Jump 1 (prespeed or a zone reset) isn't judged.
+const PACE: Record<string, number[]> = {
+	'6': [0.601, 0.722, 0.827, 0.918, 1],
+	'12': [0.432, 0.521, 0.596, 0.662, 0.72, 0.775, 0.824, 0.871, 0.915, 0.958, 1]
+};
+
+// The customizer's rows: [id, name, type, children, extra]. Groups (NONE) only fold their children; other
+// rows show a child only while their value is one of extra.showWhen[child]. extra.options: a dropdown's choices.
+// extra.range: a number box's min and max (the game's own boxes set one too).
+type Extra = {
+	options?: { label: string; value: string }[];
+	showWhen?: Record<string, string[]>;
+	range?: { min: number; max: number };
+};
+const SPEED_RANGE = { range: { min: 0, max: 10000 } };
+const GAIN_OR_PACE = ['gain', 'pace'];
+const PACE_ONLY = ['pace'];
+const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['fontStyling', 'Font', NONE, ['font', 'fontSize', 'fontColor', 'backgroundColor']],
 	['font', 'Font', FONT_PICKER],
-	['fontSize', 'Font size', NUMBER_ENTRY],
+	['fontSize', 'Font size', NUMBER_ENTRY, undefined, { range: { min: 6, max: 72 } }],
 	['fontColor', 'Font colour', COLOR_PICKER],
 	['backgroundColor', 'Background colour', COLOR_PICKER],
 	['fields', 'Fields', NONE, ['showNumber', 'showSpeed', 'showDelta', 'showGain', 'showSync', 'showStrafes',
@@ -91,18 +132,32 @@ const STYLES: [string, string, number, string[]?][] = [
 	['showHeight', 'Height change', CHECKBOX],
 	['showDistance', 'Distance', CHECKBOX],
 	['showTime', 'Time since the last jump', CHECKBOX],
-	['colours', 'Colours', NONE, ['gainAll', 'gainRed', 'gainGreen', 'redColor', 'greenColor']],
-	['gainAll', 'Colour the whole line by gain (off: only the gain %)', CHECKBOX],
-	['gainRed', 'Gain % shown fully red at or below', NUMBER_ENTRY],
-	['gainGreen', 'Gain % shown fully green at or above', NUMBER_ENTRY],
+	['colours', 'Colours', NONE, ['colorBy']],
+	['colorBy', 'Colour by', DROPDOWN, ['gainAll', 'paceCut', 'tier1Speed', 'tier1Color', 'tier2Speed', 'tier2Color',
+		'tier3Speed', 'tier3Color', 'belowColor', 'gainRed', 'gainGreen', 'redColor', 'greenColor'],
+		{ options: COLOR_BY, showWhen: {
+			gainAll: GAIN_OR_PACE, paceCut: PACE_ONLY, tier1Speed: PACE_ONLY, tier1Color: PACE_ONLY, tier2Speed: PACE_ONLY,
+			tier2Color: PACE_ONLY, tier3Speed: PACE_ONLY, tier3Color: PACE_ONLY, belowColor: PACE_ONLY,
+			gainRed: GAIN_OR_PACE, gainGreen: GAIN_OR_PACE, redColor: GAIN_OR_PACE, greenColor: GAIN_OR_PACE } }],
+	['gainAll', 'Colour the whole line', CHECKBOX],
+	['paceCut', 'Speed pace up to', DROPDOWN, undefined, { options: PACE_CUTS }],
+	['tier1Speed', 'On pace for this speed at the cutoff', NUMBER_ENTRY, undefined, SPEED_RANGE],
+	['tier1Color', '... shown in', COLOR_PICKER],
+	['tier2Speed', 'On pace for this speed', NUMBER_ENTRY, undefined, SPEED_RANGE],
+	['tier2Color', '... shown in', COLOR_PICKER],
+	['tier3Speed', 'On pace for this speed', NUMBER_ENTRY, undefined, SPEED_RANGE],
+	['tier3Color', '... shown in', COLOR_PICKER],
+	['belowColor', 'Below every pace speed', COLOR_PICKER],
+	['gainRed', 'Gain % shown fully red at or below', NUMBER_ENTRY, undefined, { range: { min: 0, max: 200 } }],
+	['gainGreen', 'Gain % shown fully green at or above', NUMBER_ENTRY, undefined, { range: { min: 0, max: 200 } }],
 	['redColor', 'Red (bad gain)', COLOR_PICKER],
 	['greenColor', 'Green (good gain)', COLOR_PICKER],
 	['jumps', 'Which jumps', NONE, ['firstJump', 'everyJump']],
-	['firstJump', 'From jump', NUMBER_ENTRY],
-	['everyJump', 'Every Nth jump (0: only the first)', NUMBER_ENTRY],
+	['firstJump', 'From jump', NUMBER_ENTRY, undefined, { range: { min: 1, max: 999 } }],
+	['everyJump', 'Every Nth jump (0: only the first)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 999 } }],
 	['timing', 'Timing', NONE, ['holdMs', 'fadeMs']],
-	['holdMs', 'Shown for (ms)', NUMBER_ENTRY],
-	['fadeMs', 'Fade out (ms)', NUMBER_ENTRY]
+	['holdMs', 'Shown for (ms)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 10000 } }],
+	['fadeMs', 'Fade out (ms)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 5000 } }]
 ];
 
 // Shown while the customizer is open, so there is something to drag
@@ -153,8 +208,35 @@ function shows(n: number, s: Settings): boolean {
 
 const signed = (v: number, digits: number) => (v >= 0 ? '+' : '') + v.toFixed(digits);
 
-// The rows to draw for a jump: one line with every field switched on, in this order, the whole line in
-// the gain colour (gainAll) or only the gain %. Takeoff 1 (no air time yet): number and speed only, in
+// The colour of jump n's line by speed pace: the speed this takeoff is on pace for at the cutoff
+// (speed / PACE share) against the tiers; the highest tier reached wins, none reached is belowColor.
+// null when n isn't judged by pace (jump 1, past the cutoff).
+function paceColor(speed: number, n: number, s: Settings): string | null {
+	const curve = PACE[String(s.paceCut)] || PACE['6'];
+	if (n < 2 || n > curve.length + 1) return null;
+	const onPace = speed / curve[n - 2];
+	const tiers = [1, 2, 3]
+		.map((i) => ({ speed: +s[`tier${i}Speed`], color: s[`tier${i}Color`] }))
+		.filter((t) => isFinite(t.speed))
+		.sort((a, b) => b.speed - a.speed);
+	const hit = tiers.find((t) => onPace >= t.speed);
+	return hit ? hit.color : s.belowColor;
+}
+
+// The colour a jump's line is drawn in (null: the font colour), by colorBy, and the field it belongs to
+// (what "only" colours when gainAll is off)
+function lineColor(st: Stats, n: number, s: Settings): { color: string | null; field: 'speed' | 'gain' } {
+	const gain = { color: gainColor(st.speedGain * 100, s), field: 'gain' as const };
+	if (s.colorBy === 'gain') return gain;
+	if (s.colorBy === 'pace') {
+		const pace = paceColor(st.takeoffSpeed, n, s);
+		return pace ? { color: pace, field: 'speed' } : gain;
+	}
+	return { color: null, field: 'gain' };
+}
+
+// The rows to draw for a jump: one line with every field switched on, in this order, in lineColor(): the
+// whole line (gainAll) or only the gain %. Takeoff 1 (no air time yet): number and speed only, in
 // the font colour. No fields: no rows. Kept as rows, so a layout with more lines can come back without
 // changing draw().
 function rows(st: Stats, n: number, s: Settings): Part[][] {
@@ -165,11 +247,13 @@ function rows(st: Stats, n: number, s: Settings): Part[][] {
 		return line.length ? [line] : [];
 	}
 	const g = st.speedGain * 100;
-	const gc = gainColor(g, s);
-	const c = s.gainAll ? gc : null;
+	const lc = lineColor(st, n, s);
+	const c = s.gainAll ? lc.color : null;
+	const gc = s.gainAll || lc.field === 'gain' ? lc.color : null;
+	const sc = s.gainAll || lc.field === 'speed' ? lc.color : null;
 	const line: Part[] = [];
 	if (s.showNumber) line.push({ text: `${n}:`, color: c });
-	if (s.showSpeed) line.push({ text: st.takeoffSpeed.toFixed(0), color: c });
+	if (s.showSpeed) line.push({ text: st.takeoffSpeed.toFixed(0), color: sc });
 	if (s.showDelta) line.push({ text: `(${signed(Math.round(st.jumpSpeedDelta), 0)})`, color: c });
 	if (s.showGain) line.push({ text: `${g.toFixed(1)} %`, color: gc });
 	if (s.showSync) line.push({ text: `sync ${(st.strafeSync * 100).toFixed(0)} %`, color: c });
@@ -263,7 +347,7 @@ function onJump() {
 
 function customizerProps() {
 	const dynamicStyles: Record<string, any> = {};
-	for (const [id, name, type, children] of STYLES) {
+	for (const [id, name, type, children, extra] of STYLES) {
 		if (type === NONE) {
 			dynamicStyles[id] = { name, type, expandable: true, children: (children || []).map((styleID) => ({ styleID })) };
 		} else if (id === 'backgroundColor') {
@@ -272,6 +356,9 @@ function customizerProps() {
 			dynamicStyles[id] = {
 				name,
 				type,
+				...(extra?.options ? { options: extra.options } : {}),
+				...(extra?.range ? { settingProps: { ...extra.range } } : {}),
+				...(children ? { children: children.map((styleID) => ({ styleID, showWhen: extra?.showWhen?.[styleID] })) } : {}),
 				callbackFunc: (_: unknown, value: unknown) => {
 					settings[id] = value;
 					if (editing) show(rows(SAMPLE, jumpOf(SAMPLE), settings), true);
@@ -280,6 +367,35 @@ function customizerProps() {
 		}
 	}
 	return { name: 'JHUD', resizeX: true, resizeY: false, gamemode: GAMEMODES, dynamicStyles };
+}
+
+// The customizer draws a 3-digit value in its number boxes with the first digit under the minus button
+// (seen 2026-11-03: 620 read "520"): the box's text field is fit-children with a 24px min-width and isn't
+// widened after the settings are built. While the customizer is open and JHUD is the component being
+// edited, its number boxes' text fields get a fixed width that fits 5 digits. The settings list is rebuilt
+// whenever a component is picked, with no event for it, so this checks every BOX_FIX_S seconds.
+const BOX_WIDTH = '44px';
+const BOX_FIX_S = 0.25;
+function widenBoxes(p: GenericPanel) {
+	for (let i = 0; i < p.GetChildCount(); i++) {
+		const c = p.GetChild(i);
+		if (!c) continue;
+		if (c.paneltype === 'NumberEntry') {
+			for (let j = 0; j < c.GetChildCount(); j++) {
+				const t = c.GetChild(j);
+				if (t && t.paneltype === 'TextEntry' && t.style.width !== BOX_WIDTH) t.style.width = BOX_WIDTH;
+			}
+		} else {
+			widenBoxes(c);
+		}
+	}
+}
+function fixBoxes() {
+	if (!live() || !editing) return;
+	const h = GLOBAL['HudCustomizerHandler'];
+	const list = h?.panels?.activeComponentSettingsList as GenericPanel | undefined;
+	if (h?.activeComponent?.id === ID && list && list.IsValid()) widenBoxes(list);
+	$.Schedule(BOX_FIX_S, fixBoxes);
 }
 
 function register() {
@@ -297,6 +413,7 @@ $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {
 	if (!live() || !GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
 	editing = true;
 	show(rows(SAMPLE, jumpOf(SAMPLE), settings), true);
+	fixBoxes();
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Closed', () => {
 	if (!live()) return;

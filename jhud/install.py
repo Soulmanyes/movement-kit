@@ -64,6 +64,15 @@ ENTRY = """    MovekitJhud =
             gainGreen = 95
             redColor = "rgba(255, 92, 92, 1)"
             greenColor = "rgba(123, 216, 143, 1)"
+            colorBy = "off"
+            paceCut = "6"
+            tier1Speed = 620
+            tier1Color = "rgba(123, 216, 143, 1)"
+            tier2Speed = 625
+            tier2Color = "rgba(92, 160, 255, 1)"
+            tier3Speed = 630
+            tier3Color = "rgba(255, 255, 255, 1)"
+            belowColor = "rgba(255, 92, 92, 1)"
             gainAll = true
             firstJump = 1
             everyJump = 1

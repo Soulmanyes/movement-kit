@@ -1,6 +1,11 @@
 # JHUD
 
-After every jump in [Momentum Mod](https://momentum-mod.org/)'s bhop modes, JHUD shows that jump in the middle of the screen: its number, your speed and how much it changed, gain % and sync, on one line. The whole line is coloured by gain, from red (60 % or less) to green (95 % or more); a tick box colours only the gain % instead. It shows at every takeoff, labelled with the takeoff's number; gain, sync and the rest are from the air time just before it, so the first takeoff shows only its number and speed. It stays for 2 seconds, then fades out. The numbers are the game's own, the same as its Jump Stats panel.
+After every jump in [Momentum Mod](https://momentum-mod.org/)'s bhop modes, JHUD shows that jump in the middle of the screen: its number, your speed and how much it changed, gain % and sync, on one line. By default the line is in the font colour, which you can set. "Colour by" can instead colour it:
+
+- **Gain %:** from red (60 % or less) to green (95 % or more).
+- **Speed pace, then gain %:** up to jump 6 or 12 (you pick), by the speed you are on pace for at that jump. You set three target speeds and their colours (by default 620 green, 625 blue, 630 white) and a colour for below all three. Jump 4, say, shows blue when its speed is what usually leads to 625 or more at jump 6. After the cutoff the line goes by gain %. The pace curve comes from one player's runs; from jump 4 on it usually predicts jump 6 within 1.5 u/s, but jump 2 is only a rough guess. Jump 1 isn't judged.
+
+A tick box colours only the speed or gain % instead of the whole line. It shows at every takeoff, labelled with the takeoff's number; gain, sync and the rest are from the air time just before it, so the first takeoff shows only its number and speed. It stays for 2 seconds, then fades out. The numbers are the game's own, the same as its Jump Stats panel.
 
 Everything about it is set in the game's **HUD customizer**, where it is listed as **JHUD**: position and width (drag it), font, size and colours, which fields show (strafes, yaw ratio, efficiency, height change, distance and time are off by default), the gain thresholds and their colours, which jumps show (from jump N, every Nth), and how long it stays and fades. The settings are saved with your HUD preset. The customizer's switch turns it off. While the customizer is open, JHUD shows a sample jump so it can be placed.
 

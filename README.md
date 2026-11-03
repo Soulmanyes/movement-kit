@@ -8,7 +8,7 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 | [Strafe Review](strafe-review/) | Records every attempt per tick and reviews it in the browser | Windows, Linux |
 | [Gain Converter](gain-converter/) | Converts CS:S SSJ gain % to Momentum gain % and back | Windows, Linux |
 | [Strafe Trainer Height](trainer-height/) | Lets Momentum's strafe trainer be dragged taller in the HUD editor | Windows, Linux |
-| [JHUD](jhud/) | Shows each bhop jump's speed, gain % and sync in the middle of the screen in Momentum, coloured, set up in its HUD editor | Windows, Linux |
+| [JHUD](jhud/) | Shows each bhop jump's speed, gain % and sync in the middle of the screen in Momentum, in one colour or coloured by gain or speed pace, set up in its HUD editor | Windows, Linux |
 
 The kit is one program, the hub, and the tools are modules it installs. A fresh hub has none; each tool is installed, updated, rolled back and uninstalled from its card on the hub's Modules page, so a tool you don't use is never downloaded. Each tool's folder has its own README with what it needs and how it works.
 
