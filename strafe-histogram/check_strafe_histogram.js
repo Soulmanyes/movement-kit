@@ -155,7 +155,10 @@ expect([0, -0.5, NaN, 0.5, 1, 1.5, 2, 3].map((r) => api.barLength(r, S)), [0, 0,
 expect([1, 1.2, 4 / 3, 2].map((r) => +api.barLength(r, S3).toFixed(4)), [0.75, 0.9, 1, 1], 'length, optimal at 3/4');
 expect([api.barSide(true, S), api.barSide(false, S)], ['left', 'left'], 'from the left by default');
 const SS = { ...S, fromSides: true };
-expect([api.barSide(true, SS), api.barSide(false, SS)], ['right', 'left'], 'from the strafe side');
+expect([api.barSide(true, SS), api.barSide(false, SS)], ['left', 'right'], 'from the sides: right strafes from the left');
+const SW = { ...SS, swapSides: true };
+expect([api.barSide(true, SW), api.barSide(false, SW)], ['right', 'left'], 'swapped: right strafes from the right');
+expect([api.barSide(true, { ...S, swapSides: true }), api.barSide(false, { ...S, swapSides: true })], ['left', 'left'], 'swap alone does nothing');
 expect(api.markers(S), [0.5], 'one marker in the middle');
 expect(api.markers(S3), [0.75], 'one marker at 3/4');
 expect(api.markers({ ...S3, fromSides: true }), [0.75, 0.25], 'from the sides at 3/4: both markers');
@@ -165,7 +168,7 @@ const G = { ...S, colorBy: 'good' };
 expect([api.barColor(1, G), api.barColor(1.5, G), api.barColor(0.5, G), api.barColor(3, G)],
 	[api.mixColor(G.goodColor, G.badColor, 0), G.badColor, G.badColor, G.badColor], 'how good: good at 1, bad at 50 % away');
 expect(api.barColor(0.75, G), api.barColor(1.25, G), 'how good: slow and fast alike');
-expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'right', color: S.barColor }, 'a row');
+expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'left', color: S.barColor }, 'a row');
 expect(api.rowStyle(0.333, false, S).width, 16.7, 'width rounded to 0.1 %');
 expect([api.onGround(0, -290, 290), api.onGround(0, 3, -5), api.onGround(0, 3, 0), api.onGround(-8, 0, -16), api.onGround(0.42, 0.42, 0),
 	api.onGround(0.42, 0, 0.42), api.onGround(0.42, 0.5, 0)], [true, false, true, false, true, true, false],
@@ -246,7 +249,7 @@ cb('fromSides', true);
 jump(600, 4, () => 1);
 expect(P.children.length, 3, 'from the sides at 3/4: two marker lines');
 expect(rowsOf(P).slice(-4).map((r) => [r.style.width, r.style.horizontalAlign]),
-	[['75%', 'left'], ['75%', 'left'], ['75%', 'right'], ['75%', 'right']], 'from the sides: right strafes from the right');
+	[['75%', 'right'], ['75%', 'right'], ['75%', 'left'], ['75%', 'left']], 'from the sides: left strafes from the right, right from the left');
 for (const [k, v] of [['rows', 100], ['optimalAt', 'middle'], ['fromSides', false], ['barColor', api.DEFAULTS.barColor]]) cb(k, v);
 jump(700, 4);
 const n0 = shownRows(P).length;

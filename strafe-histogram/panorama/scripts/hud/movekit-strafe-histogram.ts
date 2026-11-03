@@ -4,7 +4,7 @@
 // While bhopping: one horizontal bar per air tick, the newest at the bottom, the older ones scrolling up.
 // A bar's length is how fast you turned that tick against the optimal (the game's yawRatio, 1 = optimal);
 // a marker line shows where the optimal is (the middle, or 3/4 of the width). Bars grow from the left, or
-// from the side of the strafe (left strafes from the left edge, right strafes from the right edge).
+// from the sides by strafe (right strafes from the left edge, left strafes from the right; swapSides flips it).
 // Ground ticks add no row, so the bars run on across jumps; standing still adds nothing, so they stay.
 //
 // Settings live in Momentum's HUD customizer, as JHUD's do: install.py hands the kit the panel's
@@ -49,9 +49,11 @@ function barLength(ratio: number, s: Settings): number {
 	return Math.min(1, ratio * optimalAt(s));
 }
 
-// The side a bar grows from: 'left', or with fromSides on, the strafe's side (strafeRight: the game's tick stat)
+// The side a bar grows from: 'left', or with fromSides on, by the strafe (strafeRight: the game's tick stat):
+// right strafes from the left edge and left strafes from the right (owner, 2026-11-03), swapSides the other way
 function barSide(strafeRight: boolean, s: Settings): 'left' | 'right' {
-	return s.fromSides && strafeRight ? 'right' : 'left';
+	if (!s.fromSides) return 'left';
+	return strafeRight !== !!s.swapSides ? 'left' : 'right';
 }
 
 // "rgba(r, g, b, a)" or "#rrggbb" as [r, g, b, a], or null (as JHUD's)
@@ -99,6 +101,7 @@ const DEFAULTS: Settings = {
 	rowHeight: 2,
 	optimalAt: 'middle',
 	fromSides: false,
+	swapSides: false,
 	colorBy: 'plain',
 	barColor: 'rgba(255, 255, 255, 0.85)',
 	goodColor: 'rgba(123, 216, 143, 1)',
@@ -126,11 +129,12 @@ type Extra = {
 const PLAIN = ['plain'];
 const GOOD = ['good'];
 const STYLES: [string, string, number, string[]?, Extra?][] = [
-	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides']],
+	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides', 'swapSides']],
 	['rows', 'Ticks shown (10-1000)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 9999, increment: 10 } }],
 	['rowHeight', 'Bar height (px, 1-20)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 99 } }],
 	['optimalAt', 'Optimal at', DROPDOWN, undefined, { options: OPTIMAL_AT }],
-	['fromSides', 'Grow from the strafe side (right strafes from the right)', CHECKBOX],
+	['fromSides', 'Grow from the sides (right strafes from the left)', CHECKBOX],
+	['swapSides', 'Swap the sides (right strafes from the right)', CHECKBOX],
 	['colours', 'Colours', NONE, ['colorBy', 'showMarker', 'markerColor', 'backgroundColor']],
 	['colorBy', 'Colour by', DROPDOWN, ['barColor', 'goodColor', 'badColor', 'badPct'],
 		{ options: COLOR_BY, showWhen: { barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD } }],

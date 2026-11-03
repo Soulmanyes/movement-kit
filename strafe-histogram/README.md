@@ -3,7 +3,7 @@
 While you bhop in [Momentum Mod](https://momentum-mod.org/), this HUD element draws one bar for every tick you are in the air. The newest bar appears at the bottom and the older ones scroll up. A bar's length is how fast you turned your mouse that tick compared with the optimal turn speed (the game's yaw ratio, where 1.0 is optimal).
 
 - **Optimal line:** a line marks the optimal. It sits in the middle by default, so a bar reaching the right edge is twice the optimal. It can sit at 3/4 of the width instead, so the bars have room up to 1.33 times the optimal.
-- **Direction:** bars grow from the left by default. "Grow from the strafe side" makes right strafes grow from the right edge and left strafes from the left, towards the middle.
+- **Direction:** bars grow from the left by default. "Grow from the sides" makes right strafes grow from the left edge and left strafes from the right, towards the middle. "Swap the sides" turns that round.
 - **Ticks shown:** 100 by default, 1 second at 100 tick. Ground ticks add no bar, so the bars run on across jumps. Standing still adds nothing, so the bars stay until you jump again. A map load clears them.
 - **Colours:** "Colour by" is **Plain** by default: every bar in one colour you pick. **How good** colours each bar by how far its tick was from the optimal, from green at 1.0 to red at 50 % away or more, the same for too slow and too fast.
 - Turning against the strafe (a negative ratio) gives an empty bar. Anything past the right edge is cut at the edge.
@@ -16,7 +16,7 @@ Everything about it is set in the game's **HUD customizer**, where it is listed 
 
 - position and width (drag it);
 - the ticks shown and the bar height (together they give the height);
-- where the optimal sits, and the side the bars grow from;
+- where the optimal sits, and the sides the bars grow from;
 - the colours, the optimal line and the background.
 
 The settings are saved with your HUD preset. The customizer's switch turns it off. While the customizer is open, it shows a sample so it can be placed.

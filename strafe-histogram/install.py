@@ -52,6 +52,7 @@ ENTRY = """    MovekitStrafeHist =
             rowHeight = 2
             optimalAt = "middle"
             fromSides = false
+            swapSides = false
             colorBy = "plain"
             barColor = "rgba(255, 255, 255, 0.85)"
             goodColor = "rgba(123, 216, 143, 1)"
