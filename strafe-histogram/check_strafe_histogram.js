@@ -268,9 +268,32 @@ for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
 expect(P.visible, true, 'shown after strafing');
 expect(P.children[0].children.length, 14, '14 bars');
 expect(P.children[1].text, 'in band 100 %', 'band line in game');
+// a redraw keeps the panels and only changes the heights and the text
+const barsBefore = P.children[0].children.slice();
+const hBefore = barsBefore.map((b) => b.style.height);
+play([{ tick: 148, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 },
+	...jump(150, 20).map((r) => (r.ratio ? { ...r, ratio: 1.3 } : r)), { tick: 174, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
+for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
+expect(P.children[0].children.every((b, i) => b === barsBefore[i]), true, 'a redraw keeps the bar panels');
+expect(P.children[0].children.map((b) => b.style.height).join() !== hBefore.join(), true, 'a redraw changes the heights');
+expect(P.children[1].text, 'in band 50 %', 'a redraw changes the text');
+// a setting that changes the bars builds them again
+const cb = (id, v) => loaded.props.dynamicStyles[id].callbackFunc(null, v);
+cb('stepPct', 20);
+for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
+expect(P.children[0].children.length, 8, 'bar width 20: the bars built again (6 + 2)');
+cb('stepPct', 10);
+for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
+expect(P.children[0].children.length, 14, 'back to 14 bars');
+const bars14 = P.children[0].children.slice();
+cb('barColor', 'rgba(1, 2, 3, 1)');
+for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
+expect(P.children[0].children[0] !== bars14[0] && P.children[0].children[0].styleText.includes('rgba(1, 2, 3, 1)'), true,
+	'a new bar colour builds the bars again');
+cb('barColor', api.DEFAULTS.barColor);
 // standing still: nothing new, the bars stay
 for (let f = 0; f < 20; f++) { time += 0.01; frame(); }
-expect([P.visible, api.getWin().ratios.length], [true, 10], 'standing still: the bars stay');
+expect([P.visible, api.getWin().ratios.length], [true, 20], 'standing still: the bars stay');
 mode = 1;
 frame();
 expect(P.visible, false, 'another mode: hidden');
@@ -279,7 +302,7 @@ replayState = 1;
 frame();
 expect(P.visible, false, 'watching a replay: hidden');
 play([{ tick: 198, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(200, 20), { tick: 224, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
-expect(api.getWin().ratios.length, 10, 'watching a replay: its strafing not counted');
+expect(api.getWin().ratios.length, 20, 'watching a replay: its strafing not counted');
 replayState = 0;
 fire('MomentumSpectateStart');
 frame();
@@ -300,6 +323,9 @@ expect(loaded.p === P, true, 'a reload takes the placed panel over');
 expect(timer.parent.children.filter((c) => c.id === 'MovekitStrafeHist').length, 1, 'still one panel');
 play([{ tick: 498, ratio: 0, gain: 0, buttons: 0, vx: 1, vy: 0, vz: 0, yaw: 0 }, ...jump(500, 20), { tick: 524, ratio: 0, gain: 0, buttons: 0, vx: 2, vy: 0, vz: 0, yaw: 0 }]);
 expect([api.getWin().ratios.length, api2.getWin().ratios.length], [0, 10], 'only the new copy counts');
+for (let f = 0; f < 5; f++) { time += 0.06; frame(); }
+expect(P.children.length, 2, 'after the reload: the new copy built its own bars and line, once');
+expect(P.children[0].children.length, 14, 'after the reload: 14 bars');
 expect(schedules.length, 1, 'one loop running after the reload');
 
 // ---- the store: HUD ticks = viewer strafe-middle ticks ----

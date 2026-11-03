@@ -314,7 +314,7 @@ const GEN = (GLOBAL['MovekitStrafeHistGen'] = (GLOBAL['MovekitStrafeHistGen'] ||
 const live = () => GLOBAL['MovekitStrafeHistGen'] === GEN;
 
 const REPLAY_NONE = 0;
-const MOVETYPE_OBSERVER = 10;
+const MOVETYPE_OBSERVER = 10; // MomentumMovementAPI.MoveType.OBSERVER, as the recorder has it
 const REDRAW_MS = 50; // at most 20 redraws a second
 
 const settings: Settings = { ...DEFAULTS };
@@ -328,6 +328,11 @@ let lastKey = '';
 let lastTick = -1;
 let dirty = false;
 let drawnAt = 0;
+// The bars and the line are built once and then only get new heights and text: rebuilding ~16 panels at
+// every redraw would cost frames while hopping. Built again when a setting that changes them does (layoutKey).
+let bars: GenericPanel[] = [];
+let label: GenericPanel | null = null;
+let builtFor = '';
 
 function getPanel(): GenericPanel {
 	if (panel && panel.IsValid()) return panel;
@@ -344,29 +349,41 @@ function getPanel(): GenericPanel {
 	return panel;
 }
 
-function draw(counts: number[], band: number) {
-	const p = getPanel();
+// What the built panels depend on: the bars, their colours and the line's font
+function layoutKey(s: Settings): string {
+	const e = edges(s);
+	return JSON.stringify([e.bars, barColors(s), +s.barHeight, s.font, +s.fontSize, s.fontColor]);
+}
+
+function build(p: GenericPanel) {
 	p.RemoveAndDeleteChildren();
 	const colors = barColors(settings);
-	const hs = heights(counts, settings);
 	const h = Math.max(4, +settings.barHeight || 60);
-	const bars = $.CreatePanel('Panel', p, '', { style: `width: 100%; height: ${h}px; flow-children: right;` });
-	hs.forEach((bh, i) =>
-		$.CreatePanel('Panel', bars, '', {
-			style: `width: fill-parent-flow(1); height: ${bh}px; vertical-align: bottom; margin-left: 1px; margin-right: 1px;
-				background-color: ${colors[i]};`
+	const row = $.CreatePanel('Panel', p, '', { style: `width: 100%; height: ${h}px; flow-children: right;` });
+	bars = colors.map((c) =>
+		$.CreatePanel('Panel', row, '', {
+			style: `width: fill-parent-flow(1); height: 0px; vertical-align: bottom; margin-left: 1px; margin-right: 1px;
+				background-color: ${c};`
 		})
 	);
+	const font = String(settings.font || '').replace(/"/g, '');
+	label = $.CreatePanel('Label', p, '', {
+		text: '',
+		style: `horizontal-align: center; margin-top: 4px; ${font ? `font-family: "${font}";` : ''}
+			font-size: ${Math.max(6, +settings.fontSize || 16)}px; font-weight: bold; color: ${settings.fontColor};
+			text-shadow: 0px 1px 4px 2px rgba(0, 0, 0, 0.9);`
+	});
+	builtFor = layoutKey(settings);
+}
+
+function draw(counts: number[], band: number) {
+	const p = getPanel();
+	const stale = !label || !label.IsValid() || bars.length !== counts.length || bars.some((b) => !b.IsValid());
+	if (stale || builtFor !== layoutKey(settings)) build(p);
+	heights(counts, settings).forEach((bh, i) => (bars[i].style.height = `${bh}px`));
 	const text = bandText(band, settings);
-	if (text) {
-		const font = String(settings.font || '').replace(/"/g, '');
-		$.CreatePanel('Label', p, '', {
-			text,
-			style: `horizontal-align: center; margin-top: 4px; ${font ? `font-family: "${font}";` : ''}
-				font-size: ${Math.max(6, +settings.fontSize || 16)}px; font-weight: bold; color: ${settings.fontColor};
-				text-shadow: 0px 1px 4px 2px rgba(0, 0, 0, 0.9);`
-		});
-	}
+	label!.text = text;
+	label!.visible = text !== '';
 }
 
 function redraw() {
