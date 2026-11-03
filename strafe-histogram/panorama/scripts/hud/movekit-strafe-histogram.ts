@@ -75,10 +75,28 @@ function mixColor(a: string, b: string, t: number): string {
 	return `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${+c[3].toFixed(3)})`;
 }
 
+// The gain % a tick gets at this yaw ratio: 100 * (1 - (ratio - 1)^2), too slow and too fast alike. Fitted
+// to the owner's saved bhop runs (2026-11-03, 1.0 M air ticks, median gain per 0.05 of ratio): 92 % at 0.718
+// and 1.288 measured against 1 -/+ 0.283 from the curve, 86.5 % at 0.634 and 1.372 against 1 -/+ 0.367.
+// Turning against the strafe (ratio 0 or below) gets 0 or less.
+function gainOf(ratio: number): number {
+	return isFinite(ratio) ? 100 * (1 - (ratio - 1) ** 2) : 0;
+}
+
+// colorBy 'gain': lowColor under gainLow, midColor up to gainHigh, highColor above (thresholds in tenths of
+// a %, as the customizer's number boxes take whole numbers: 865 = 86.5 %)
+function gainBand(ratio: number, s: Settings): string {
+	const g = gainOf(ratio);
+	if (g < +s.gainLow / 10) return s.lowColor;
+	return g <= +s.gainHigh / 10 ? s.midColor : s.highColor;
+}
+
 // A bar's colour: one colour (colorBy 'plain'; growing from the sides, one per screen side, leftColor and
 // rightColor, so a colour stays with its edge when the sides are swapped), or by how far the ratio is from 1
-// (colorBy 'good'): goodColor at 1, badColor at badPct % away or more, too slow and too fast alike
+// (colorBy 'good'): goodColor at 1, badColor at badPct % away or more, too slow and too fast alike, or by
+// the gain its turn speed gives (colorBy 'gain', gainBand)
 function barColor(ratio: number, side: 'left' | 'right', s: Settings): string {
+	if (s.colorBy === 'gain') return gainBand(ratio, s);
 	if (s.colorBy !== 'good') return s.fromSides ? (side === 'left' ? s.leftColor : s.rightColor) : s.barColor;
 	const far = Math.max(1, +s.badPct || 50) / 100;
 	return mixColor(s.goodColor, s.badColor, isFinite(ratio) ? Math.abs(ratio - 1) / far : 1);
@@ -111,6 +129,11 @@ const DEFAULTS: Settings = {
 	goodColor: 'rgba(123, 216, 143, 1)',
 	badColor: 'rgba(255, 92, 92, 1)',
 	badPct: 50,
+	gainLow: 865,
+	gainHigh: 920,
+	lowColor: 'rgba(255, 176, 50, 1)',
+	midColor: 'rgba(123, 216, 143, 1)',
+	highColor: 'rgba(92, 160, 255, 1)',
 	showMarker: true,
 	markerColor: 'rgba(255, 220, 90, 0.9)'
 };
@@ -121,7 +144,8 @@ const OPTIMAL_AT = [
 ];
 const COLOR_BY = [
 	{ label: 'Plain (one colour)', value: 'plain' },
-	{ label: 'How good (by distance from optimal)', value: 'good' }
+	{ label: 'How good (by distance from optimal)', value: 'good' },
+	{ label: 'Gain % (what the turn speed gains)', value: 'gain' }
 ];
 type Extra = {
 	options?: { label: string; value: string }[];
@@ -133,6 +157,7 @@ type Extra = {
 const PLAIN = ['plain'];
 const SIDES = [true]; // a tick box hands showWhen its checked state
 const GOOD = ['good'];
+const GAIN = ['gain'];
 const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides']],
 	['rows', 'Ticks shown (10-1000)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 9999, increment: 10 } }],
@@ -144,12 +169,18 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['leftColor', 'Bars from the left edge (Plain)', COLOR_PICKER],
 	['rightColor', 'Bars from the right edge (Plain)', COLOR_PICKER],
 	['colours', 'Colours', NONE, ['colorBy', 'showMarker', 'markerColor', 'backgroundColor']],
-	['colorBy', 'Colour by', DROPDOWN, ['barColor', 'goodColor', 'badColor', 'badPct'],
-		{ options: COLOR_BY, showWhen: { barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD } }],
+	['colorBy', 'Colour by', DROPDOWN, ['barColor', 'goodColor', 'badColor', 'badPct', 'gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor'],
+		{ options: COLOR_BY, showWhen: { barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD,
+			gainLow: GAIN, gainHigh: GAIN, lowColor: GAIN, midColor: GAIN, highColor: GAIN } }],
 	['barColor', 'Bar colour', COLOR_PICKER],
 	['goodColor', 'At optimal', COLOR_PICKER],
 	['badColor', 'Far from optimal', COLOR_PICKER],
 	['badPct', 'Fully "far" at (% away)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 1000 } }],
+	['gainLow', 'Middle colour from (gain %, tenths: 865 = 86.5 %)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 1000 } }],
+	['gainHigh', 'Top colour above (gain %, tenths: 920 = 92 %)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 1000 } }],
+	['lowColor', 'Below the middle (amber)', COLOR_PICKER],
+	['midColor', 'Middle (green)', COLOR_PICKER],
+	['highColor', 'Top (blue)', COLOR_PICKER],
 	['showMarker', 'Line at the optimal', CHECKBOX],
 	['markerColor', 'Line colour', COLOR_PICKER],
 	['backgroundColor', 'Background colour', COLOR_PICKER]

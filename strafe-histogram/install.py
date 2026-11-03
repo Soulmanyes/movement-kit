@@ -60,6 +60,11 @@ ENTRY = """    MovekitStrafeHist =
             goodColor = "rgba(123, 216, 143, 1)"
             badColor = "rgba(255, 92, 92, 1)"
             badPct = 50
+            gainLow = 865
+            gainHigh = 920
+            lowColor = "rgba(255, 176, 50, 1)"
+            midColor = "rgba(123, 216, 143, 1)"
+            highColor = "rgba(92, 160, 255, 1)"
             showMarker = true
             markerColor = "rgba(255, 220, 90, 0.9)"
         }

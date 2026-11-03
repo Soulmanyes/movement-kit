@@ -114,7 +114,7 @@ function loadScript() {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${src}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, fitLayout, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, fitLayout, gainOf, gainBand, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
 	rowStyle, settings };`, ctx);
 	return ctx.__api;
 }
@@ -170,6 +170,21 @@ const G = { ...S, colorBy: 'good' };
 expect([api.barColor(1, 'left', G), api.barColor(1.5, 'left', G), api.barColor(0.5, 'left', G), api.barColor(3, 'left', G)],
 	[api.mixColor(G.goodColor, G.badColor, 0), G.badColor, G.badColor, G.badColor], 'how good: good at 1, bad at 50 % away');
 expect(api.barColor(0.75, 'left', G), api.barColor(1.25, 'left', G), 'how good: slow and fast alike');
+// colour by gain: the gain the turn speed gives, 1 - (r - 1)^2, in three bands
+expect([1, 0.5, 1.5, 0, -1].map((r) => +api.gainOf(r).toFixed(2)), [100, 75, 75, 0, -300], 'gain from the ratio');
+expect([0.718, 1.288].map((r) => Math.abs(api.gainOf(r) - 92) < 0.5), [true, true], 'the curve meets the store: 92 % at 0.718 and 1.288');
+expect([0.634, 1.372].map((r) => Math.abs(api.gainOf(r) - 86.5) < 0.5), [true, true], 'the curve meets the store: 86.5 % at 0.634 and 1.372');
+const GN = { ...S, colorBy: 'gain' };
+expect([1, 0.75, 1.28, 0.7, 1.3, 0.6, 1.4, -0.2, NaN].map((r) => api.barColor(r, 'left', GN)),
+	[GN.highColor, GN.highColor, GN.highColor, GN.midColor, GN.midColor, GN.lowColor, GN.lowColor, GN.lowColor, GN.lowColor], 'gain bands');
+// band edges: gain exactly 86.5 is green, exactly 92 is green, above 92 blue
+const atGain = (g) => 1 - Math.sqrt(1 - g / 100);
+expect([api.gainBand(atGain(86.5) + 1e-9, GN), api.gainBand(atGain(92) - 1e-9, GN), api.gainBand(atGain(92) + 1e-6, GN), api.gainBand(atGain(86.5) - 1e-6, GN)],
+	[GN.midColor, GN.midColor, GN.highColor, GN.lowColor], 'gain band edges');
+expect(api.barColor(1, 'right', { ...GN, fromSides: true }), GN.highColor, 'gain beats the edge colours');
+// exact edges: ratio 0.5 gains exactly 75 %, which is the middle colour at either threshold
+expect([api.gainBand(0.5, { ...GN, gainLow: 750, gainHigh: 900 }), api.gainBand(0.5, { ...GN, gainLow: 0, gainHigh: 750 })],
+	[GN.midColor, GN.midColor], 'a gain equal to a threshold: the middle colour (86.5-92 % inclusive)');
 expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'left', color: S.leftColor }, 'a row from the sides: the left colour');
 expect(api.rowStyle(1.5, true, { ...SS, swapSides: true }).color, S.rightColor, 'swapped: the colour stays with its edge');
 expect(api.rowStyle(0.333, false, S).width, 16.7, 'width rounded to 0.1 %');
