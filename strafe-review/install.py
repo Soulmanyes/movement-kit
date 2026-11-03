@@ -3,10 +3,11 @@
 
 Usage: install.py [--game DIR] [--uninstall]
 
-- Copies the recorder (recorder/panorama) into the game's custom/0-strafe-review folder, with a
-  layout/hud/timer.xml that loads it: a copy of the timer.xml the game would use otherwise (another
-  HUD mod's in custom/, else the game's own) with one more script include. The game mounts custom/
-  folders in alphabetical order and the first file found wins, so the folder name sorts first.
+- Copies the recorder (recorder/panorama) into the game's custom/0-strafe-review folder, and hands
+  the kit's Panorama files (movekit/panorama.py) one patch: the recorder's script include in
+  layout/hud/timer.xml. The kit writes that file into custom/0-movekit, made from the timer.xml the
+  game would use otherwise (another HUD mod's in custom/, else the game's own). The game mounts
+  custom/ folders in alphabetical order and the first file found wins, so both names sort first.
   Type panorama_reload in game after updating it.
 - Writes a block between "// movekit:strafe-review begin" and "end" into cfg/autoexec.cfg (replacing
   the older "// strafe-review begin" block where it stands): con_logfile yaw.log (the log the collector reads), and
@@ -16,11 +17,10 @@ Usage: install.py [--game DIR] [--uninstall]
   movekit-run and the old name strafe-review-run into ~/.local/bin for the Steam launch options.
 
 The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
---uninstall removes the recorder, the autoexec block and the link. With no game found it still removes
+--uninstall removes the recorder and its patch, the autoexec block and the link. With no game found it still removes
 the launch hook and the link.
 """
 import argparse
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -41,7 +41,7 @@ import steam  # found through the path above; it also puts movekit on the path
 from recorder_settings import FOLDER
 
 from hud import settings as hud_settings  # the repo root is on the path too
-from movekit import cfgblock, vpk
+from movekit import cfgblock, panorama
 
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
@@ -52,6 +52,7 @@ HOOK_ORDER = 20  # before Source Yaw's (50): the trainer then finds the server's
 OLD_FOLDERS = ["strafe-review"]  # before 2026-10-28; removed on install
 TIMER = Path("panorama") / "layout" / "hud" / "timer.xml"
 INCLUDE = '<include type="module" src="file://{scripts}/hud/strafe-review.ts" />'
+PATCHES = [{"file": TIMER.as_posix(), "before": "</scripts>", "line": INCLUDE}]  # for movekit/panorama.py
 
 
 def apply_settings(game):
@@ -70,33 +71,14 @@ def set_autoexec(game, add):
     print(f"{'updated' if add else 'removed the strafe-review block from'} {autoexec}")
 
 
-def base_timer(game):
-    """The timer.xml the game would load without us: the first custom/ folder in mount order that has
-    one, else the game's own. A VPK with one in front of it can't be copied from; that gets a warning."""
-    custom = Path(game) / "custom"
-    ours = {FOLDER.lower(), *(f.lower() for f in OLD_FOLDERS)}
-    entries = sorted(custom.iterdir(), key=lambda p: p.name.lower()) if custom.is_dir() else []
-    for entry in entries:
-        if entry.name.lower() in ours:
-            continue
-        if entry.is_dir() and (entry / TIMER).is_file():
-            return entry / TIMER
-        if entry.suffix.lower() == ".vpk" and TIMER.as_posix().lower() in vpk.files(entry):
-            print(f"warning: {entry} has its own timer.xml, which ours replaces; that mod's timer may look "
-                  "different", file=sys.stderr)
-    return Path(game) / TIMER
-
-
-def timer_with_recorder(text):
-    """timer.xml text with our script included next to the others."""
-    if "strafe-review.ts" in text:
-        return text
-    m = re.search(r"^([ \t]*)</scripts>", text, re.MULTILINE)
-    if not m:
-        raise ValueError("no </scripts> in timer.xml")
-    indent = m.group(1) + ("\t" if "\t" in m.group(1) or not m.group(1) else "    ")
-    nl = "\r\n" if "\r\n" in text else "\n"
-    return text[:m.start()] + indent + INCLUDE + nl + text[m.start():]
+def report(result):
+    """Print what the kit couldn't do. A skipped patch means the recorder doesn't load."""
+    for w in result["warnings"]:
+        print(f"warning: {w}", file=sys.stderr)
+    for row in result["patches"]:
+        if row["state"] == "skipped":
+            print(f"warning: {row['tool']}'s patch to {row['file']} is left out ({row['reason']})"
+                  + ("; the recorder won't load" if row["tool"] == TOOL else ""), file=sys.stderr)
 
 
 def link_launcher(add):
@@ -123,21 +105,29 @@ def link_launcher(add):
 def install(game):
     for old in OLD_FOLDERS:
         shutil.rmtree(Path(game) / "custom" / old, ignore_errors=True)
-    base = base_timer(game)
-    text = timer_with_recorder(base.read_text(encoding="utf-8", errors="surrogateescape"))
     dest = Path(game) / "custom" / FOLDER
-    shutil.rmtree(dest, ignore_errors=True)
+    shutil.rmtree(dest, ignore_errors=True)  # also drops the timer.xml older versions wrote here
     shutil.copytree(ROOT / "recorder" / "panorama", dest / "panorama")
-    (dest / TIMER).parent.mkdir(parents=True, exist_ok=True)
-    (dest / TIMER).write_text(text, encoding="utf-8", errors="surrogateescape", newline="")
     apply_settings(game)
-    print(f"installed to {dest} (timer.xml based on {base})")
+    # after the copy: the kit's timer.xml must never include a script that isn't there
+    result = panorama.install(game, FOLDER, TOOL, PATCHES)
+    report(result)
+    base = next((r["base"] for r in result["patches"] if r["tool"] == TOOL), None)
+    print(f"installed to {dest} (timer.xml in {panorama.KIT_FOLDER}, based on {base})")
     set_autoexec(game, add=True)
     link_launcher(add=True)
 
 
 def uninstall(game):
-    for name in (FOLDER, *OLD_FOLDERS):
+    # the patch goes first, so the kit's timer.xml never includes a recorder that's gone
+    try:
+        report(panorama.uninstall(game, FOLDER))
+        synced = True
+    except OSError as e:
+        print(f"warning: couldn't update custom/{panorama.KIT_FOLDER} ({e}), so the recorder stays",
+              file=sys.stderr)
+        synced = False
+    for name in ((FOLDER,) if synced else ()) + tuple(OLD_FOLDERS):
         dest = Path(game) / "custom" / name
         if dest.exists():
             shutil.rmtree(dest, ignore_errors=True)

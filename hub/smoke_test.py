@@ -12,7 +12,7 @@ so they run from the download folder, never from the exe. Checks:
    (Strafe Review's install hook puts the recorder into the fake game); --check-sections finds their
    sections and the HUD's, and the HUD section finds the recorder and writes its setting into it.
 1. Open review (the module's --collect, through the core's --run-script): pages served, the recorder,
-   the CRLF autoexec block and timer.xml in place, /api/status sees the setup, and an attempt written
+   the CRLF autoexec block and the kit's timer.xml (custom/0-movekit, on panoDev's) in place, /api/status sees the setup, and an attempt written
    into yaw.log the way the game writes it is collected, listed and announced on the movekit session.
 2. A second server (the old exe's --serve, sent to the module) refuses the busy port.
 3. Launch option: the module's launch step starts the server and opens the page, the "game" runs and
@@ -269,6 +269,7 @@ def main():
         env["MOVEKIT_KIT_ROOT"] = str(kit)  # from the repo the kit would be the checkout
     core = Core(cmd, env, tmp)
     ours = game / "custom" / "0-strafe-review" / "panorama"
+    kit_timer = game / "custom" / "0-movekit" / "panorama" / "layout" / "hud" / "timer.xml"
     try:
         print("0. modules")
         reply = core.modules("cards")
@@ -318,9 +319,11 @@ def main():
         saved = session_events("attempt_saved")
         if saved != [{"dir": "bhop_smoke", "id": SMOKE_ID}]:
             fail(f"attempt_saved events on the session: {saved}")
-        timer = (ours / "layout" / "hud" / "timer.xml").read_text()
+        timer = kit_timer.read_text()
         if "mod-panoDev" not in timer or timer.count("strafe-review.ts") != 1:
             fail(f"timer.xml isn't panoDev's with our include:\n{timer}")
+        if (ours / "layout" / "hud" / "timer.xml").exists():
+            fail("the recorder's folder has a timer.xml of its own; it belongs in 0-movekit")
         autoexec = (game / "cfg" / "autoexec.cfg").read_bytes()
         want = b"exec something\r\n\r\n// movekit:strafe-review begin\r\ncon_logfile yaw.log\r\nengine_no_focus_sleep 0\r\n// movekit:strafe-review end\r\n"
         if autoexec != want:
@@ -369,6 +372,8 @@ def main():
         print("5. uninstall")
         core.modules("uninstall", "strafe-review")
         core.modules("uninstall", "gain-converter")
+        if (game / "custom" / "0-movekit").exists():
+            fail("custom/0-movekit is left after uninstalling")
         if ours.exists() or b"movekit:strafe-review" in (game / "cfg" / "autoexec.cfg").read_bytes():
             fail("the recorder or the autoexec block is left after uninstalling")
         if (kit / "strafe-review").exists():

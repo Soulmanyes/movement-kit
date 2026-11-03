@@ -57,7 +57,8 @@ Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts` on Windows and `~/.
 
 ## What it changes in the game folder
 
-- `custom/0-strafe-review`: the recorder script, plus a `timer.xml` that loads it. That file is a copy of the one the game would use otherwise (another HUD mod's in `custom/`, or the game's own) with one line added, made again on every start so other mods' updates carry over. The folder name sorts first because the game mounts `custom/` folders alphabetically and the first file found wins.
+- `custom/0-strafe-review`: the recorder script, and `movekit-panorama.json`, the one line it adds to `timer.xml`.
+- `custom/0-movekit`: the kit's `timer.xml` that loads the recorder. It is a copy of the one the game would use otherwise (another HUD mod's in `custom/`, or the game's own) with that line added, made again on every start so other mods' updates carry over. Other kit tools' changes to the same file go in the same copy. Both folder names sort first because the game mounts `custom/` folders alphabetically and the first file found wins.
 - `cfg/autoexec.cfg`: a block between `// movekit:strafe-review begin` and `// movekit:strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to) and `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick). The first install keeps the original as `autoexec.cfg.bak-strafe-review`. A block from before 2026-11-02 (`// strafe-review begin`) is replaced where it stands.
 
 **Uninstall** on the card takes them out again (`python install.py --uninstall` from a clone). Your attempts stay unless you tick **Also delete saved data**. If no attempts show up, the main page shows a **Setup check** box that says where it stops.

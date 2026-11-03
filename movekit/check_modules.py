@@ -489,12 +489,17 @@ def check_strafe_review_hooks():
     expect("strafe-review" in mgr.installed(), False, "strafe-review hidden after uninstall")
     mgr.install("strafe-review")
     expect((game / "custom" / "0-strafe-review" / "panorama").is_dir(), True, "recorder installed")
+    kit_timer = game / "custom" / "0-movekit" / "panorama" / "layout" / "hud" / "timer.xml"
+    expect(kit_timer.is_file() and kit_timer.read_text().count("strafe-review.ts"), 1, "include in 0-movekit")
+    expect((game / "custom" / "0-strafe-review" / "panorama" / "layout" / "hud" / "timer.xml").exists(), False,
+           "no timer.xml in the recorder's folder")
     if "movekit:strafe-review begin" not in (game / "cfg" / "autoexec.cfg").read_text():
         fail("no autoexec block after the module install")
     if sys.platform.startswith("linux"):
         expect((hook_link.is_symlink(), bin_link.is_symlink()), (True, True), "launch hook and link")
     mgr.uninstall("strafe-review")
     expect((game / "custom" / "0-strafe-review").exists(), False, "recorder after uninstall")
+    expect((game / "custom" / "0-movekit").exists(), False, "kit folder after uninstall")
     if "movekit:strafe-review" in (game / "cfg" / "autoexec.cfg").read_text():
         fail("autoexec block left after the module uninstall")
     expect(hook_link.is_symlink(), False, "launch hook after uninstall")

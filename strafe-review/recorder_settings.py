@@ -7,7 +7,7 @@ uses it too, so a fresh install carries the saved settings.
 import re
 from pathlib import Path
 
-FOLDER = "0-strafe-review"  # in custom/; sorts before other mods, so our timer.xml is the one loaded
+FOLDER = "0-strafe-review"  # in custom/; the recorder and its kit manifest (timer.xml is in 0-movekit)
 RECORDER = Path("panorama") / "scripts" / "hud" / "strafe-review.ts"
 SHOW_LINE = re.compile(r"^const SHOW_LINE = (true|false);", re.MULTILINE)
 
