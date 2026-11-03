@@ -324,6 +324,13 @@ Each game tick counts once, whatever the frame rate. The `$.Schedule(0)` loop ru
 
 **Modes (owner, 2026-11-03).** Bhop modes only (`BHOP`, `BHOP_HL1`), like JHUD. Own play only: it shows nothing while spectating or watching a replay. Whether `GetLastTickStats` follows a spectated player is untested.
 
+### Phase 6.1: core 1.4.0, HUD cards from module.json (2026-11-03, branch `phase-6`)
+
+- `module.json` may have `hud_card` (`title`, `text`, both non-empty; `read_manifest` refuses anything else). The HUD section's `get()` returns `cards` (by title) in place of `jhud`. The page draws one card per entry in `#hud-cards`.
+- Hub sections may have `show_if(found)`, where `found` is `{key: manifest}` of the installed modules. A section shows while `show_with` names an installed module or `show_if` says True; an error counts as False. The HUD section keeps `show_with` for Strafe Review and Trainer Height, and shows while any installed module has a card.
+- JHUD's card text moved into `jhud/module.json` (JHUD 1.0.1, still `needs_core` 1.3.0: an old core ignores the field and keeps its hard-coded card). A JHUD 1.0.0 on core 1.4.0 keeps its card through `LEGACY_CARDS` in `hud/hub_section.py`. `check_hud.py` checks that the legacy text equals the manifest's.
+- Checks: `check_hud.py` (cards: own, legacy, none, sorted; when the section shows), `check_modules.py` (bad `hud_card` shapes refused, a good one kept; a core section with `show_if` given the manifests; one that raises stays hidden). Mutations caught (6/6): `show_if` ignored, `show_if`-less sections shown, `hud_card` unchecked, no legacy card, unsorted, no `show_if` on the HUD section. Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. Test window: the HUD section looks the same as before.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

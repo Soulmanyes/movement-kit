@@ -10,8 +10,11 @@ A module is a tool folder with a module.json:
      "needs": [],                               keys of modules it can't run without
      "data": ["data:strafe-review/attempts"],   what "Also delete saved data" removes, under
                                                 movekit.paths' data_dir (data:) or config_dir (config:)
-     "standalone": ["old_window.py"]}           files that run on their own, never in the core (an
+     "standalone": ["old_window.py"],           files that run on their own, never in the core (an
                                                 old window), so check_modules' import rule skips them
+     "hud_card": {"title": "...", "text": "..."}}
+                                                optional: a card on the hub's HUD section, for modules
+                                                set up in Momentum's own HUD customizer (JHUD, ...)
 
 and, if it changes anything outside its own folder, a module_hooks.py with any of:
 
