@@ -53,6 +53,8 @@ ENTRY = """    MovekitStrafeHist =
             optimalAt = "middle"
             fromSides = false
             swapSides = false
+            leftColor = "rgba(92, 160, 255, 0.9)"
+            rightColor = "rgba(255, 170, 80, 0.9)"
             colorBy = "plain"
             barColor = "rgba(255, 255, 255, 0.85)"
             goodColor = "rgba(123, 216, 143, 1)"

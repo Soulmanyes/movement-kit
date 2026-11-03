@@ -75,10 +75,11 @@ function mixColor(a: string, b: string, t: number): string {
 	return `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${+c[3].toFixed(3)})`;
 }
 
-// A bar's colour: one colour (colorBy 'plain'), or by how far the ratio is from 1 (colorBy 'good'):
-// goodColor at 1, badColor at badPct % away or more, too slow and too fast alike
-function barColor(ratio: number, s: Settings): string {
-	if (s.colorBy !== 'good') return s.barColor;
+// A bar's colour: one colour (colorBy 'plain'; growing from the sides, one per screen side, leftColor and
+// rightColor, so a colour stays with its edge when the sides are swapped), or by how far the ratio is from 1
+// (colorBy 'good'): goodColor at 1, badColor at badPct % away or more, too slow and too fast alike
+function barColor(ratio: number, side: 'left' | 'right', s: Settings): string {
+	if (s.colorBy !== 'good') return s.fromSides ? (side === 'left' ? s.leftColor : s.rightColor) : s.barColor;
 	const far = Math.max(1, +s.badPct || 50) / 100;
 	return mixColor(s.goodColor, s.badColor, isFinite(ratio) ? Math.abs(ratio - 1) / far : 1);
 }
@@ -92,7 +93,8 @@ function markers(s: Settings): number[] {
 
 // How one row is drawn: width in % of the panel, the side it grows from, its colour
 function rowStyle(ratio: number, strafeRight: boolean, s: Settings): { width: number; side: 'left' | 'right'; color: string } {
-	return { width: Math.round(barLength(ratio, s) * 1000) / 10, side: barSide(strafeRight, s), color: barColor(ratio, s) };
+	const side = barSide(strafeRight, s);
+	return { width: Math.round(barLength(ratio, s) * 1000) / 10, side, color: barColor(ratio, side, s) };
 }
 
 const DEFAULTS: Settings = {
@@ -102,6 +104,8 @@ const DEFAULTS: Settings = {
 	optimalAt: 'middle',
 	fromSides: false,
 	swapSides: false,
+	leftColor: 'rgba(92, 160, 255, 0.9)',
+	rightColor: 'rgba(255, 170, 80, 0.9)',
 	colorBy: 'plain',
 	barColor: 'rgba(255, 255, 255, 0.85)',
 	goodColor: 'rgba(123, 216, 143, 1)',
@@ -121,20 +125,24 @@ const COLOR_BY = [
 ];
 type Extra = {
 	options?: { label: string; value: string }[];
-	showWhen?: Record<string, string[]>;
+	showWhen?: Record<string, (string | boolean)[]>;
 	range?: { min: number; max: number; increment?: number };
 };
 // A box's min is 0 and its max roomy: the NumberEntry clamps on every keystroke, so a min of 10 snaps "2"
 // (on the way to 200) back to 10 (owner, 2026-11-03). The real limits are applied here (rowCount, rowPx).
 const PLAIN = ['plain'];
+const SIDES = [true]; // a tick box hands showWhen its checked state
 const GOOD = ['good'];
 const STYLES: [string, string, number, string[]?, Extra?][] = [
-	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides', 'swapSides']],
+	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides']],
 	['rows', 'Ticks shown (10-1000)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 9999, increment: 10 } }],
 	['rowHeight', 'Bar height (px, 1-20)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 99 } }],
 	['optimalAt', 'Optimal at', DROPDOWN, undefined, { options: OPTIMAL_AT }],
-	['fromSides', 'Grow from the sides (right strafes from the left)', CHECKBOX],
+	['fromSides', 'Grow from the sides (right strafes from the left)', CHECKBOX, ['swapSides', 'leftColor', 'rightColor'],
+		{ showWhen: { swapSides: SIDES, leftColor: SIDES, rightColor: SIDES } }],
 	['swapSides', 'Swap the sides (right strafes from the right)', CHECKBOX],
+	['leftColor', 'Bars from the left edge (Plain)', COLOR_PICKER],
+	['rightColor', 'Bars from the right edge (Plain)', COLOR_PICKER],
 	['colours', 'Colours', NONE, ['colorBy', 'showMarker', 'markerColor', 'backgroundColor']],
 	['colorBy', 'Colour by', DROPDOWN, ['barColor', 'goodColor', 'badColor', 'badPct'],
 		{ options: COLOR_BY, showWhen: { barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD } }],

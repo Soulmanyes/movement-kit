@@ -163,12 +163,15 @@ expect(api.markers(S), [0.5], 'one marker in the middle');
 expect(api.markers(S3), [0.75], 'one marker at 3/4');
 expect(api.markers({ ...S3, fromSides: true }), [0.75, 0.25], 'from the sides at 3/4: both markers');
 expect(api.markers({ ...S, fromSides: true }), [0.5], 'from the sides in the middle: one marker');
-expect(api.barColor(0.3, S), S.barColor, 'plain: one colour');
+expect(api.barColor(0.3, 'left', S), S.barColor, 'plain: one colour');
+expect([api.barColor(0.3, 'left', SS), api.barColor(0.3, 'right', SS)], [S.leftColor, S.rightColor], 'plain from the sides: a colour per edge');
+expect([api.barColor(1, 'left', { ...SS, colorBy: 'good' }), api.barColor(1, 'right', { ...SS, colorBy: 'good' })].every((c) => c === api.mixColor(S.goodColor, S.badColor, 0)), true, 'how good from the sides: by goodness, not side');
 const G = { ...S, colorBy: 'good' };
-expect([api.barColor(1, G), api.barColor(1.5, G), api.barColor(0.5, G), api.barColor(3, G)],
+expect([api.barColor(1, 'left', G), api.barColor(1.5, 'left', G), api.barColor(0.5, 'left', G), api.barColor(3, 'left', G)],
 	[api.mixColor(G.goodColor, G.badColor, 0), G.badColor, G.badColor, G.badColor], 'how good: good at 1, bad at 50 % away');
-expect(api.barColor(0.75, G), api.barColor(1.25, G), 'how good: slow and fast alike');
-expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'left', color: S.barColor }, 'a row');
+expect(api.barColor(0.75, 'left', G), api.barColor(1.25, 'left', G), 'how good: slow and fast alike');
+expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'left', color: S.leftColor }, 'a row from the sides: the left colour');
+expect(api.rowStyle(1.5, true, { ...SS, swapSides: true }).color, S.rightColor, 'swapped: the colour stays with its edge');
 expect(api.rowStyle(0.333, false, S).width, 16.7, 'width rounded to 0.1 %');
 expect([api.onGround(0, -290, 290), api.onGround(0, 3, -5), api.onGround(0, 3, 0), api.onGround(-8, 0, -16), api.onGround(0.42, 0.42, 0),
 	api.onGround(0.42, 0, 0.42), api.onGround(0.42, 0.5, 0)], [true, false, true, false, true, true, false],
@@ -182,6 +185,8 @@ fire('HudCustomizer_Ready');
 expect(loads, 1, 'registered at HudCustomizer_Ready');
 expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
 expect(loaded.props.name, 'Strafe Speed Histogram', 'component name');
+expect(loaded.props.dynamicStyles.fromSides.children, ['swapSides', 'leftColor', 'rightColor'].map((styleID) => ({ styleID, showWhen: [true] })),
+	'swap and the edge colours show only while growing from the sides');
 const P = loaded.p;
 expect(P.id, 'MovekitStrafeHist', 'panel id');
 expect(P.visible, false, 'hidden before any tick');
@@ -250,6 +255,7 @@ jump(600, 4, () => 1);
 expect(P.children.length, 3, 'from the sides at 3/4: two marker lines');
 expect(rowsOf(P).slice(-4).map((r) => [r.style.width, r.style.horizontalAlign]),
 	[['75%', 'right'], ['75%', 'right'], ['75%', 'left'], ['75%', 'left']], 'from the sides: left strafes from the right, right from the left');
+expect(rowsOf(P).slice(-4).map((r) => r.style.backgroundColor), [S.rightColor, S.rightColor, S.leftColor, S.leftColor], 'from the sides: the edge colours in game');
 for (const [k, v] of [['rows', 100], ['optimalAt', 'middle'], ['fromSides', false], ['barColor', api.DEFAULTS.barColor]]) cb(k, v);
 jump(700, 4);
 const n0 = shownRows(P).length;
