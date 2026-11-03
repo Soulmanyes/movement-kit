@@ -331,6 +331,17 @@ Each game tick counts once, whatever the frame rate. The `$.Schedule(0)` loop ru
 - JHUD's card text moved into `jhud/module.json` (JHUD 1.0.1, still `needs_core` 1.3.0: an old core ignores the field and keeps its hard-coded card). A JHUD 1.0.0 on core 1.4.0 keeps its card through `LEGACY_CARDS` in `hud/hub_section.py`. `check_hud.py` checks that the legacy text equals the manifest's.
 - Checks: `check_hud.py` (cards: own, legacy, none, sorted; when the section shows), `check_modules.py` (bad `hud_card` shapes refused, a good one kept; a core section with `show_if` given the manifests; one that raises stays hidden). Mutations caught (6/6): `show_if` ignored, `show_if`-less sections shown, `hud_card` unchecked, no legacy card, unsorted, no `show_if` on the HUD section. Every `check_*.py`, `check_jhud.js` and `hub/smoke_test.py --repo` pass. Test window: the HUD section looks the same as before.
 
+### Phase 6.2: Strafe Speed Histogram module (2026-11-03, branch `phase-6`, waiting on the owner's in-game look)
+
+- `strafe-histogram/`: `module.json` (key `strafe-histogram`, `needs_core` 1.4.0, `hud_card`), `install.py` (1.0.0, `HOOK_ORDER` 50), `module_hooks.py`, `launch-hook.sh`, README, LICENSE. Script `movekit-strafe-histogram.ts`, panel `MovekitStrafeHist`, kv3 entry at 810/880, width 300.
+- The tick rule is `middles(rows)`, Strafe Review's viewer rule over the rows seen so far, limited to what is certain: ground one row behind, ideal keys two, a strafe's end two more. `Middles.push` gives each tick once. It keeps rows from 3 before the first open jump's takeoff: the takeoff row's 5-tick yaw average reaches 2 back, and the oldest one's yaw change needs the row before it (with 2, 1 tick in 1419 came out different). There is a cap of 2000 rows, so a surf ramp run (one long "jump") outgrows it. That doesn't matter, since surf modes don't show it.
+- Bars are built once. A redraw (at most 20 a second) sets only the heights and the line's text. A setting that changes them (range, width, colours, font) builds them again. After `panorama_reload`, the new copy builds its own once.
+- `check_strafe_histogram.js` covers: kv3 against DEFAULTS, ranges, bars, colours, the window, the tick rule on made-up jumps, and the Panorama side (sample, other mode, replay, spectating, switched off, reload take-over, one loop). On the store, the HUD's ticks equal the viewer's strafe-middle ticks on every own bhop attempt: 1146 attempts, 577754 ticks, in-band counts equal. Surf maps are skipped.
+- Mutations caught (17): counting a tick again, counting every frame, no end skip, no window drop, band edges exclusive, band edge off, 2 rows kept before a takeoff, counting while spectating, counting in a replay, other modes, no reload guard, panel replaced on reload, bar edge off by one, rebuild on every draw, no rebuild on a layout change, old children kept on build, and in `check_strafe_histogram.py` no kv3 patch, script removed on a failed sync, no hook unregister.
+- Two mutations were equivalent, not gaps: trusting the newest row's ground (keys stop 2 rows earlier), and skipping the rebuild after a take-over (`builtFor` is empty in a new copy).
+- `check_strafe_histogram.py` covers the fake game as `check_jhud.py` does, plus JHUD installed alongside (both entries and includes, either uninstalls alone).
+- Installed into the live game from the repo on 2026-11-03, with every patch applied.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
