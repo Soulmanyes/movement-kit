@@ -422,7 +422,7 @@ The owner asked for the jump-1 line to be "a separate hud element ... like jhud 
   - Every `check_*.py`, the node checks and the smoke test pass.
 - **Released 2026-11-03.** The owner tested it in game and found it fine. `first-jump` was fast-forwarded into `main` (1a26cf8), and the tags `hub-v1.6.0`, `strafe-review-v1.9.0` and `first-jump-v1.0.0` were pushed by Claude (from now on Claude pushes the tags). All 4 CI runs passed. Each release has its files: hub-windows.zip; strafe-review module zip and json plus strafe-review-windows.zip; first-jump module zip and json.
 
-## Phase 8: bhop and surf yaw lists in Source Yaw (owner, 2026-11-03; OK'd the same day, branch `sourceyaw-modes`)
+## Phase 8: bhop and surf yaw lists in Source Yaw (owner, 2026-11-03; OK'd the same day; released 2026-11-04 as hub-v1.7.0 and sourceyaw-v1.9.0)
 
 The owner wants separate bhop and surf yawspeeds in both games. They picked "both" for switching: automatic by map prefix, plus a mode key that overrides it.
 
@@ -476,6 +476,7 @@ The owner wants separate bhop and surf yawspeeds in both games. They picked "bot
   - `trainer.map_tickrate` now goes through `yawcore.prefix_value`, which lowercases the map name as well as the prefix (before, only the prefix was lowercased). This is a small behaviour change for map names with capitals.
   - The `I001` (import order) findings in trainer.py and crosshair_watch.py, deliberate because movekit must come after yawcore, now carry `noqa` (owner's OK).
   - Live (2026-11-04): the Strafe Review server was restarted on the new `session.py` and `sourceyaw/install.sh` was rerun. A window screenshot showed the new rows. In Momentum, the owner said it "seems to be working". run.log shows the watcher listening and arming on map loads (`surf_ferros -> arm surf`, `bhop_glacial -> arm bhop`). No mode key was set, so the mode key and CS:S weren't tried in game.
+  - Released 2026-11-04: `sourceyaw-modes` fast-forwarded into `main`, and Claude pushed the tags hub-v1.7.0 (hub-windows.zip) and sourceyaw-v1.9.0 (module zip with `mode_watch.py`, and json). Both CI runs passed and the notes are written.
   - Earlier note, not yet checked then: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
 
 ## Later / undecided
