@@ -6,7 +6,7 @@
 //
 // Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group, number boxes
 // have a range around their default) against install.py's hud_default.kv3 entry; bar length, side, colour
-// and marker lines; ground from vz; the Panorama side: the customizer component for bhop modes only, the
+// and marker lines; ground from vz; the Panorama side: the customizer component for surf and bhop modes only, the
 // sample while it is open, one row per air tick (each tick once over several frames, none for ground ticks),
 // newest at the bottom and the top row reused (no panel made or deleted per tick), a setting that changes the
 // rows building them again, nothing while spectating, in a replay, in another mode or switched off, and after
@@ -198,7 +198,7 @@ const shownRows = (p) => rowsOf(p).filter((r) => r.visible);
 expect(loaded, null, 'not registered before the customizer is ready');
 fire('HudCustomizer_Ready');
 expect(loads, 1, 'registered at HudCustomizer_Ready');
-expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
+expect(loaded.props.gamemode, [1, 2, 3], 'surf and bhop modes only');
 expect(loaded.props.name, 'Strafe Speed Histogram', 'component name');
 expect(loaded.props.dynamicStyles.fromSides.children, ['swapSides', 'leftColor', 'rightColor'].map((styleID) => ({ styleID, showWhen: [true] })),
 	'swap and the edge colours show only while growing from the sides');
@@ -274,7 +274,7 @@ expect(rowsOf(P).slice(-4).map((r) => r.style.backgroundColor), [S.rightColor, S
 for (const [k, v] of [['rows', 100], ['optimalAt', 'middle'], ['fromSides', false], ['barColor', api.DEFAULTS.barColor]]) cb(k, v);
 jump(700, 4);
 const n0 = shownRows(P).length;
-mode = 1;
+mode = 4; // climb
 jump(800, 10);
 expect([P.visible, shownRows(P).length], [false, n0], 'another mode: hidden, nothing added');
 mode = 2;

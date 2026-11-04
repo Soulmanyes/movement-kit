@@ -16,7 +16,7 @@
 // width): Panorama scripts can't import, and a shared script would tie two modules that install alone.
 
 const ID = 'MovekitStrafeHist';
-const GAMEMODES = [2, 3]; // Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
+const GAMEMODES = [1, 2, 3]; // Gamemode.SURF, Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
 // CustomizerPropertyType in common/hud-customizer.ts
 const NONE = 0;
 const NUMBER_ENTRY = 1;
@@ -301,12 +301,21 @@ function hide() {
 	if (panel && panel.IsValid()) panel.visible = false;
 }
 
+// Whether the HUD customizer has this panel switched on. Its own record (components[ID].enabled, what the
+// preset saves) is read first: the owner saw First Jump show with its switch off and saved (2026-11-04),
+// while the script read panel.enabled. The panel's flag is the fallback for a customizer that hasn't
+// taken the panel.
+function switchedOn(): boolean {
+	const c = GLOBAL['HudCustomizerHandler']?.components?.[ID];
+	return c ? c.enabled !== false : getPanel().enabled;
+}
+
 // Own play in a bhop mode with the panel switched on in the customizer
 function watching(): boolean {
 	if (!GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return false;
 	if (spectating || MomentumMovementAPI.GetMoveType() === MOVETYPE_OBSERVER) return false;
 	if (MomentumReplayAPI.GetReplayState() !== REPLAY_NONE) return false;
-	return getPanel().enabled;
+	return switchedOn();
 }
 
 // Empty rows from the next tick on (a map load, spectating, the customizer closing)

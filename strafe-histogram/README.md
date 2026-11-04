@@ -11,7 +11,7 @@ While you bhop in [Momentum Mod](https://momentum-mod.org/), this HUD element dr
 
 Each tick is drawn one tick (10 ms) late, once the next tick says whether it was on the ground: the same rule Strafe Review uses (`check_strafe_histogram.js` compares the two on saved runs).
 
-It shows in the bhop modes only, and only for your own play: not while spectating or watching a replay.
+It shows in the bhop and surf modes only, and only for your own play: not while spectating or watching a replay.
 
 Everything about it is set in the game's **HUD customizer**, where it is listed as **Strafe Speed Histogram**:
 

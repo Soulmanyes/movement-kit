@@ -29,7 +29,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import games, panorama, steam  # after the path above
 
-VERSION = "1.0.0"  # the Strafe Speed Histogram's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.0"  # the Strafe Speed Histogram's (module.json reads it); bump in the same commit as the release tag
 TOOL = "strafe-histogram"
 FOLDER = "movekit-strafe-histogram"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 50  # after Strafe Review's (20), Strafe Trainer Height's (30) and JHUD's (40); all only sync the kit
