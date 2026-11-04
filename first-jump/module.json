@@ -1,7 +1,7 @@
 {
   "key": "first-jump",
   "title": "First Jump HUD",
-  "summary": "After jump 1 of a bhop run in Momentum Mod: landing speed, gain %, gain per strafe, what lost each strafe the most, and the biggest mistake.",
+  "summary": "After jump 1 of a bhop or surf run in Momentum Mod: landing speed, gain %, gain per strafe, what lost each strafe the most, and the biggest mistake.",
   "os": ["linux", "win32"],
   "tag_prefix": "first-jump-v",
   "version_from": "install.py",
@@ -11,6 +11,6 @@
   "group": "hud",
   "hud_card": {
     "title": "First Jump HUD",
-    "text": "Shortly after jump 1 of a bhop run lands: the landing speed and gain %, one box per strafe with its gain % (amber, green or blue, like JHUD), what lost each strafe the most under it, and the biggest jump-1 mistake. Its position, width, font, sizes, colours, rows and how long it stays are set in Momentum Mod's own HUD customizer, where it is listed as First Jump, and saved with your HUD preset. Turn it off there too."
+    "text": "Shortly after jump 1 of a bhop or surf run lands: the landing speed and gain %, one box per strafe with its gain % (amber, green or blue, like JHUD), what lost each strafe the most under it, and the biggest jump-1 mistake. Its position, width, font, sizes, colours, rows and how long it stays are set in Momentum Mod's own HUD customizer, where it is listed as First Jump, and saved with your HUD preset. Turn it off there too."
   }
 }

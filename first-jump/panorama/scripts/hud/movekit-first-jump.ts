@@ -22,7 +22,7 @@
 
 const ID = 'MovekitFirstJump';
 const LINE_TAG = 'FJLINE';
-const GAMEMODES = [2, 3]; // Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
+const GAMEMODES = [1, 2, 3]; // Gamemode.SURF, Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
 // CustomizerPropertyType in common/hud-customizer.ts
 const NONE = 0;
 const NUMBER_ENTRY = 1;
@@ -730,6 +730,16 @@ function getPanel(): GenericPanel {
 	return panel;
 }
 
+// Whether the HUD customizer has this panel switched on. Its own record (components[ID].enabled, what the
+// preset saves) is read first: the owner saw First Jump show with its switch off and saved (2026-11-04),
+// while the script read panel.enabled. The panel's flag is the fallback for a customizer that hasn't
+// taken the panel.
+function switchedOn(): boolean {
+	const c = GLOBAL['HudCustomizerHandler']?.components?.[ID];
+	const on = c ? c.enabled !== false : getPanel().enabled;
+	return on;
+}
+
 const size = (v: unknown, fallback: number, min: number) => Math.max(min, +(v as number) || fallback);
 
 function draw(p: Parts) {
@@ -791,7 +801,7 @@ function loop() {
 	guard('sample', sample);
 	guard('line', () => {
 		const L = lineStep();
-		if (L && !editing && getPanel().enabled) {
+		if (L && !editing && switchedOn()) {
 			const p = parts(L, settings);
 			if (!empty(p)) show(p, false);
 		}
@@ -855,11 +865,20 @@ function widenBoxes(p: GenericPanel) {
 		}
 	}
 }
+// While the customizer is open: the sample hides when the switch is turned off and comes back when it's
+// turned on (no event for the switch, so fixBoxes' loop checks)
+function sampleFollowsSwitch() {
+	const on = switchedOn();
+	const p = getPanel();
+	if (!on && p.visible) hide();
+	else if (on && !p.visible) show(parts(SAMPLE, settings), true);
+}
 function fixBoxes() {
 	if (!live() || !editing) return;
 	const h = GLOBAL['HudCustomizerHandler'];
 	const list = h?.panels?.activeComponentSettingsList as GenericPanel | undefined;
 	if (h?.activeComponent?.id === ID && list && list.IsValid()) widenBoxes(list);
+	sampleFollowsSwitch();
 	$.Schedule(BOX_FIX_S, fixBoxes);
 }
 
@@ -899,7 +918,7 @@ $.RegisterForUnhandledEvent('HudCustomizer_Ready', () => {
 $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {
 	if (!live() || !GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
 	editing = true;
-	show(parts(SAMPLE, settings), true);
+	if (switchedOn()) show(parts(SAMPLE, settings), true);
 	fixBoxes();
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Closed', () => {

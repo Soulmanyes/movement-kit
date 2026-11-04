@@ -225,7 +225,7 @@ fire('HudCustomizer_Ready');
 GLOBAL.HudCustomizerHandler.customizerReady = true;
 if (!loaded) fail('the customizer got no component');
 expect(loaded.p.id, 'MovekitFirstJump', 'component panel id');
-expect([loaded.props.name, loaded.props.gamemode], ['First Jump', [2, 3]], 'listed as First Jump, bhop modes only');
+expect([loaded.props.name, loaded.props.gamemode], ['First Jump', [1, 2, 3]], 'listed as First Jump, surf and bhop modes only');
 expect(Object.keys(loaded.props.dynamicStyles).sort(), api.STYLES.map((x) => x[0]).sort(), 'every row in the customizer');
 for (const [id, value] of Object.entries(S)) {
 	const d = loaded.props.dynamicStyles[id];
@@ -273,8 +273,8 @@ const quiet = (what, opts, undo) => {
 	undo && undo();
 	reset();
 };
-G.mode = 1;
-quiet('surf shows nothing', {}, () => (G.mode = 2));
+G.mode = 4; // climb
+quiet('other modes show nothing', {}, () => (G.mode = 2));
 G.replay = 1;
 quiet('a replay shows nothing', {}, () => (G.replay = 0));
 fire('MomentumSpectateStart');

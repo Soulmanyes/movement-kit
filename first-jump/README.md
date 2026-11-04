@@ -1,6 +1,6 @@
 # First Jump HUD
 
-Shortly after jump 1 of a run in [Momentum Mod](https://momentum-mod.org/)'s bhop modes lands, First Jump HUD shows how that jump went, at the top middle of the screen:
+Shortly after jump 1 of a run in [Momentum Mod](https://momentum-mod.org/)'s bhop or surf modes lands, First Jump HUD shows how that jump went, at the top middle of the screen:
 
 - **Top line:** the landing speed and the jump's gain %.
 - **One box per strafe** with its gain %, coloured like JHUD and the Strafe Speed Histogram: amber below 86.5 %, green from 86.5 to 92 %, blue above 92 %. The thresholds are set in tenths of a percent (865 = 86.5 %), as the HUD customizer's number boxes take whole numbers.

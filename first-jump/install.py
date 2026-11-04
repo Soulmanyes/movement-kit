@@ -28,7 +28,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import games, panorama, steam  # after the path above
 
-VERSION = "1.0.0"  # First Jump HUD's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.0"  # First Jump HUD's (module.json reads it); bump in the same commit as the release tag
 TOOL = "first-jump"
 FOLDER = "movekit-first-jump"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 60  # after the other HUD modules (JHUD 40, Strafe Speed Histogram 50); all only sync the kit
