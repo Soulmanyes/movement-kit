@@ -1,7 +1,7 @@
 {
   "key": "jhud",
   "title": "JHUD",
-  "summary": "After every bhop jump in Momentum Mod: the jump's speed, gain % and sync in the middle of the screen, in one colour, coloured by gain, or by speed pace.",
+  "summary": "After every bhop or surf jump in Momentum Mod: the jump's speed, gain % and sync in the middle of the screen, in one colour, coloured by gain, or by speed pace.",
   "os": ["linux", "win32"],
   "tag_prefix": "jhud-v",
   "version_from": "install.py",
@@ -11,6 +11,6 @@
   "group": "hud",
   "hud_card": {
     "title": "JHUD",
-    "text": "After every jump in bhop: the jump's number, speed, speed change, gain % and sync, in the middle of the screen, in one colour, coloured by gain, or by speed pace. Its position, size, font, colours, fields and thresholds are set in Momentum Mod's own HUD customizer, where it is listed as JHUD, and saved with your HUD preset. Turn it off there too."
+    "text": "After every jump in bhop or surf: the jump's number, speed, speed change, gain % and sync, in the middle of the screen, in one colour, coloured by gain, or by speed pace. Its position, size, font, colours, fields and thresholds are set in Momentum Mod's own HUD customizer, where it is listed as JHUD, and saved with your HUD preset. Turn it off there too."
   }
 }

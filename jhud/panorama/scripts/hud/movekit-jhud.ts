@@ -19,7 +19,7 @@
 // by check_jhud.js.
 
 const ID = 'MovekitJhud';
-const GAMEMODES = [2, 3]; // Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
+const GAMEMODES = [1, 2, 3]; // Gamemode.SURF, Gamemode.BHOP, Gamemode.BHOP_HL1 (common/web/enums/gamemode.enum)
 // CustomizerPropertyType in common/hud-customizer.ts
 const NONE = 0;
 const NUMBER_ENTRY = 1;
@@ -339,10 +339,18 @@ function hide() {
 	if (panel && panel.IsValid()) panel.visible = false;
 }
 
+// Whether the HUD customizer has this panel switched on. Its own record (components[ID].enabled, what the
+// preset saves) is read first: the owner saw First Jump show with its switch off and saved (2026-11-04),
+// while the script read panel.enabled. The panel's flag is the fallback for a customizer that hasn't
+// taken the panel.
+function switchedOn(): boolean {
+	const c = GLOBAL['HudCustomizerHandler']?.components?.[ID];
+	return c ? c.enabled !== false : getPanel().enabled;
+}
+
 function onJump() {
 	if (editing || !GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
-	const p = getPanel();
-	if (!p.enabled) return; // switched off in the customizer
+	if (!switchedOn()) return; // switched off in the customizer
 	const st = MomentumMovementAPI.GetLastJumpStats() as unknown as Stats;
 	const n = jumpOf(st);
 	if (n < 1 || !shows(n, settings)) return;

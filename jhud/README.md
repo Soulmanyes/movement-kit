@@ -1,6 +1,6 @@
 # JHUD
 
-After every jump in [Momentum Mod](https://momentum-mod.org/)'s bhop modes, JHUD shows that jump in the middle of the screen: its number, your speed and how much it changed, gain % and sync, on one line. By default the line is in the font colour, which you can set. "Colour by" can instead colour it:
+After every jump in [Momentum Mod](https://momentum-mod.org/)'s bhop and surf modes, JHUD shows that jump in the middle of the screen: its number, your speed and how much it changed, gain % and sync, on one line. By default the line is in the font colour, which you can set. "Colour by" can instead colour it:
 
 - **Gain %:** amber below 86.5 %, green from 86.5 to 92 %, blue above 92 %, the same as the Strafe Speed Histogram's Gain % mode. The thresholds are set in tenths of a percent (865 = 86.5 %), as the HUD customizer's number boxes take whole numbers.
 - **Speed pace, then gain %:** up to jump 6 or 12 (you pick), by the speed you are on pace for at that jump. You set three target speeds and their colours (by default 620 green, 625 blue, 630 white) and a colour for below all three. Jump 4, say, shows blue when its speed is what usually leads to 625 or more at jump 6. After the cutoff the line goes by gain %. The pace curve comes from one player's runs; from jump 4 on it usually predicts jump 6 within 1.5 u/s, but jump 2 is only a rough guess. Jump 1 isn't judged.

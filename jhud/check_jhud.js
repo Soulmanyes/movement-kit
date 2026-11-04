@@ -6,7 +6,7 @@
 //
 // Covers: the customizer settings (every STYLES row has a DEFAULTS value and sits in one group) against
 // install.py's hud_default.kv3 entry (same keys, same values); jumpOf, shows, the gain colour scale and
-// the row text; the Panorama side: the customizer gets the component for bhop modes only, the first
+// the row text; the Panorama side: the customizer gets the component for surf and bhop modes only, the first
 // takeoff shows its number and speed, other modes and a panel switched off in the customizer show
 // nothing, a jump shows its rows and
 // fades after holdMs, the customizer's sample while it is open; then every saved jump event in Strafe
@@ -194,7 +194,7 @@ fire('HudCustomizer_Ready');
 GLOBAL.HudCustomizerHandler.customizerReady = true;
 if (!loaded) fail('the customizer got no component');
 expect(loaded.p.id, 'MovekitJhud', 'component panel id');
-expect(loaded.props.gamemode, [2, 3], 'bhop modes only');
+expect(loaded.props.gamemode, [1, 2, 3], 'surf and bhop modes only');
 expect(Object.keys(loaded.props.dynamicStyles).sort(), api.STYLES.map((x) => x[0]).sort(), 'every row in the customizer');
 // the customizer calls back each setting with its saved value (shared "$" values come resolved)
 for (const [id, value] of Object.entries(S)) {
@@ -232,9 +232,9 @@ runSchedules();
 runSchedules();
 expect(panel.visible, false, 'the first takeoff fades');
 stats = st;
-mode = 1;
+mode = 4; // climb
 fire('OnJumpStarted');
-expect(panel.visible, false, 'surf shows nothing');
+expect(panel.visible, false, 'other modes show nothing');
 mode = 2;
 panel.enabled = false;
 fire('OnJumpStarted');
@@ -293,10 +293,10 @@ fire('HudCustomizer_Closed');
 expect(panel.visible, false, 'hidden when the customizer closes');
 runSchedules();
 expect(schedules.length, 0, 'number box check stops when the customizer closes');
-mode = 1;
+mode = 4; // climb
 fire('HudCustomizer_Opened');
-expect(panel.visible, false, 'no sample outside bhop');
-expect(schedules.length, 0, 'no number box check outside bhop');
+expect(panel.visible, false, 'no sample outside surf and bhop');
+expect(schedules.length, 0, 'no number box check outside surf and bhop');
 fire('HudCustomizer_Closed');
 mode = 2;
 
