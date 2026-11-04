@@ -1,0 +1,16 @@
+{
+  "key": "zone-exit",
+  "title": "Zone Exit Speed",
+  "summary": "When a surf run starts in Momentum Mod: your 3D speed leaving the start zone, coloured by how good it is, and the difference to your PB's.",
+  "os": ["linux", "win32"],
+  "tag_prefix": "zone-exit-v",
+  "version_from": "install.py",
+  "needs_core": "1.5.0",
+  "needs": [],
+  "data": [],
+  "group": "hud",
+  "hud_card": {
+    "title": "Zone Exit Speed",
+    "text": "When you leave the start zone in surf: your speed (x, y and z, so the pre jump counts), amber, green or blue by two speeds you set, and how far it is above or below the comparison run's (normally your PB). Its position, font, colours, speeds and how long it stays are set in Momentum Mod's own HUD customizer, where it is listed as Zone Exit, and saved with your HUD preset. Turn it off there too."
+  }
+}

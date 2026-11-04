@@ -130,7 +130,7 @@ def main():
         manifests = {p.parent.name: json.loads(p.read_text()) for p in KIT.glob("*/module.json")}
         jhud = sorted(({"key": k, **m["hud_card"]} for k, m in manifests.items() if "hud_card" in m),
                       key=lambda c: (c["title"].lower(), c["key"]))
-        expect([c["key"] for c in jhud], ["first-jump", "jhud", "strafe-histogram"], "the checkout's HUD cards")
+        expect([c["key"] for c in jhud], ["first-jump", "jhud", "strafe-histogram", "zone-exit"], "the checkout's HUD cards")
         settings.save("inGameLine", False)
         hud_sec = sections[[s.key for s in sections].index("hud")]
         live = hud_sec.api["get"].__globals__  # the section as discovery loaded it
@@ -168,11 +168,12 @@ def main():
                 {"key": "jhud", **sec.LEGACY_CARDS["jhud"]},
                 {"key": "b", **card}], "cards: own, legacy, none, by title")
         expect(sec.cards({"jhud": {"hud_card": card}}), [{"key": "jhud", **card}], "a module's own card beats the legacy one")
-        expect(sec.LEGACY_CARDS["jhud"], jcard, "the legacy JHUD card says what JHUD's module.json says")
+        # the legacy card is for JHUD 1.0.0 (bhop only, no hud_card), so only its title follows module.json
+        expect(sec.LEGACY_CARDS["jhud"]["title"], jcard["title"], "the legacy JHUD card has JHUD's title")
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
         expect(bridge.call("hud", "get")["result"]["legacyLine"], False, "get, the old Strafe Review uninstalled")
-        state.write_text(json.dumps({"modules": {k: {"removed": True} for k in ("jhud", "strafe-histogram", "first-jump")}}))
+        state.write_text(json.dumps({"modules": {k: {"removed": True} for k in ("jhud", "strafe-histogram", "first-jump", "zone-exit")}}))
         expect(bridge.call("hud", "get")["result"]["cards"], [], "get, the card modules uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
