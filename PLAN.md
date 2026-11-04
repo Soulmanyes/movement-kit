@@ -479,6 +479,31 @@ The owner wants separate bhop and surf yawspeeds in both games. They picked "bot
   - Released 2026-11-04: `sourceyaw-modes` fast-forwarded into `main`, and Claude pushed the tags hub-v1.7.0 (hub-windows.zip) and sourceyaw-v1.9.0 (module zip with `mode_watch.py`, and json). Both CI runs passed and the notes are written.
   - Earlier note, not yet checked then: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
 
+## Phase 9: turn speed check, a Strafe Review page (owner, 2026-11-04; planned, not started)
+
+The owner wants a check across all saved attempts: is the turn speed too slow or too fast at some speeds, and is the fix sens / yawspeed or technique? The Histogram shows it per tick and Strafe Review shows it per run; neither adds it up across runs and speeds.
+
+- **Where.** A new `/turn` page in the Strafe Review viewer, next to `/drill` and `/compare` (owner's pick). It is not a hub section and not its own module.
+- **Look (mockup shown to the owner).**
+
+  ```
+  speed band     your turn vs optimal    strafes
+   300-700            98%                 4,210
+   700-1100           96%                 6,880
+  1100-1500           89%                 3,150
+  1500+               81%   too slow        920
+
+  -> You turn 19% too slow above 1500 u/s.
+     Try a faster cl_yawspeed entry for high speed (now 120),
+     or raise sens about 10%.
+  ```
+
+- **Numbers.** Per speed band, the median yawRatio of strafe middles, the same rule as the run stats' "Angle" (`static/stats.js`: 2 ticks skipped at each end, +left/+right ticks out). Speed from `vx`/`vy`. Own attempts only, bhop maps only.
+- **Mouse and keys apart.** Ticks with +left/+right held (`buttons` 128/256) are turned by `cl_yawspeed`; they get their own rows, and their advice points at Source Yaw's list. Mouse ticks point at sens.
+- **Per sens.** Each attempt saves `mouse` (`sensitivity`, `m_yaw`, `cl_yawspeed`, DPI), and the auto tags mark sens changes. Group by sens setting, so before and after a change can be compared, and the advice uses the current one.
+- **The verdict.** Low only in the high bands means the hand can't keep up, so sens or yawspeed is the fix. Low in every band means technique. The page says which, not just the numbers. Band edges and thresholds come from the owner's saved runs.
+- **Dropped in the same talk (2026-11-04).** Surf modules (landing quality, ramp smoothness, PB comparison by position, fail stats per stage, progress log, segment trainer: all either grade a style that has no single right way or repeat savelocs / KSF); weak-side finder (Strafe Review already shows it); key timing on every jump (the owner's offsets HUD has it, and more to watch next to JHUD is too much); a landing beep by gain band.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
