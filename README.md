@@ -4,7 +4,7 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 
 | Tool | What it does | Runs on |
 | --- | --- | --- |
-| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key, colours the crosshair per yawspeed, trains strafes | Linux |
+| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key (bhop and surf lists), colours the crosshair per yawspeed, trains strafes | Linux |
 | [Strafe Review](strafe-review/) | Records every attempt per tick and reviews it in the browser | Windows, Linux |
 | [Gain Converter](gain-converter/) | Converts CS:S SSJ gain % to Momentum gain % and back | Windows, Linux |
 | [Strafe Trainer Height](trainer-height/) | Lets Momentum's strafe trainer be dragged taller in the HUD editor | Windows, Linux |
