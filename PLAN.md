@@ -475,7 +475,8 @@ The owner wants separate bhop and surf yawspeeds in both games. They picked "bot
     - `check_modes.py` checks that yaws.cfg with either list active matches 1.8.0's yawcore given that list (48 cases), plus validate, colour cfgs and the hub's save and load. `--mutations`: 11 of 11 caught.
   - `trainer.map_tickrate` now goes through `yawcore.prefix_value`, which lowercases the map name as well as the prefix (before, only the prefix was lowercased). This is a small behaviour change for map names with capitals.
   - The `I001` (import order) findings in trainer.py and crosshair_watch.py, deliberate because movekit must come after yawcore, now carry `noqa` (owner's OK).
-  - Not yet checked: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
+  - Live (2026-11-04): the Strafe Review server was restarted on the new `session.py` and `sourceyaw/install.sh` was rerun. A window screenshot showed the new rows. In Momentum, the owner said it "seems to be working". run.log shows the watcher listening and arming on map loads (`surf_ferros -> arm surf`, `bhop_glacial -> arm bhop`). No mode key was set, so the mode key and CS:S weren't tried in game.
+  - Earlier note, not yet checked then: the page in a window (CS:S was running), and the switch in game. The Strafe Review server hosts the session, so it must be restarted on the new `session.py` before the mode tokens reach the watcher.
 
 ## Later / undecided
 
