@@ -219,7 +219,7 @@ G.moveType = 10;
 quiet('observer move type shows nothing', () => (G.moveType = 2));
 panel.enabled = false;
 quiet('switched off in the customizer shows nothing', () => (panel.enabled = true));
-// the customizer's own record wins over the panel's flag (First Jump showed with its switch off, 2026-11-04)
+// the customizer's own record wins over the panel's flag
 GLOBAL.HudCustomizerHandler.components = { MovekitZoneExit: { enabled: false } };
 quiet('switched off in the customizer\'s record, panel flag on: nothing', () => (GLOBAL.HudCustomizerHandler.components.MovekitZoneExit.enabled = true));
 panel.enabled = false;

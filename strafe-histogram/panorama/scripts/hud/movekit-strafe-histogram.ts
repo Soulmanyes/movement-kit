@@ -301,10 +301,8 @@ function hide() {
 	if (panel && panel.IsValid()) panel.visible = false;
 }
 
-// Whether the HUD customizer has this panel switched on. Its own record (components[ID].enabled, what the
-// preset saves) is read first: the owner saw First Jump show with its switch off and saved (2026-11-04),
-// while the script read panel.enabled. The panel's flag is the fallback for a customizer that hasn't
-// taken the panel.
+// Whether the HUD customizer has this panel switched on: its own record (components[ID].enabled, what the
+// preset saves), else the panel's flag for a customizer that hasn't taken the panel.
 function switchedOn(): boolean {
 	const c = GLOBAL['HudCustomizerHandler']?.components?.[ID];
 	return c ? c.enabled !== false : getPanel().enabled;
