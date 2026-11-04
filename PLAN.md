@@ -504,6 +504,23 @@ The owner wants a check across all saved attempts: is the turn speed too slow or
 - **The verdict.** Low only in the high bands means the hand can't keep up, so sens or yawspeed is the fix. Low in every band means technique. The page says which, not just the numbers. Band edges and thresholds come from the owner's saved runs.
 - **Dropped in the same talk (2026-11-04).** Surf modules (landing quality, ramp smoothness, PB comparison by position, fail stats per stage, progress log, segment trainer: all either grade a style that has no single right way or repeat savelocs / KSF); weak-side finder (Strafe Review already shows it); key timing on every jump (the owner's offsets HUD has it, and more to watch next to JHUD is too much); a landing beep by gain band.
 
+## Phase 10: Zone Exit Speed, a surf HUD module (owner, 2026-11-04; built on branch `zone-exit`, not released)
+
+The owner wants to see how good a surf run's pre jump is: the speed leaving the start zone.
+
+- **Why a module.** Momentum's Zone Velocity speedometer would show it, but its handler (`hud/speedometer.ts` `onZoneChange`) is commented out in the game ("TODO: replace with updates based on new timer events"). The owner added one and saw nothing.
+- **Look (owner's picks).** One number, the 3D speed (x, y and z: "it should show xyz speed"), coloured in three bands like JHUD (amber below `speedLow`, green to `speedHigh`, blue above), and the difference to the comparison run's exit speed (normally the PB) in a faster or slower colour. Session best/average was offered and not picked. A HUD customizer component like the other HUD modules ("Zone Exit"), so it can be moved; surf only.
+- **10.1 Probe (2026-11-04, surf_aura).** `zone-exit/probe/` logged `ZXPROBE` lines. `--mounted` put the script into the already mounted `custom/movekit-jhud`, so no game restart was needed.
+  - `OnObservedTimerSegmentEffectiveStart` fires once on leaving the start zone, timer RUNNING, `majorNum` 1. The game's own scripts don't use it.
+  - The run's own `segments[0].effectiveStartVelocity` is still `[0, 0, 0]` at that event, so the module uses `MomentumPlayerAPI.GetVelocity()` then (a filled split wins).
+  - `RunComparisonsAPI.GetComparisonRun().runSplits.segments[0].effectiveStartVelocity` holds the comparison's exit velocity (`[327.4, -93.7, -250.0]`, 3D 422.5).
+  - Split velocities are `[x, y, z]` arrays; `GetVelocity()` is `{x, y, z}`.
+  - The start zone caps horizontal speed (`limitStartGroundSpeed`, about 340 u/s: exits 336-340 horizontal, 393-429 3D). So only the 3D number tells exits apart.
+  - Stage starts weren't tried; the module filters on `majorNum === 1`.
+- **10.2 Built.** `zone-exit/` (key `zone-exit`, tag `zone-exit-v*`, group hud, `HOOK_ORDER` 70, needs core 1.5.0), copied from JHUD's install, hooks and checks. Default bands 400 / 420 u/s from the probe; map dependent, set in the customizer. Checks: `node zone-exit/check_zone_exit.js` (with the probe's numbers; 4 of 4 mutations caught: no stage filter, a zero split used, another track's comparison, band edge) and `python zone-exit/check_zone_exit.py`; `movekit/check_modules.py` and `hud/check_hud.py` list it.
+- **10.3 In game (2026-11-04).** The owner: "looks good". `ZXCHECK` lines over ~20 exits: the run's own split stayed `[0, 0, 0]` (later NaN) for at least 0.5 s after the exit, so the shown speed is the player's velocity at the event. No run was finished, so whether that matches the tick the PB's split was taken at is not checked; the diff may be off by a few u/s. The temporary lines are removed.
+- **Switch fix (2026-11-04).** The owner unticked First Jump in the customizer (saved: `bhop_bhop.kv3` has `enabled = false`) and it still showed, in runs and as the customizer sample. All four HUD modules now read the customizer's own record (`HudCustomizerHandler.components[ID].enabled`, what the preset saves) before `panel.enabled`; First Jump and Zone Exit also hide or bring back the customizer sample when the switch changes. Not confirmed in game yet (no disagreement line was logged before release). Owner asked to release everything as is.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
