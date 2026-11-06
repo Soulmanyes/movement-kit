@@ -175,12 +175,12 @@ def check_launch(yawcore, game_dir):
     at_exit = []
     launch_win.atexit = types.SimpleNamespace(register=at_exit.append)
     ctx = types.SimpleNamespace(platform="win32", folder=SOURCEYAW)
-    before = threading.active_count()
     module_hooks.launch(ctx, [str(game_dir.parent / "cstrike_win64.exe"), "-steam"])
     cfg = (game_dir / "cfg" / "yaws.cfg").read_text()
     expect((cfg.startswith(yawcore.YAWS_HEADER), "yaws_colors" in cfg, "krosshair" in cfg.lower()),
            (True, False, False), "launch: yaws.cfg written, no colour")
-    expect(threading.active_count() > before, True, "launch: helper threads running")
+    # by name: a count would also see the last step's threads ending meanwhile
+    expect("sourceyaw-trainer" in [t.name for t in threading.enumerate()], True, "launch: trainer thread running")
     expect(len(at_exit), 1, "launch: exit step registered")
     time.sleep(1)
     timed("launch: exit step (helpers stopped)", at_exit[0], 6)
