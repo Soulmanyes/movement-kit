@@ -216,6 +216,7 @@ class Bridge:
         self._mlock = threading.Lock()
         self._busy = None  # what the manager is doing, shown on the Modules page
         self._last = {}    # the last auto update's results
+        self._auto_done = threading.Event()  # set once the start's auto update has run
         self._set(sections, problems)
 
     def _set(self, sections, problems):
@@ -248,6 +249,7 @@ class Bridge:
                     self._refresh()
             finally:
                 self._busy = None
+                self._auto_done.set()
 
     def modules(self, name, args=None):
         """The Modules page's calls: cards, check, install(key), update(key), update_all,
@@ -287,6 +289,27 @@ class Bridge:
             self._busy = None
             self._mlock.release()
         return {"ok": True, "result": self._cards()}
+
+    def whats_new(self):
+        """The release notes to show once after an update (Manager.whats_new); [] when there are
+        none or GitHub can't be read. Waits for the start's auto update, which may update too."""
+        if self._manager is None:
+            return []
+        self._auto_done.wait(timeout=120)
+        with self._mlock:
+            try:
+                return self._manager.whats_new()
+            except (OSError, ValueError):  # offline: the next start tries again
+                return []
+
+    def notes_seen(self, keys):
+        """The page showed these keys' notes: don't show them again."""
+        if self._manager is None or not isinstance(keys, list):
+            return False
+        with self._mlock:
+            known = {"core", *self._manager.installed()}  # "core": modules.CORE
+            self._manager.mark_seen([k for k in keys if k in known])
+        return True
 
     def _cards_safe(self):
         try:

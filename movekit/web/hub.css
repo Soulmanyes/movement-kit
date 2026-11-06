@@ -112,3 +112,23 @@ button.danger { border-color: var(--warn); color: var(--warn); }
 .mod-group { margin: 22px 0 10px; }
 .mod-unavailable { opacity: 0.5; }
 .mod-unavailable h2 { color: var(--muted); }
+
+/* "What's new" after an update (hub.js whatsNew) */
+dialog.hub-notes[open] {
+	background: var(--panel);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 18px 20px;
+	width: min(560px, 90vw);
+	max-height: 80vh;
+	display: flex;
+	flex-direction: column;
+}
+dialog.hub-notes::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog.hub-notes h2 { margin: 0 0 10px; }
+dialog.hub-notes h3 { margin: 14px 0 4px; font-size: 1em; color: var(--accent); }
+.hub-notes-body { overflow-y: auto; }
+.hub-notes-body p, .hub-notes-body ul { margin: 6px 0; line-height: 1.45; }
+.hub-notes-body code { background: var(--card); border-radius: 4px; padding: 0 4px; }
+.hub-notes-buttons { display: flex; justify-content: flex-end; margin-top: 14px; }

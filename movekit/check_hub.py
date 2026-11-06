@@ -157,8 +157,8 @@ def main():
             r = bridge.call(k, n)
             check(r["ok"] is False and text in r["error"], f"{k}.{n} refused: {r['error']}")
         public = [a for a in dir(bridge) if not a.startswith("_")]
-        check(sorted(public) == ["call", "modules", "sections"],
-              f"only call(), sections() and modules() are public: {public}")
+        check(sorted(public) == ["call", "modules", "notes_seen", "sections", "whats_new"],
+              f"only call(), sections(), modules(), whats_new() and notes_seen() are public: {public}")
         r = bridge.modules("cards")
         check(r == {"ok": False, "error": "no module manager"}, f"modules() with no manager: {r}")
 
