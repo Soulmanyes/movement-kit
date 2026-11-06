@@ -217,7 +217,8 @@ def check_hub(game_dir):
 def main():
     if sys.platform != "win32":
         sys.exit("check_windows.py is for Windows")
-    with tempfile.TemporaryDirectory() as tmp:
+    # run.log stays open (launch_win tees into it), which Windows won't delete
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
         os.environ["APPDATA"] = str(tmp / "appdata")
         os.environ["LOCALAPPDATA"] = str(tmp / "localappdata")
