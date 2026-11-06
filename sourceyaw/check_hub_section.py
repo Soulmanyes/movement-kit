@@ -237,8 +237,10 @@ def main():
             def hide(self):
                 shown.append("hidden")
 
-        trainer.Overlay = FakeOverlay
-        trainer.write_atlas = lambda cfg: shown.append(("atlas", cfg["size"]))
+        # trainer_linux's, as the hub loads it (by path, through trainer)
+        linux = trainer._sibling("trainer_linux")
+        linux.Overlay = FakeOverlay
+        linux.write_atlas = lambda cfg: shown.append(("atlas", cfg["size"]))
         tr = dict(st["trainer"], target=2, x=25, y=75, size=40)
         expect(call("show_in_game", on=True, game="css", trainer=tr), True, "show in game")
         expect(call("show_in_game", on=False, game="css", trainer=tr), False, "hide in game")

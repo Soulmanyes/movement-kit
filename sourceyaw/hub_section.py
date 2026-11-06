@@ -392,14 +392,16 @@ def play_cue(game, sound, tone_volume, pitch):
 def show_in_game(on, game, trainer):
     """Shows (or hides) a sample offset in a game started through movekit-run (Window.preview_overlay)."""
     global _overlay
-    t = _trainer()
+    if _core().WINDOWS:  # no offset overlay on Windows (the page hides the button)
+        return False
+    linux = _trainer()._sibling("trainer_linux")
     if _overlay is None:
-        _overlay = t.Overlay()
+        _overlay = linux.Overlay()
     if not on:
         _overlay.hide()
         return False
     cfg = _trainer_value(game, trainer)
-    t.write_atlas(cfg)
+    linux.write_atlas(cfg)
     target = cfg["target"]
     _overlay.show(f"{target:+d}" if target else "0", 1, cfg["x"], cfg["y"])
     return True
