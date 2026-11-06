@@ -396,29 +396,35 @@
 	// ------------------------------------------------------------ strafe trainer
 
 	const T = (name) => $("sy-t-" + name);
-	const NUMBERS = ["x", "y", "target", "size", "wrong_ticks", "repeat", "tone_pitch", "tone_volume"];
-	const SWITCHES = ["enabled", "show_offset", "cue_wrong_key", "cue_no_key"];
+	// each cue (trainer.CUES): its switch, then <cue>_sound, <cue>_pitch and <cue>_ticks
+	const CUES = { wrong: "cue_wrong_key", none: "cue_no_key", overlap: "cue_overlap" };
+	const NUMBERS = ["x", "y", "target", "size", "repeat", "tone_volume",
+		...Object.keys(CUES).flatMap((c) => [c + "_pitch", c + "_ticks"])];
+	const SWITCHES = ["enabled", "show_offset", ...Object.values(CUES)];
 
 	function trainerForm() {
 		const n = (name) => parseFloat(T(name).dataset.last);
-		const form = { offset_key: offsetKey, sound: T("sound").value,
+		const form = { offset_key: offsetKey,
 			colors: { early: T("early").value, perfect: T("perfect").value, late: T("late").value },
 			tickrate: st.trainer.tickrate === null ? null : n("tickrate") };
 		for (const name of NUMBERS) form[name] = n(name);
 		for (const name of SWITCHES) form[name] = T(name).checked;
+		for (const cue of Object.keys(CUES)) form[cue + "_sound"] = T(cue + "_sound").value;
 		return form;
 	}
 
 	let statusAsked = 0;
 	async function showTrainerStatus() {
-		document.querySelector(".sy-trainer").classList.toggle("off", !T("enabled").checked);
+		document.querySelectorAll(".sy-trainer").forEach((n) => n.classList.toggle("off", !T("enabled").checked));
 		const asked = ++statusAsked;
-		const s = await call("trainer_status", { game: st.game, sound: T("sound").value });
+		// the pitch only means something for the tone; the box keeps its place so the rows line up
+		const cues = Object.keys(CUES);
+		for (const cue of cues) {
+			document.querySelector(`[data-tone-of="${cue}"]`).classList.toggle("sy-gone", T(cue + "_sound").value !== "tone");
+		}
+		$("sy-repeat-field").classList.toggle("sy-gone", cues.every((c) => T(c + "_sound").value === "tone"));
+		const s = await call("trainer_status", { game: st.game });
 		if (asked !== statusAsked) return;
-		document.querySelectorAll("[data-tone]").forEach((n) => { n.hidden = !s.tone; });
-		document.querySelectorAll("[data-not-tone]").forEach((n) => { n.hidden = s.tone; });
-		$("sy-wrong-note").textContent = s.wrong_note;
-		$("sy-none-note").textContent = s.none_note;
 		$("sy-service").textContent = s.service;
 		$("sy-service-copy").hidden = s.installed;
 		$("sy-service-copy").dataset.command = s.command;
@@ -445,21 +451,25 @@
 			T(name).value = t.colors[name];
 			T(name).oninput = trainerChanged;
 		}
-		options(T("sound"), st.cue_sounds, t.sound);
-		T("sound").onchange = trainerChanged;
+		for (const cue of Object.keys(CUES)) {
+			options(T(cue + "_sound"), st.cue_sounds, t[cue + "_sound"]);
+			T(cue + "_sound").onchange = trainerChanged;
+		}
 		$("sy-tick-note").textContent = st.tickrate_note;
 		$("sy-tick-field").hidden = t.tickrate === null;
 		if (t.tickrate !== null) numberBox(T("tickrate"), t.tickrate, trainerChanged);
 	}
 
 	$("sy-service-copy").onclick = (ev) => copy(ev.target.dataset.command);
-	$("sy-cue-play").onclick = async () => {
-		const f = trainerForm();
-		if (!f.sound) return;
-		const ok = await call("play_cue", { game: st.game, sound: f.sound, tone_volume: f.tone_volume,
-			tone_pitch: f.tone_pitch });
-		if (!ok) toast(`Couldn't find ${f.sound} in your game files`, true);
-	};
+	document.querySelectorAll("[data-play]").forEach((b) => {
+		b.onclick = async () => {
+			const f = trainerForm();
+			const cue = b.dataset.play, sound = f[cue + "_sound"];
+			const ok = await call("play_cue", { game: st.game, sound, tone_volume: f.tone_volume,
+				pitch: f[cue + "_pitch"] });
+			if (!ok) toast(`Couldn't find ${sound} in your game files`, true);
+		};
+	});
 	$("sy-show-in-game").onclick = async (ev) => {
 		showing = !showing;
 		ev.target.setAttribute("aria-pressed", String(showing));

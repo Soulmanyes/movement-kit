@@ -22,8 +22,9 @@ from movekit.hub import local_import
 # the GTK window's spin buttons: (lowest, highest). Speeds keep 4 decimals, as the window saves them.
 LIMITS = {
     "speed": (1, 2000), "x": (0, 100), "y": (0, 100), "target": (-5, 5), "size": (10, 120),
-    "wrong_ticks": (1, 20), "repeat": (0, 1), "tone_volume": (5, 100), "tone_pitch": (60, 1000),
-    "tickrate": (16, 128),
+    "wrong_ticks": (1, 20), "repeat": (0, 1), "tone_volume": (5, 100), "tickrate": (16, 128),
+    **{f"{cue}_{name}": limit for cue in ("wrong", "none", "overlap")
+       for name, limit in (("ticks", (1, 20)), ("pitch", (60, 1000)))},
 }
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 PREVIEW_PX = 33  # the window's preview size; nearest-neighbour keeps the crosshair's pixels sharp
@@ -211,11 +212,20 @@ def _trainer_form(cfg, game):
     return {
         "enabled": cfg["enabled"], "show_offset": cfg["show_offset"], "offset_key": cfg["offset_key"],
         "x": round(cfg["x"] * 100, 4), "y": round(cfg["y"] * 100, 4), "size": cfg["size"], "colors": dict(cfg["colors"]),
-        "sound": cfg["sound"], "wrong_ticks": cfg["wrong_ticks"], "repeat": cfg["repeat"],
-        "tone_volume": round(cfg["tone_volume"] * 100, 4), "tone_pitch": cfg["tone_pitch"],
-        "cue_wrong_key": cfg["cue_wrong_key"], "cue_no_key": cfg["cue_no_key"], "target": cfg["target"],
+        "repeat": cfg["repeat"], "tone_volume": round(cfg["tone_volume"] * 100, 4), "target": cfg["target"],
+        **{key: cfg[key] for cue, switch in _trainer().CUES.items()
+           for key in (switch, f"{cue}_sound", f"{cue}_pitch", f"{cue}_ticks")},
         "tickrate": None if game == "momentum" else cfg["tickrate"].get(game, 66),
     }
+
+
+def _cue_sounds(sound_choices, cfg):
+    """The choices every cue's sound picker offers: the tone, the game's sounds, and any saved
+    sound this install doesn't have."""
+    choices = [("tone", "Constant tone"), *sound_choices]
+    for cue in _trainer().CUES:
+        choices = _with_kept(choices, cfg[f"{cue}_sound"])
+    return choices
 
 
 def _entries_form(entries):
@@ -268,9 +278,9 @@ def load(game=None):
         "mode_key": data["mode_key"], "auto_mode": data["auto_mode"],
         "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
-        "cue_sounds": _with_kept([("tone", "Constant tone"), *sound_choices], cfg["sound"]),
+        "cue_sounds": _cue_sounds(sound_choices, cfg),
         "trainer": trainer, "tickrate_note": tickrate_note,
-        "trainer_status": api.trainer_status(cstrike, cfg["sound"]),
+        "trainer_status": api.trainer_status(cstrike),
         "notes": key_notes(game, data["key"], trainer["offset_key"], data["mode_key"]),
         "krosshair": krosshair() if uses_krosshair else None,
         "launch": launch_option(game),
@@ -293,8 +303,8 @@ def set_game(game):
     return load(game)
 
 
-def trainer_status(game, sound):
-    return _api().trainer_status(_cstrike(game), sound)
+def trainer_status(game):
+    return _api().trainer_status(_cstrike(game))
 
 
 def new_entry(entries):
@@ -364,17 +374,16 @@ def play_sound(game, sound):
     return bool(cstrike and _core().play_sound(cstrike, sound, game))
 
 
-def play_cue(game, sound, tone_volume, tone_pitch):
-    """The trainer's wrong-key sound: both tones (other key, then no key), or the game sound."""
+def play_cue(game, sound, tone_volume, pitch):
+    """One trainer cue's sound: the tone at `pitch` Hz for 0.4 s, or the game sound."""
     if sound != "tone":
         return play_sound(game, sound)
     volume = _number({"v": tone_volume}, "v", *LIMITS["tone_volume"]) / 100
-    pitch = _number({"v": tone_pitch}, "v", *LIMITS["tone_pitch"])
-    tone = _trainer().Tone(volume, pitch)
+    hz = _number({"v": pitch}, "v", *LIMITS["wrong_pitch"])
+    tone = _trainer().Tone(volume, {"cue": hz})
     tone.start()
-    tone.mode = "wrong"
-    for delay, step in ((0.35, lambda: setattr(tone, "mode", "none")),
-                        (0.7, lambda: setattr(tone, "mode", None)), (0.9, tone.close)):
+    tone.mode = "cue"
+    for delay, step in ((0.4, lambda: setattr(tone, "mode", None)), (0.6, tone.close)):
         threading.Timer(delay, step).start()
     return True
 
@@ -403,14 +412,17 @@ def _trainer_value(game, form, saved=None):
     if saved is None:
         saved = _core().load_settings(game).get("trainer")
     clean = dict(form)
-    for name in ("x", "y", "size", "wrong_ticks", "repeat", "tone_volume", "tone_pitch", "target"):
+    cues = _trainer().CUES
+    for name in ("x", "y", "size", "repeat", "tone_volume", "target",
+                 *[f"{cue}_{n}" for cue in cues for n in ("ticks", "pitch")]):
         clean[name] = _number(form, name)
     clean["tickrate"] = None if game == "momentum" or form.get("tickrate") is None else _number(form, "tickrate")
     clean["colors"] = {k: _color(form["colors"][k], f"the {k} colour") for k in ("early", "perfect", "late")}
-    for name in ("enabled", "show_offset", "cue_wrong_key", "cue_no_key"):
+    for name in ("enabled", "show_offset", *cues.values()):
         clean[name] = bool(form[name])
+    for cue in cues:
+        clean[f"{cue}_sound"] = form.get(f"{cue}_sound") or "tone"
     clean["offset_key"] = form.get("offset_key") or ""
-    clean["sound"] = form.get("sound") or ""
     return api.trainer_value(api.trainer_config(saved), clean, game)
 
 

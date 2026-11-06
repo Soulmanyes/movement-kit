@@ -30,6 +30,9 @@ button:disabled:hover { border-color: var(--border); }
 .sy-desc { margin: -4px 0 8px; }
 .sy-group-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .sy-group-head h2 { margin-bottom: 2px; }
+.sy-group-head h3 { font-size: 14px; margin: 0 0 2px; }
+/* a sub-head inside a card: a divider above, the rows below it start without one */
+.sy-sub { border-top: 1px solid var(--border); padding-top: 12px; margin: 4px 0 0; }
 
 .sy-row {
 	display: flex;
@@ -38,13 +41,16 @@ button:disabled:hover { border-color: var(--border); }
 	padding: 9px 0;
 	border-top: 1px solid var(--border);
 }
-.card > h2 + .sy-row, .sy-group-head + .sy-row, .sy-desc + .sy-row { border-top: none; }
+.card > h2 + .sy-row, .sy-group-head + .sy-row, .sy-desc + .sy-row,
+.card > h2 + .sy-trainer > .sy-row:first-child { border-top: none; }
 .sy-label { flex: 1; min-width: 0; font-weight: 500; }
 .sy-label .muted { font-weight: normal; font-size: 13px; }
 .sy-label .muted.warn, .warn { color: var(--warn); }
 .sy-field { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .sy-field input[type="number"] { width: 78px; }
 .sy-trainer.off { opacity: 0.45; pointer-events: none; }
+/* hidden but keeping its place, so the cue rows' boxes line up */
+.sy-gone { visibility: hidden; }
 
 /* on/off switches: a visible track either way */
 .sy-switch {

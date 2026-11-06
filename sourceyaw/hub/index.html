@@ -22,7 +22,7 @@
 
 	<div id="sy-form" hidden>
 		<section class="card">
-			<h2>Game</h2>
+			<h2>Setup</h2>
 			<div id="sy-game-row" class="sy-row" hidden>
 				<div class="sy-label">Game<div class="muted">Each game has its own settings</div></div>
 				<div id="sy-games" class="sy-seg"></div>
@@ -32,10 +32,19 @@
 					your autoexec.cfg, so the game loads your yawspeed binds when it starts</div></label>
 				<input id="sy-autoexec" type="checkbox" class="sy-switch">
 			</div>
+			<div class="sy-row">
+				<div class="sy-label">Steam launch options<div id="sy-steam-note" class="muted"></div></div>
+				<button id="sy-launch-refresh" title="Read the launch options from Steam again">Refresh</button>
+			</div>
+			<div class="sy-row">
+				<code id="sy-launch" class="sy-launch"></code>
+				<button id="sy-launch-copy">Copy</button>
+			</div>
+			<div id="sy-launch-note" class="muted"></div>
 		</section>
 
 		<section class="card">
-			<h2>Keybind</h2>
+			<h2>Yaw cycle</h2>
 			<div class="sy-row">
 				<div class="sy-label">Cycle key<div id="sy-key-note" class="muted"></div></div>
 				<span id="sy-key" class="sy-key"></span>
@@ -51,11 +60,8 @@
 				<label class="sy-label" for="sy-auto">Auto by map prefix<div id="sy-auto-note" class="muted"></div></label>
 				<input id="sy-auto" type="checkbox" class="sy-switch">
 			</div>
-		</section>
-
-		<section class="card">
-			<div class="sy-group-head">
-				<div><h2>Yawspeeds</h2><div id="sy-entries-note" class="muted"></div></div>
+			<div class="sy-group-head sy-sub">
+				<div><h3>Yawspeeds</h3><div id="sy-entries-note" class="muted"></div></div>
 				<button id="sy-add" title="Add a yawspeed">+ Add</button>
 			</div>
 			<div class="sy-row">
@@ -92,8 +98,9 @@
 
 		<section class="card">
 			<h2>Strafe trainer</h2>
-			<div class="muted sy-desc">While a jump key is held: a sound when you turn without that way's strafe key,
-				and each strafe's offset on screen in ticks (minus: key early, plus: key late, 0: same tick).</div>
+			<div class="muted sy-desc">While a jump key is held: sounds when you turn without that way's strafe key
+				or hold both strafe keys, and each strafe's offset on screen in ticks (minus: key early, plus: key late,
+				0: same tick).</div>
 			<div class="sy-row">
 				<label class="sy-label" for="sy-t-enabled">Strafe trainer</label>
 				<input id="sy-t-enabled" type="checkbox" class="sy-switch">
@@ -103,80 +110,96 @@
 				<button id="sy-service-copy" title="Copy the install command">Copy command</button>
 			</div>
 			<div class="sy-trainer">
-				<div class="sy-row">
-					<div class="sy-label">Keys<div id="sy-binds" class="muted"></div></div>
-				</div>
-				<div class="sy-row">
-					<label class="sy-label" for="sy-t-show_offset">Show offset</label>
-					<input id="sy-t-show_offset" type="checkbox" class="sy-switch">
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Offset key<div id="sy-offset-note" class="muted"></div></div>
-					<span id="sy-offset-key" class="sy-key"></span>
-					<button id="sy-offset-change">Change…</button>
-					<button id="sy-offset-clear" title="No offset key">Clear</button>
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Position<div class="muted">Centre of the number, % across and down the screen</div></div>
-					<label class="sy-field">Across <input id="sy-t-x" type="number" step="1" data-limit="x"></label>
-					<label class="sy-field">Down <input id="sy-t-y" type="number" step="1" data-limit="y"></label>
-					<button id="sy-show-in-game" class="sy-toggle" aria-pressed="false"
-						title="Shows a sample number in the running game while you adjust it">Show in game</button>
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Best offset<div class="muted">Shown in the on-time colour; lower is early, higher late</div></div>
-					<label class="sy-field">Ticks <input id="sy-t-target" type="number" step="1" data-limit="target"></label>
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Size and colours<div class="muted">Early, on time and late</div></div>
-					<label class="sy-field">Size <input id="sy-t-size" type="number" step="2" data-limit="size"></label>
-					<input id="sy-t-early" type="color" title="Early">
-					<input id="sy-t-perfect" type="color" title="On time">
-					<input id="sy-t-late" type="color" title="Late">
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Wrong-key sound<div class="muted">After this many ticks turning without the matching
-						key. The tone lasts while the key is wrong; a game sound repeats every this many seconds (0: once)</div></div>
-					<label class="sy-field">Ticks <input id="sy-t-wrong_ticks" type="number" step="1" data-limit="wrong_ticks"></label>
-					<label class="sy-field" data-not-tone>Seconds <input id="sy-t-repeat" type="number" step="0.05" data-limit="repeat"></label>
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Sound<div class="muted">Tone pitch and volume, or a game sound</div></div>
-					<select id="sy-t-sound" class="sy-sound"></select>
-					<label class="sy-field" data-tone title="Tone pitch in Hz (other key; the no-key tone is 2/3 of it)">Hz
-						<input id="sy-t-tone_pitch" type="number" step="10" data-limit="tone_pitch"></label>
-					<label class="sy-field" data-tone>Volume %
-						<input id="sy-t-tone_volume" type="number" step="5" data-limit="tone_volume"></label>
-					<button id="sy-cue-play" title="Play">▶</button>
-				</div>
-				<div class="sy-row">
-					<label class="sy-label" for="sy-t-cue_wrong_key">Sound when turning with the other strafe key
-						<div id="sy-wrong-note" class="muted"></div></label>
-					<input id="sy-t-cue_wrong_key" type="checkbox" class="sy-switch">
-				</div>
-				<div class="sy-row">
-					<label class="sy-label" for="sy-t-cue_no_key">Sound when turning with no strafe key
-						<div id="sy-none-note" class="muted"></div></label>
-					<input id="sy-t-cue_no_key" type="checkbox" class="sy-switch">
-				</div>
-				<div class="sy-row">
-					<div class="sy-label">Tickrate<div id="sy-tick-note" class="muted"></div></div>
-					<label class="sy-field" id="sy-tick-field">Ticks per second
-						<input id="sy-t-tickrate" type="number" step="1" data-limit="tickrate"></label>
-				</div>
+			<div class="sy-row">
+				<div class="sy-label">Keys<div id="sy-binds" class="muted"></div></div>
+			</div>
+			<div class="sy-row">
+				<div class="sy-label">Tickrate<div id="sy-tick-note" class="muted"></div></div>
+				<label class="sy-field" id="sy-tick-field">Ticks per second
+					<input id="sy-t-tickrate" type="number" step="1" data-limit="tickrate"></label>
+			</div>
 			</div>
 		</section>
 
 		<section class="card">
-			<div class="sy-group-head">
-				<div><h2>Steam launch options</h2><div id="sy-steam-note" class="muted"></div></div>
-				<button id="sy-launch-refresh" title="Read the launch options from Steam again">Refresh</button>
+			<h2>Offset display</h2>
+			<div class="sy-trainer">
+			<div class="sy-row">
+				<label class="sy-label" for="sy-t-show_offset">Show offset</label>
+				<input id="sy-t-show_offset" type="checkbox" class="sy-switch">
 			</div>
 			<div class="sy-row">
-				<code id="sy-launch" class="sy-launch"></code>
-				<button id="sy-launch-copy">Copy</button>
+				<div class="sy-label">Offset key<div id="sy-offset-note" class="muted"></div></div>
+				<span id="sy-offset-key" class="sy-key"></span>
+				<button id="sy-offset-change">Change…</button>
+				<button id="sy-offset-clear" title="No offset key">Clear</button>
 			</div>
-			<div id="sy-launch-note" class="muted"></div>
+			<div class="sy-row">
+				<div class="sy-label">Position<div class="muted">Centre of the number, % across and down the screen</div></div>
+				<label class="sy-field">Across <input id="sy-t-x" type="number" step="1" data-limit="x"></label>
+				<label class="sy-field">Down <input id="sy-t-y" type="number" step="1" data-limit="y"></label>
+				<button id="sy-show-in-game" class="sy-toggle" aria-pressed="false"
+					title="Shows a sample number in the running game while you adjust it">Show in game</button>
+			</div>
+			<div class="sy-row">
+				<div class="sy-label">Best offset<div class="muted">Shown in the on-time colour; lower is early, higher late</div></div>
+				<label class="sy-field">Ticks <input id="sy-t-target" type="number" step="1" data-limit="target"></label>
+			</div>
+			<div class="sy-row">
+				<div class="sy-label">Size and colours<div class="muted">Early, on time and late</div></div>
+				<label class="sy-field">Size <input id="sy-t-size" type="number" step="2" data-limit="size"></label>
+				<input id="sy-t-early" type="color" title="Early">
+				<input id="sy-t-perfect" type="color" title="On time">
+				<input id="sy-t-late" type="color" title="Late">
+			</div>
+			</div>
+		</section>
+
+		<section class="card">
+			<h2>Trainer sounds</h2>
+			<div class="muted sy-desc">Each mistake has its own sound: a constant tone that lasts while the mistake does,
+				or a game sound. Pitch (Hz): the tone's note, lower number = lower note. Wait (ticks): how long the
+				mistake must last before it sounds; one tick is 1/66 s or 1/100 s, so a higher wait lets short slips go.</div>
+			<div class="sy-trainer">
+				<div class="sy-row">
+					<div class="sy-label">Volume and repeat<div class="muted">Tone volume. A game sound plays again every
+						this many seconds while the mistake lasts (0: once)</div></div>
+					<label class="sy-field">Volume %
+						<input id="sy-t-tone_volume" type="number" step="5" data-limit="tone_volume"></label>
+					<label class="sy-field" id="sy-repeat-field">Repeat (s)
+						<input id="sy-t-repeat" type="number" step="0.05" data-limit="repeat"></label>
+				</div>
+				<div class="sy-row sy-cue">
+					<label class="sy-label" for="sy-t-cue_wrong_key">Turning with the other strafe key</label>
+					<select id="sy-t-wrong_sound" class="sy-sound" data-cue="wrong"></select>
+					<label class="sy-field" data-tone-of="wrong">Pitch (Hz)
+						<input id="sy-t-wrong_pitch" type="number" step="10" data-limit="wrong_pitch"></label>
+					<label class="sy-field">Wait (ticks)
+						<input id="sy-t-wrong_ticks" type="number" step="1" data-limit="wrong_ticks"></label>
+					<button data-play="wrong" title="Play">▶</button>
+					<input id="sy-t-cue_wrong_key" type="checkbox" class="sy-switch">
+				</div>
+				<div class="sy-row sy-cue">
+					<label class="sy-label" for="sy-t-cue_no_key">Turning with no strafe key</label>
+					<select id="sy-t-none_sound" class="sy-sound" data-cue="none"></select>
+					<label class="sy-field" data-tone-of="none">Pitch (Hz)
+						<input id="sy-t-none_pitch" type="number" step="10" data-limit="none_pitch"></label>
+					<label class="sy-field">Wait (ticks)
+						<input id="sy-t-none_ticks" type="number" step="1" data-limit="none_ticks"></label>
+					<button data-play="none" title="Play">▶</button>
+					<input id="sy-t-cue_no_key" type="checkbox" class="sy-switch">
+				</div>
+				<div class="sy-row sy-cue">
+					<label class="sy-label" for="sy-t-cue_overlap">Both strafe keys held</label>
+					<select id="sy-t-overlap_sound" class="sy-sound" data-cue="overlap"></select>
+					<label class="sy-field" data-tone-of="overlap">Pitch (Hz)
+						<input id="sy-t-overlap_pitch" type="number" step="10" data-limit="overlap_pitch"></label>
+					<label class="sy-field">Wait (ticks)
+						<input id="sy-t-overlap_ticks" type="number" step="1" data-limit="overlap_ticks"></label>
+					<button data-play="overlap" title="Play">▶</button>
+					<input id="sy-t-cue_overlap" type="checkbox" class="sy-switch">
+				</div>
+			</div>
 		</section>
 	</div>
 </main>

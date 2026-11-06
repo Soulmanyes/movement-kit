@@ -6,8 +6,8 @@ Usage: python sourceyaw/check_settings_api.py   (exits 1 on the first failure)
 Covers, loaded the hub's way (hub.local_import, sourceyaw/ not on sys.path): setup_problem (found,
 not found, Flatpak-only), base_options (with and without crosshair-maker, a custom image),
 trainer_config (defaults, colours and tickrate merged per key), trainer_value (unit conversion and
-rounding, tickrate kept where the map sets it), trainer_status (tone or game sound, input service
-installed or not, binds the service doesn't forward), collect feeding yawcore.validate; no bare
+rounding, tickrate kept where the map sets it, per-cue sounds and the old shared keys kept for a roll
+back; settings from before per-cue sounds migrated), trainer_status (input service installed or not, binds the service doesn't forward), collect feeding yawcore.validate; no bare
 yawcore or trainer left behind, trainer using the same yawcore, and local_import returning the
 same modules. Then, in a child process the
 app's way (sourceyaw/ on sys.path, settings_api imported first): the plain yawcore and trainer
@@ -35,9 +35,10 @@ def expect(got, want, what):
 
 FORM = {"enabled": True, "show_offset": False, "offset_key": "o", "x": 33.0, "y": 57.12345,
         "size": 40.0, "colors": {"early": "#112233", "perfect": "#445566", "late": "#778899"},
-        "sound": "tone", "wrong_ticks": 4.0, "repeat": 0.354, "tone_volume": 45.0,
-        "tone_pitch": 330.0, "cue_wrong_key": True, "cue_no_key": False, "target": -2.0,
-        "tickrate": 85.0}
+        "repeat": 0.354, "tone_volume": 45.0, "target": -2.0, "tickrate": 85.0,
+        "cue_wrong_key": True, "wrong_sound": "tone", "wrong_pitch": 330.0, "wrong_ticks": 4.0,
+        "cue_no_key": False, "none_sound": "buttons/blip1.wav", "none_pitch": 200.0, "none_ticks": 5.0,
+        "cue_overlap": False, "overlap_sound": "tone", "overlap_pitch": 130.0, "overlap_ticks": 2.0}
 
 APP_WAY = f"""
 import sys
@@ -102,11 +103,30 @@ def main():
         expect(cfg["x"], 0.4, "saved value kept")
         expect(api.trainer_config(None), trainer.TRAINER_DEFAULTS, "config with nothing saved")
         value = api.trainer_value(cfg, FORM, "css")
-        expect({k: value[k] for k in ("x", "y", "size", "wrong_ticks", "repeat", "tone_volume",
-                                      "tone_pitch", "target", "tickrate")},
-               {"x": 0.33, "y": 0.571, "size": 40, "wrong_ticks": 4, "repeat": 0.35, "tone_volume": 0.45,
-                "tone_pitch": 330, "target": -2, "tickrate": {"css": 85, "momentum": 100}},
+        expect({k: value[k] for k in ("x", "y", "size", "repeat", "tone_volume", "target", "tickrate")},
+               {"x": 0.33, "y": 0.571, "size": 40, "repeat": 0.35, "tone_volume": 0.45,
+                "target": -2, "tickrate": {"css": 85, "momentum": 100}},
                "trainer value converted")
+        expect({k: value[k] for c in ("wrong", "none", "overlap") for k in value if k.startswith(c + "_")},
+               {"wrong_sound": "tone", "wrong_pitch": 330, "wrong_ticks": 4,
+                "none_sound": "buttons/blip1.wav", "none_pitch": 200, "none_ticks": 5,
+                "overlap_sound": "tone", "overlap_pitch": 130, "overlap_ticks": 2}, "per-cue values")
+        expect((value["cue_wrong_key"], value["cue_no_key"], value["cue_overlap"]), (True, False, False),
+               "cue switches")
+        expect((value["sound"], value["tone_pitch"]), ("tone", 330), "old shared keys for a roll back")
+        # saved by 1.9.0: one sound and pitch for both wrong-key cues, the no-key tone at 2/3
+        old = api.trainer_config({"sound": "buttons/blip2.wav", "tone_pitch": 300, "wrong_ticks": 5})
+        expect({k: old[k] for k in ("wrong_sound", "none_sound", "wrong_pitch", "none_pitch",
+                                    "wrong_ticks", "none_ticks", "overlap_sound", "cue_wrong_key")},
+               {"wrong_sound": "buttons/blip2.wav", "none_sound": "buttons/blip2.wav", "wrong_pitch": 300,
+                "none_pitch": 200, "wrong_ticks": 5, "none_ticks": 5, "overlap_sound": "tone",
+                "cue_wrong_key": True}, "1.9.0 settings migrated")
+        silent = api.trainer_config({"sound": ""})
+        expect((silent["cue_wrong_key"], silent["cue_no_key"], silent["wrong_sound"], silent["cue_overlap"]),
+               (False, False, "tone", True), "1.9.0 'no sound' turns both wrong-key cues off")
+        again = api.trainer_config(value)
+        expect((again["none_sound"], again["none_pitch"]), ("buttons/blip1.wav", 200),
+               "per-cue values win over the old shared keys")
         expect(value["hide_after"], trainer.TRAINER_DEFAULTS["hide_after"], "fields without a control kept")
         mom = api.trainer_value(cfg, {**FORM, "tickrate": None}, "momentum")
         expect(mom["tickrate"], {"css": 70, "momentum": 100}, "tickrate kept where the map sets it")
@@ -119,18 +139,16 @@ def main():
         (game / "cfg/config.cfg").write_text('bind "space" "+jump"\nbind "a" "+moveleft"\n'
                                              'bind "mouse4" "+left"\n')
         trainer.INPUTD_CONFIG = str(tmp / "inputd.conf")
-        st = api.trainer_status(None, "buttons/blip1.wav")
-        expect((st["tone"], st["wrong_note"], st["installed"], st["binds"]), (False, "", False, None),
-               "status with a game sound, no service, no game")
+        st = api.trainer_status(None)
+        expect((st["installed"], st["binds"]), (False, None), "status with no service, no game")
         expect(st["service"].endswith(api.inputd_command()), True, "install command in the note")
         Path(trainer.INPUTD_CONFIG).write_text("keys = KEY_SPACE KEY_A\n")
-        st = api.trainer_status(game, "tone")
-        expect((st["tone"], st["wrong_note"], st["none_note"], st["installed"]),
-               (True, "Higher tone", "Lower tone", True), "status with the tone and the service")
+        st = api.trainer_status(game)
+        expect(st["installed"], True, "status with the service")
         expect(st["binds"], "⚠ Not forwarded by the input service: mouse4 (turn left). "
                             "Add them to /etc/sourceyaw-inputd.conf", "unforwarded binds")
         Path(trainer.INPUTD_CONFIG).write_text("keys = KEY_SPACE KEY_A BTN_SIDE\n")
-        expect(api.trainer_status(game, "tone")["binds"],
+        expect(api.trainer_status(game)["binds"],
                "Strafe, turn and jump keys come from your binds in the game", "all binds forwarded")
         json.dumps(st)
 

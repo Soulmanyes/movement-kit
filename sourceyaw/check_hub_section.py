@@ -109,7 +109,7 @@ def main():
         expect(st["sounds"][0], ["", "None"], "first sound choice")
         expect(st["cue_sounds"][0], ["tone", "Constant tone"], "first cue choice")
         expect(st["launch"]["note"].startswith("Couldn't read your Steam launch options"), True, "launch note")
-        call("trainer_status", game="css", sound="tone")  # loads trainer.py, which imports yawcore by name
+        call("trainer_status", game="css")  # loads trainer.py, which imports yawcore by name
         expect([m for m in BARE if m in sys.modules], [], "bare modules after loading the trainer")
         mom = call("load", game="momentum")
         expect((mom["uses_krosshair"], mom["krosshair"], mom["trainer"]["tickrate"]), (False, None, None),
@@ -158,13 +158,17 @@ def main():
 
         f = form_of(st)
         f["entries"][0]["speed"] = 5000
-        f["trainer"].update(x=-5, y=250, size=1, wrong_ticks=99, repeat=3, tone_volume=0, tone_pitch=5000,
-                            target=-9, tickrate=500)
+        f["trainer"].update(x=-5, y=250, size=1, wrong_ticks=99, repeat=3, tone_volume=0, wrong_pitch=5000,
+                            none_ticks=50, none_pitch=1, overlap_ticks=0, overlap_pitch=9, target=-9,
+                            tickrate=500, none_sound="")
         got = call("settings", game="css", form=f)
         t = got["trainer"]
         expect(got["entries"][0]["speed"], 2000, "speed clamped")
-        expect((t["x"], t["y"], t["size"], t["wrong_ticks"], t["repeat"], t["tone_volume"], t["tone_pitch"],
-                t["target"], t["tickrate"]["css"]), (0, 1, 10, 20, 1, 0.05, 1000, -5, 128), "trainer clamped")
+        expect((t["x"], t["y"], t["size"], t["wrong_ticks"], t["repeat"], t["tone_volume"], t["wrong_pitch"],
+                t["none_ticks"], t["none_pitch"], t["overlap_ticks"], t["overlap_pitch"], t["target"],
+                t["tickrate"]["css"]),
+               (0, 1, 10, 20, 1, 0.05, 1000, 20, 60, 1, 60, -5, 128), "trainer clamped")
+        expect(t["none_sound"], "tone", "an empty cue sound becomes the tone")
         f = form_of(st)
         f["entries"][1]["speed"] = None
         expect(call("apply", game="css", form=f), {"saved": False, "messages": ["speed needs a number"]},
@@ -197,9 +201,9 @@ def main():
         tones = []
 
         class FakeTone:
-            def __init__(self, volume, pitch):
+            def __init__(self, volume, pitches):
                 self.modes, self.closed = [], False
-                tones.append(((volume, pitch), self))
+                tones.append(((volume, pitches), self))
 
             def start(self):
                 pass
@@ -213,10 +217,14 @@ def main():
                 self.closed = True
 
         trainer.Tone = FakeTone
-        expect(call("play_cue", game="css", sound="tone", tone_volume=45, tone_pitch=330), True, "play the tone")
-        time.sleep(1.1)
+        expect(call("play_cue", game="css", sound="tone", tone_volume=45, pitch=330), True, "play the tone")
+        time.sleep(0.8)
         (args, tone), = tones
-        expect((args, tone.modes, tone.closed), ((0.45, 330), ["wrong", "none", None], True), "tone sequence")
+        expect((args, tone.modes, tone.closed), ((0.45, {"cue": 330}), ["cue", None], True), "tone played")
+        tones.clear()
+        expect(call("play_cue", game="css", sound="tone", tone_volume=45, pitch=5), True, "pitch clamped")
+        time.sleep(0.8)
+        expect(tones[0][0], (0.45, {"cue": 60}), "pitch clamped to 60")
         shown = []
 
         class FakeOverlay:

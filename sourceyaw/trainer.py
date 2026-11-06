@@ -4,7 +4,8 @@
 Reads the strafe, turn and jump keys plus mouse movement from the Source Yaw
 input service (/run/sourceyaw-inputd.sock), and while a jump key is held:
   - plays a sound when you turn one way for a few ticks without holding that
-    way's strafe key (no key, or the other one),
+    way's strafe key (no key, or the other one), and one when both strafe
+    keys are held at once,
   - works out each strafe's offset: the ticks between turning the other way
     and switching strafe keys. Negative means the key came early, positive
     late, 0 on the same tick. The number is drawn over the game by the Source
@@ -87,13 +88,13 @@ ROLES = {"+jump": "jump", "+moveleft": "strafe_left", "+moveright": "strafe_righ
 
 TRAINER_DEFAULTS = {
     "enabled": False,
-    "sound": "tone",               # wrong-key cue: "tone", a game sound, or "" for none
     "tone_volume": 0.3,            # 0-1, for the constant tone
-    "tone_pitch": 220,             # Hz of the other-key tone; the no-key tone is 2/3 of it
-    "cue_wrong_key": True,         # cue when turning with the other strafe key held
-    "cue_no_key": True,            # cue when turning with no strafe key held
-    "wrong_ticks": 3,              # ticks of wrong (or no) key before the cue
     "repeat": 0.2,                 # game sound: seconds between plays while wrong; 0 = once
+    # the cues (CUES): on/off, sound ("tone" or a game sound), the tone's Hz, and the
+    # ticks the mistake must last before it sounds
+    "cue_wrong_key": True, "wrong_sound": "tone", "wrong_pitch": 220, "wrong_ticks": 3,
+    "cue_no_key": True, "none_sound": "tone", "none_pitch": 147, "none_ticks": 3,
+    "cue_overlap": True, "overlap_sound": "tone", "overlap_pitch": 110, "overlap_ticks": 1,
     "target": -1,                  # the offset counted as best (shown green)
     "show_offset": True,           # at launch; offset_key flips it in game
     "offset_key": "",              # key bound in yaws.cfg to show or hide the offset
@@ -109,8 +110,31 @@ TRAINER_DEFAULTS = {
 }
 
 
+# cue -> its on/off setting: "wrong" turning with the other strafe key held, "none" turning with
+# no strafe key held, "overlap" both strafe keys held. Its other settings are <cue>_sound,
+# <cue>_pitch and <cue>_ticks.
+CUES = {"wrong": "cue_wrong_key", "none": "cue_no_key", "overlap": "cue_overlap"}
+
+
+def migrate(saved):
+    """Trainer settings saved before each cue had its own sound (1.9.0 and older: one `sound` and
+    `tone_pitch` for both wrong-key cues, the no-key tone at 2/3 of that pitch, one `wrong_ticks`)
+    in today's keys. The old keys stay, so a rolled-back version still reads them."""
+    saved = dict(saved or {})
+    if "wrong_sound" not in saved and "sound" in saved:
+        if not saved["sound"]:  # "" played nothing
+            saved["cue_wrong_key"] = saved["cue_no_key"] = False
+        saved["wrong_sound"] = saved["none_sound"] = saved["sound"] or "tone"
+    if "wrong_pitch" not in saved and "tone_pitch" in saved:
+        saved["wrong_pitch"] = int(saved["tone_pitch"])
+        saved["none_pitch"] = max(40, round(int(saved["tone_pitch"]) * 2 / 3))
+    if "none_ticks" not in saved and "wrong_ticks" in saved:
+        saved["none_ticks"] = saved["wrong_ticks"]
+    return saved
+
+
 def settings(game):
-    data = yawcore.load_settings(game).get("trainer") or {}
+    data = migrate(yawcore.load_settings(game).get("trainer"))
     merged = {**TRAINER_DEFAULTS, **data}
     merged["colors"] = {**TRAINER_DEFAULTS["colors"], **data.get("colors", {})}
     return merged
@@ -193,8 +217,7 @@ class Overlay:
 
 class Tone:
     """A tone that sounds while `mode` is set, streamed to PipeWire through pw-cat.
-    Each mode has its own pitch: "wrong" (other strafe key held) is `pitch`,
-    "none" (no strafe key held) a fifth lower.
+    `pitches` maps each mode (a cue: "wrong", "none", "overlap") to its Hz.
 
     Audio is written in 5 ms chunks paced by the clock, keeping only LEAD
     seconds queued, so switching it on or off is heard within ~20 ms (a plain
@@ -205,7 +228,7 @@ class Tone:
     CHUNK = 240     # 5 ms
     LEAD = 0.015
 
-    def __init__(self, volume, pitch=220):
+    def __init__(self, volume, pitches):
         self.mode = None
         self.proc = None
         player = shutil.which("pw-cat")
@@ -220,7 +243,7 @@ class Tone:
         except OSError:
             pass
         amp = 32767 * max(0.0, min(1.0, volume))
-        pitches = {"wrong": max(40, int(pitch)), "none": max(40, round(int(pitch) * 2 / 3))}
+        pitches = {mode: max(40, int(hz)) for mode, hz in pitches.items()}
         self.silence = bytes(2 * self.CHUNK)
         # per mode: the loop of chunks (whole cycles overall) as float samples
         self.loops = {}
@@ -283,13 +306,35 @@ class Tone:
             self.proc.kill()
 
 
+class CueSounds:
+    """Each cue's own sound: cues set to "tone" share one Tone (a mode per cue, at the cue's pitch),
+    the rest play their game sound through `play` on every cue (Trainer's on_wrong)."""
+
+    def __init__(self, cfg, play, tone_class=None):
+        self.cfg, self.play = cfg, play
+        self.pitches = {cue: cfg[f"{cue}_pitch"] for cue in CUES if cfg[f"{cue}_sound"] == "tone"}
+        self.tone = (tone_class or Tone)(cfg["tone_volume"], self.pitches) if self.pitches else None
+        if self.tone:
+            self.tone.start()
+
+    def state(self, reason):
+        """Trainer's on_wrong_state: the cue now sounding, or None."""
+        if self.tone:
+            self.tone.mode = reason if reason in self.pitches else None
+
+    def cue(self, reason):
+        sound = self.cfg.get(f"{reason}_sound")
+        if sound and sound != "tone":
+            self.play(sound)
+
+
 # ---------------------------------------------------------------- the trainer
 
 class Trainer:
     def __init__(self, cfg, roles, tickrate, on_offset, on_wrong, on_wrong_state=None):
         self.cfg = cfg
         self.on_wrong_state = on_wrong_state
-        self.wrong_active = None   # None, "wrong" or "none"
+        self.wrong_active = None   # None, "wrong", "none" or "overlap"
         self.roles = roles
         self.tickrate = tickrate
         self.on_offset = on_offset
@@ -305,6 +350,7 @@ class Trainer:
         self.last_motion = 0.0
         self.pending = None        # (turn time, direction) waiting for its key switch
         self.wrong_since = None
+        self.overlap_since = None
         self.last_cue = None
 
     def has(self, role, code):
@@ -329,6 +375,11 @@ class Trainer:
                 if code in self.roles[role] and t > when:
                     best, when = d, t
         return best
+
+    def _overlapping(self):
+        """Both strafe keys held at once."""
+        return (any(c in self.roles["strafe_left"] for c in self.held)
+                and any(c in self.roles["strafe_right"] for c in self.held))
 
     def _button_turn(self):
         best, when = 0, -1.0
@@ -366,6 +417,11 @@ class Trainer:
                 self.held[code] = t
             else:
                 self.held.pop(code, None)
+            # the overlap counts from the key press that made it
+            if not self._overlapping():
+                self.overlap_since = None
+            elif self.overlap_since is None:
+                self.overlap_since = t
             new = self._strafe()
             if new != self.strafe_dir:
                 self.strafe_dir = new
@@ -408,9 +464,15 @@ class Trainer:
                 self.on_wrong_state(reason)
 
     def check(self, now):
-        """Wrong-key cue; called often between events."""
+        """Wrong-key and overlap cues; called often between events."""
         if self.pending and now - self.pending[0] > self.cfg["window"]:
             self.pending = None
+        # an overlap outranks a wrong-key turn: it is the cause of it
+        if (self.cfg["cue_overlap"] and self.overlap_since is not None and self.jumping(now)
+                and now - self.overlap_since >= self.cfg["overlap_ticks"] / self.tickrate):
+            self._cue("overlap", now)
+            self.wrong_since = None  # a wrong-key turn waits its ticks again after the overlap
+            return
         turning = self._button_turn() or (self.mouse_dir if now - self.last_motion < 0.03 else 0)
         reason = None
         if turning and self.jumping(now) and self.strafe_dir != turning:
@@ -423,11 +485,16 @@ class Trainer:
             return
         if self.wrong_since is None:
             self.wrong_since = now
-        if now - self.wrong_since < self.cfg["wrong_ticks"] / self.tickrate:
+        if now - self.wrong_since < self.cfg[f"{reason}_ticks"] / self.tickrate:
+            if self.wrong_active == "overlap":  # the overlap ended; the turn isn't wrong for long enough yet
+                self._wrong_state(None)
             return
+        self._cue(reason, now)
+
+    def _cue(self, reason, now):
         self._wrong_state(reason)
-        # first cue once it has lasted wrong_ticks, then every `repeat` seconds
-        # for as long as it stays wrong
+        # first cue once it has lasted <reason>_ticks, then every `repeat`
+        # seconds for as long as it stays wrong
         repeat = self.cfg["repeat"]
         if self.last_cue is None or (repeat > 0 and now - self.last_cue >= repeat):
             self.last_cue = now
@@ -558,19 +625,9 @@ def run(game):
         overlay.show(f"{ticks:+d}" if ticks else "0", row, cfg["x"], cfg["y"])
         shown_until = time.monotonic() + cfg["hide_after"]
 
-    tone = Tone(cfg["tone_volume"], cfg["tone_pitch"]) if cfg["sound"] == "tone" else None
-    if tone:
-        tone.start()
-
-    def wrong():
-        if cfg["sound"] and not tone:
-            yawcore.play_sound(game_dir, cfg["sound"], game)
-
-    def wrong_state(reason):
-        if tone:
-            tone.mode = reason
-
-    trainer = Trainer(cfg, roles, game_events.tickrate, offset, wrong, wrong_state)
+    sounds = CueSounds(cfg, lambda sound: yawcore.play_sound(game_dir, sound, game))
+    trainer = Trainer(cfg, roles, game_events.tickrate, offset,
+                      lambda: sounds.cue(trainer.wrong_active), sounds.state)
     focus = FocusWatch(yawcore.GAMES[game]["process"])
     # map loads and the offsets toggle come from the movekit session (after the input service
     # check above, so a trainer that gives up never holds the session's port)

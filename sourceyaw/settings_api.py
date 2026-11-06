@@ -96,9 +96,11 @@ def base_options(base_choice):
 
 def trainer_config(saved):
     """The trainer settings the window starts from: the saved "trainer" dict over the defaults.
-    Unlike trainer.settings(), this also merges "tickrate" per game."""
-    defaults = _trainer_module().TRAINER_DEFAULTS
-    saved = saved or {}
+    Unlike trainer.settings(), this also merges "tickrate" per game. Settings saved before each cue
+    had its own sound come through trainer.migrate."""
+    trainer = _trainer_module()
+    defaults = trainer.TRAINER_DEFAULTS
+    saved = trainer.migrate(saved)
     cfg = {**defaults, **saved}
     cfg["colors"] = {**defaults["colors"], **saved.get("colors", {})}
     cfg["tickrate"] = {**defaults["tickrate"], **saved.get("tickrate", {})}
@@ -109,9 +111,12 @@ def trainer_value(cfg, form, game):
     """The trainer dict to save: `cfg` (from trainer_config) with the form's values on top.
 
     `form` holds what the window shows, in its units: enabled, show_offset, offset_key,
-    x and y (percent), size, colors {early, perfect, late}, sound, wrong_ticks, repeat,
-    tone_volume (percent), tone_pitch, cue_wrong_key, cue_no_key, target, and tickrate
-    (ticks per second for `game`, or None where the map sets it, as on Momentum)."""
+    x and y (percent), size, colors {early, perfect, late}, repeat, tone_volume (percent), target,
+    tickrate (ticks per second for `game`, or None where the map sets it, as on Momentum), and per
+    cue (trainer.CUES) its switch plus <cue>_sound, <cue>_pitch and <cue>_ticks.
+    The other-key cue's sound and pitch are also saved as the old shared `sound` and `tone_pitch`,
+    so a rolled-back Source Yaw (1.9.0 or older) still reads them."""
+    cues = _trainer_module().CUES
     cfg = dict(cfg)
     cfg.update({
         "enabled": form["enabled"],
@@ -121,15 +126,16 @@ def trainer_value(cfg, form, game):
         "y": round(form["y"] / 100, 3),
         "size": int(form["size"]),
         "colors": dict(form["colors"]),
-        "sound": form["sound"],
-        "wrong_ticks": int(form["wrong_ticks"]),
         "repeat": round(form["repeat"], 2),
         "tone_volume": round(form["tone_volume"] / 100, 2),
-        "tone_pitch": int(form["tone_pitch"]),
-        "cue_wrong_key": form["cue_wrong_key"],
-        "cue_no_key": form["cue_no_key"],
         "target": int(form["target"]),
     })
+    for cue, switch in cues.items():
+        cfg[switch] = form[switch]
+        cfg[f"{cue}_sound"] = form[f"{cue}_sound"]
+        cfg[f"{cue}_pitch"] = int(form[f"{cue}_pitch"])
+        cfg[f"{cue}_ticks"] = int(form[f"{cue}_ticks"])
+    cfg["sound"], cfg["tone_pitch"] = cfg["wrong_sound"], cfg["wrong_pitch"]
     if form.get("tickrate") is not None:
         cfg["tickrate"] = {**cfg["tickrate"], game: int(form["tickrate"])}
     return cfg
@@ -140,19 +146,14 @@ def inputd_command():
     return f"sudo sh {core.HERE / 'inputd/install-inputd.sh'}"
 
 
-def trainer_status(cstrike, sound):
+def trainer_status(cstrike):
     """What the trainer group shows around its controls, for the game's mod folder `cstrike`
-    (or None) and the chosen wrong-key `sound`:
-      tone          True when the sound is the constant tone (pitch and volume shown, repeat hidden)
-      wrong_note    note under "other strafe key" ("" for a game sound)
-      none_note     note under "no strafe key"
+    (or None):
       installed     the input service is installed
       service       note under "Input service"
       command       the install command, to copy
       binds         note under "Keys", or None without a game folder"""
     trainer = _trainer_module()
-    # the tone sounds for as long as the key is wrong; game sounds repeat
-    tone = sound == "tone"
     installed = trainer.forwarded() is not None
     if installed:
         service = "Installed: forwards only the keys in /etc/sourceyaw-inputd.conf"
@@ -165,10 +166,7 @@ def trainer_status(cstrike, sound):
         binds = ("⚠ Not forwarded by the input service: " + ", ".join(unseen)
                  + ". Add them to /etc/sourceyaw-inputd.conf" if unseen
                  else "Strafe, turn and jump keys come from your binds in the game")
-    return {"tone": tone,
-            "wrong_note": "Higher tone" if tone else "",
-            "none_note": "Lower tone" if tone else "",
-            "installed": installed, "service": service, "command": inputd_command(),
+    return {"installed": installed, "service": service, "command": inputd_command(),
             "binds": binds}
 
 
