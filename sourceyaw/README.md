@@ -117,9 +117,8 @@ What's different from Linux:
 - The strafe trainer plays its sounds but shows no offset number: drawing over CS:S would mean
   hooking DirectX, which risks a VAC ban. It reads your keys through Windows' Raw Input, the
   same way games do, and only counts while the game's window is in front with the cursor in it.
-- Settings are in `%APPDATA%\sourceyaw`, and what the launch did goes to `run.log` there.
-- New in 1.10.0 and not yet tried in a game by a person, only on a test machine. If something
-  doesn't work, `run.log` says why.
+- Settings are in `%APPDATA%\sourceyaw`, and what the launch did goes to `run.log` there. If
+  something doesn't work, `run.log` says why.
 
 If you already had a `yaws.cfg` of your own, the app saves it as `yaws.cfg.bak-sourceyaw`
 before writing its own, and uninstalling puts it back.
