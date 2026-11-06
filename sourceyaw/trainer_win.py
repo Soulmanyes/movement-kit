@@ -133,6 +133,7 @@ RID_INPUT = 0x10000003
 RIDEV_REMOVE, RIDEV_INPUTSINK = 0x00000001, 0x00000100
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WAVE_MAPPER, WAVE_FORMAT_PCM, WHDR_DONE = 0xFFFFFFFF, 1, 1
+CALLBACK_EVENT = 0x00050000
 
 _dlls = {}
 
@@ -168,6 +169,8 @@ def _win32():
                 (k.OpenProcess, w.HANDLE, [w.DWORD, w.BOOL, w.DWORD]),
                 (k.QueryFullProcessImageNameW, w.BOOL, [w.HANDLE, w.DWORD, w.LPWSTR, p(w.DWORD)]),
                 (k.CloseHandle, w.BOOL, [w.HANDLE]),
+                (k.CreateEventW, w.HANDLE, [w.LPVOID, w.BOOL, w.BOOL, w.LPCWSTR]),
+                (k.WaitForSingleObject, w.DWORD, [w.HANDLE, w.DWORD]),
                 (m.waveOutOpen, w.UINT, [p(w.HANDLE), w.UINT, p(WAVEFORMATEX), ctypes.c_size_t,
                                          ctypes.c_size_t, w.DWORD]),
                 (m.waveOutPrepareHeader, w.UINT, [w.HANDLE, p(WAVEHDR), w.UINT]),
@@ -343,11 +346,15 @@ class Tone:
     """A tone that sounds while `mode` is set (a cue, or None for silence), played through winmm's
     waveOut. `synth` is the trainer.ToneSynth giving 5 ms chunks.
 
-    BUFFERS chunks are queued at most, so switching it on or off is heard within about
-    BUFFERS x 5 ms; a buffer is refilled as soon as waveOut marks it done. Too few buffers
-    would let the sound run dry (crackles) when Python is slow to refill: `dry` counts the
-    times every buffer had finished before the next was written, logged at close."""
-    BUFFERS = 4
+    Each waveOut buffer holds CHUNKS chunks (10 ms) and BUFFERS of them are queued at most, so
+    up to 50 ms is queued and switching it on or off is heard within about that. The Windows
+    audio engine mixes in ~10 ms periods: with 5 ms buffers and only 20 ms queued, refilled by
+    a 1 ms sleep poll, the queue ran dry and every gap was heard as a click (loud, crackly,
+    distorted). So a buffer is now refilled as soon as waveOut signals its done event
+    (CALLBACK_EVENT, auto-reset). `dry` counts the times every buffer had finished before the
+    next was written, logged at close."""
+    BUFFERS = 5
+    CHUNKS = 2
 
     def __init__(self, synth):
         self.mode = None
@@ -356,11 +363,16 @@ class Tone:
         self.thread = None
         self.dry = 0
         self.hwo = wintypes.HANDLE()
-        _, _, winmm = _win32()
+        _, kernel32, winmm = _win32()
         rate = synth.RATE
         fmt = WAVEFORMATEX(WAVE_FORMAT_PCM, 1, rate, rate * 2, 2, 16, 0)
-        if winmm.waveOutOpen(ctypes.byref(self.hwo), WAVE_MAPPER, ctypes.byref(fmt), 0, 0, 0):
+        self.event = kernel32.CreateEventW(None, False, False, None)  # auto-reset
+        if not self.event or winmm.waveOutOpen(ctypes.byref(self.hwo), WAVE_MAPPER, ctypes.byref(fmt),
+                                               self.event, 0, CALLBACK_EVENT):
             print("trainer: no sound device for the tone", flush=True)
+            if self.event:
+                kernel32.CloseHandle(self.event)
+                self.event = None
             self.hwo = None
 
     def start(self):
@@ -369,8 +381,8 @@ class Tone:
             self.thread.start()
 
     def _feed(self):
-        _, _, winmm = _win32()
-        size = 2 * self.synth.CHUNK
+        _, kernel32, winmm = _win32()
+        size = 2 * self.synth.CHUNK * self.CHUNKS
         data = [ctypes.create_string_buffer(size) for _ in range(self.BUFFERS)]
         headers = [WAVEHDR(ctypes.cast(d, ctypes.c_void_p), size) for d in data]
         hsize = ctypes.sizeof(WAVEHDR)
@@ -382,11 +394,11 @@ class Tone:
             while not self.closed.is_set():
                 h = headers[i]
                 if queued[i] and not h.dwFlags & WHDR_DONE:
-                    time.sleep(0.001)
+                    kernel32.WaitForSingleObject(self.event, 20)
                     continue
                 if all(queued) and all(x.dwFlags & WHDR_DONE for x in headers):
                     self.dry += 1
-                ctypes.memmove(data[i], self.synth.next(self.mode), size)
+                ctypes.memmove(data[i], b"".join(self.synth.next(self.mode) for _ in range(self.CHUNKS)), size)
                 h.dwFlags &= ~WHDR_DONE
                 if winmm.waveOutWrite(self.hwo, ctypes.byref(h), hsize):
                     return
@@ -397,6 +409,7 @@ class Tone:
             for h in headers:
                 winmm.waveOutUnprepareHeader(self.hwo, ctypes.byref(h), hsize)
             winmm.waveOutClose(self.hwo)
+            kernel32.CloseHandle(self.event)
 
     def close(self):
         self.closed.set()
@@ -404,7 +417,9 @@ class Tone:
             self.thread.join(1)
             print(f"trainer: tone ran dry {self.dry} times", flush=True)
         elif self.hwo:
-            _win32()[2].waveOutClose(self.hwo)
+            _, kernel32, winmm = _win32()
+            winmm.waveOutClose(self.hwo)
+            kernel32.CloseHandle(self.event)
 
 
 # ---------------------------------------------------------------- the platform
