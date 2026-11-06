@@ -2,13 +2,20 @@
 # module.json, attach <tool>-module.zip and <tool>-module.json (.github/scripts/module_zip.py) to that
 # tag's GitHub release, creating it if the tool's other workflow hasn't yet. The kit's core installs
 # and updates modules from these. The tag must match the tool's VERSION. Run by hand with a tool name
-# for a test build, kept as a workflow artifact.
+# for a test build, kept as a workflow artifact. tag-release.yml calls it with a tag it just pushed: a
+# tag pushed with the workflow token doesn't start the push trigger below.
 name: module-release
 on:
   workflow_dispatch:
     inputs:
       tool:
         description: The tool's folder, "strafe-review"
+        required: true
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to release, "sourceyaw-v1.10.1"
+        type: string
         required: true
   push:
     tags: ["strafe-review-v*", "gain-converter-v*", "sourceyaw-v*", "trainer-height-v*", "jhud-v*", "strafe-histogram-v*", "first-jump-v*", "zone-exit-v*"]
@@ -17,9 +24,13 @@ permissions:
 jobs:
   module:
     runs-on: ubuntu-latest
+    env:
+      # the release tag: the pushed tag, or tag-release.yml's; empty for a test build
+      TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0  # every tag, for the release notes' start tag
       - uses: actions/setup-python@v5
         with:
@@ -29,7 +40,7 @@ jobs:
         env:
           INPUT_TOOL: ${{ inputs.tool }}
         run: |
-          if [ -n "$INPUT_TOOL" ]; then tool=$INPUT_TOOL; else tool=${GITHUB_REF_NAME%-v*}; fi
+          if [ -n "$INPUT_TOOL" ]; then tool=$INPUT_TOOL; else tool=${TAG%-v*}; fi
           test -f "$tool/module.json" || { echo "$tool has no module.json"; exit 1; }
           python .github/scripts/module_zip.py "$tool" out
           echo "tool=$tool" >> "$GITHUB_OUTPUT"
@@ -38,20 +49,20 @@ jobs:
           name: ${{ steps.build.outputs.tool }}-module
           path: out/
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TOOL: ${{ steps.build.outputs.tool }}
         run: |
-          version=${GITHUB_REF_NAME#"$TOOL"-v}
+          version=${TAG#"$TOOL"-v}
           have=$(python .github/scripts/version.py "$TOOL")
           # a tag that isn't VERSION would make every copy see an update that never takes
-          if [ "$version" != "$have" ]; then echo "tag $GITHUB_REF_NAME but VERSION $have"; exit 1; fi
+          if [ "$version" != "$have" ]; then echo "tag $TAG but VERSION $have"; exit 1; fi
           title=$(python -c "import json; print(json.load(open('$TOOL/module.json'))['title'])")
-          prev=$(git tag -l "$TOOL-v*" --sort=v:refname | grep -x -B1 "$GITHUB_REF_NAME" | grep -vx "$GITHUB_REF_NAME" || true)
+          prev=$(git tag -l "$TOOL-v*" --sort=v:refname | grep -x -B1 "$TAG" | grep -vx "$TAG" || true)
           # the notes are the tag's message; GitHub's generated ones only for a tag without one
-          sh "$(git rev-parse --show-toplevel)/.github/scripts/tag-notes.sh" "$GITHUB_REF_NAME" > tag-notes.md
+          sh "$(git rev-parse --show-toplevel)/.github/scripts/tag-notes.sh" "$TAG" > tag-notes.md
           if [ -s tag-notes.md ]; then notes=(--notes-file tag-notes.md)
           else notes=(--generate-notes ${prev:+--notes-start-tag "$prev"}); fi
-          gh release create "$GITHUB_REF_NAME" out/* --title "$title $version" "${notes[@]}" \
-            || gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          gh release create "$TAG" out/* --title "$title $version" "${notes[@]}" \
+            || gh release upload "$TAG" out/* --clobber

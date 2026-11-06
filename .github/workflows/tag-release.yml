@@ -1,0 +1,62 @@
+# Releases a module from main without pushing a tag by hand: run it from the Actions tab (or the API)
+# with the tool, its version and the release notes. It checks the version is the tool's VERSION on
+# main, pushes the annotated tag <tool>-v<version> with the notes as its message (tag-notes.sh reads
+# them from there, and the hub's "What's new" shows them), then runs module-release.yml for that tag.
+# The workflow token's tag push doesn't start other workflows, hence the call. Only for tools whose
+# release is just the module zip: hub and strafe-review also build a Windows exe on their tag push.
+name: tag-release
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: The tool's folder, "sourceyaw"
+        required: true
+      version:
+        description: Its VERSION on main, "1.10.1"
+        required: true
+      notes:
+        description: Release notes (Markdown); empty for GitHub's generated notes
+        required: false
+        default: ""
+permissions:
+  contents: write
+concurrency: tag-release
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Tag
+        id: tag
+        env:
+          TOOL: ${{ inputs.tool }}
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          case "$TOOL" in
+            hub|strafe-review) echo "$TOOL also builds an exe on its tag push: push the tag by hand"; exit 1;;
+          esac
+          printf %s "$TOOL" | grep -Eqx '[a-z0-9-]+' || { echo "bad tool name $TOOL"; exit 1; }
+          test -f "$TOOL/module.json" || { echo "$TOOL has no module.json"; exit 1; }
+          have=$(python3 .github/scripts/version.py "$TOOL")
+          if [ "$VERSION" != "$have" ]; then echo "version $VERSION but VERSION on main is $have"; exit 1; fi
+          tag="$TOOL-v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$NOTES" ]; then printf '%s\n' "$NOTES" > notes.md; else printf '%s\n' "$tag" > notes.md; fi
+          git tag -a "$tag" -F notes.md
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+  release:
+    needs: tag
+    uses: ./.github/workflows/module-release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
