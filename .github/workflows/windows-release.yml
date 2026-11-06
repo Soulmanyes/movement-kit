@@ -113,8 +113,8 @@ jobs:
           prev=$(git tag -l "$TOOL-v*" --sort=v:refname | grep -x -B1 "$GITHUB_REF_NAME" | grep -vx "$GITHUB_REF_NAME" || true)
           zip=$TOOL-windows.zip
           # the notes are the tag's message; GitHub's generated ones only for a tag without one
-          sh .github/scripts/tag-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          if [ -s "$RUNNER_TEMP/notes.md" ]; then notes=(--notes-file "$RUNNER_TEMP/notes.md")
+          sh "$(git rev-parse --show-toplevel)/.github/scripts/tag-notes.sh" "$GITHUB_REF_NAME" > tag-notes.md
+          if [ -s tag-notes.md ]; then notes=(--notes-file tag-notes.md)
           else notes=(--generate-notes ${prev:+--notes-start-tag "$prev"}); fi
           gh release create "$GITHUB_REF_NAME" "$zip" --title "$TITLE $version" "${notes[@]}" \
             || gh release upload "$GITHUB_REF_NAME" "$zip" --clobber
