@@ -8,9 +8,11 @@ Covers the overlap cue (Phase 11 in PLAN.md): it waits overlap_ticks, needs a ju
 obeys cue_overlap, outranks a wrong-key turn, and hands back without the overlap tone lingering
 while the wrong-key turn is still under wrong_ticks. Also the wrong-key and no-key cues, each
 cue's own wait (<cue>_ticks), and CueSounds: tone cues share one Tone at their own pitches, game-sound
-cues play their own sound on every cue.
+cues play their own sound on every cue. Phase 12's split: trainer.run with a fake platform, and
+trainer.py, yawcore and settings_api importing without Pillow or fcntl (as in the Windows exe).
 """
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -197,7 +199,127 @@ def main():
                                   played.append, FakeTone)
         expect((made, quiet.tone), ([], None), "no tone when no cue uses it")
         quiet.state("overlap")  # nothing to switch, nothing raised
+
+        check_run(trainer, Path(tmp))
+        check_neutral_import()
     print("check_trainer: all passed")
+
+
+def check_neutral_import():
+    """The Windows exe has no Pillow and no fcntl/termios: the platform-neutral files must import
+    without them (trainer_linux, which needs them, only loads on Linux)."""
+    code = ("import sys\n"
+            "for m in ('PIL', 'fcntl', 'termios', 'trainer_linux'):\n"
+            "    sys.modules[m] = None\n"
+            f"sys.path[:0] = [{str(HERE)!r}]\n"
+            "import trainer, settings_api\n")
+    done = subprocess.run([sys.executable, "-c", code], check=False, capture_output=True, text=True)
+    expect(done.stderr.strip().splitlines()[-1:], [], "trainer.py imports without Pillow, fcntl or trainer_linux")
+
+
+def check_run(trainer, tmp):
+    """trainer.run with a fake platform (the Phase 12 split): binds read without the input service's
+    filter, events fed in order, the overlap tone on, an offset drawn, everything closed at the end."""
+    game_dir = tmp / "game"
+    (game_dir / "cfg").mkdir(parents=True)
+    (game_dir / "cfg" / "config.cfg").write_text(
+        'bind "SPACE" "+jump"\nbind "a" "+moveleft"\nbind "d" "+moveright"\n'
+        'bind "MOUSE1" "+left"\nbind "MOUSE2" "+right"\nbind "F13" "+jump"\n')
+    trainer.settings = lambda game: {**trainer.TRAINER_DEFAULTS, "enabled": True}
+    trainer.yawcore.find_game = lambda game: game_dir
+    log = []
+
+    class FakeJoined:
+        mode = "fake"
+
+        def __init__(self, path):
+            import queue
+            self.events = queue.Queue()
+
+        def close(self):
+            log.append("session closed")
+
+    trainer.session.join = FakeJoined
+
+    class Tone:
+        def __init__(self, volume, pitches):
+            self._mode = None
+
+        @property
+        def mode(self):
+            return self._mode
+
+        @mode.setter
+        def mode(self, value):
+            if value != self._mode:
+                log.append(f"tone {value}")
+            self._mode = value
+
+        def start(self):
+            pass
+
+        def close(self):
+            log.append("tone closed")
+
+    class Overlay:
+        def show(self, text, row, x, y):
+            log.append(f"offset {text} row {row}")
+
+        def hide(self):
+            pass
+
+    # (clock, events) per read; 66 tick in CS:S, so overlap_ticks 1 is ~0.015 s
+    script = [(1.000, [(1.000, EV_KEY, SPACE, 1), (1.000, EV_KEY, A, 1), (1.000, EV_KEY, D, 1)]),
+              (1.010, []), (1.020, []),
+              (1.100, [(1.100, EV_KEY, D, 0)]),
+              (1.200, [(1.200, EV_KEY, TURN_R, 1)]),
+              (1.230, [(1.230, EV_KEY, D, 1), (1.230, EV_KEY, A, 0)])]
+
+    class Source:
+        def read(self, timeout):
+            if not script:
+                return None
+            platform.now, events = script.pop(0)
+            return events
+
+        def close(self):
+            log.append("input closed")
+
+    class Platform:
+        FORWARDED_ONLY = False
+        UNSEEN, GONE = "keys with no code", "input gone"
+        now = 0.0
+
+        def __init__(self):
+            self.Tone = Tone
+
+        def clock(self):
+            return self.now
+
+        def overlay(self, cfg):
+            return Overlay()
+
+        def open_input(self):
+            return Source()
+
+        def focus(self, process):
+            return type("Focus", (), {"focused": True})()
+
+        def play(self, game_dir, sound, game):
+            log.append(f"play {sound}")
+
+    platform = Platform()
+    expect(trainer.run("css", platform), 1, "run ends with 1 when the input is gone")
+    expect(log, ["tone overlap", "tone None", "offset +2 row 2",
+                 "tone closed", "input closed", "session closed"], "run with a fake platform")
+
+    # stop set: returns 0 at once, still closes everything
+    import threading
+    stop = threading.Event()
+    stop.set()
+    log.clear()
+    expect(trainer.run("css", platform, stop), 0, "run returns 0 when stopped")
+    expect(log, ["tone closed", "input closed", "session closed"], "stopped run closes everything")
 
 
 if __name__ == "__main__":

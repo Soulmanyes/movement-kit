@@ -1,51 +1,38 @@
 #!/usr/bin/env python3
-"""Strafe trainer: runs beside the game (started by launch-hook.sh through movekit-run).
+"""Strafe trainer: runs beside the game (started by launch-hook.sh through movekit-run on Linux).
 
-Reads the strafe, turn and jump keys plus mouse movement from the Source Yaw
-input service (/run/sourceyaw-inputd.sock), and while a jump key is held:
+Reads the strafe, turn and jump keys plus mouse movement, and while a jump key is held:
   - plays a sound when you turn one way for a few ticks without holding that
     way's strafe key (no key, or the other one), and one when both strafe
     keys are held at once,
   - works out each strafe's offset: the ticks between turning the other way
     and switching strafe keys. Negative means the key came early, positive
-    late, 0 on the same tick. The number is drawn over the game by the Source
-    Yaw overlay layer (overlay/), through a small shared state file.
+    late, 0 on the same tick. The number is drawn over the game where the
+    platform can (Linux: the Source Yaw overlay layer).
+
+This file is platform-neutral (it imports on Windows, with no Pillow): the cue logic, binds,
+settings and the main loop. Where keys come from, how sounds play, focus and the overlay are
+the platform's (trainer_linux.Linux; Windows is Phase 12 in PLAN.md), handed to run().
 
 Keys come from the game's own binds (config.cfg plus aliases from every cfg),
-so rebinding in the game just works as long as the input service forwards
-that key (see /etc/sourceyaw-inputd.conf).
+so rebinding in the game just works. On Linux the input service must forward
+that key too (see /etc/sourceyaw-inputd.conf).
 
   trainer.py GAME            run until the game exits (launch-hook.sh does this)
   trainer.py GAME --binds    print which keys do what, then exit
 """
 
-import array  # noqa: I001 - movekit must come after yawcore (see below)
-import fcntl
-import glob
-import math
-import mmap
-import os
-import select
-import shutil
-import socket
-import struct
-import subprocess
 import sys
-import threading
 import time
-from fractions import Fraction
 from pathlib import Path
 
 import yawcore
 
 from movekit import binds, session  # after yawcore, which puts movekit on the path
 
-SOCKET = "/run/sourceyaw-inputd.sock"
+# the Linux input service's config: which keys it forwards (read here, not in trainer_linux,
+# because the hub's settings ask too)
 INPUTD_CONFIG = "/etc/sourceyaw-inputd.conf"
-OVERLAY_DIR = yawcore.CONFIG_DIR / "overlay"
-ATLAS = OVERLAY_DIR / "atlas.png"
-STATE = OVERLAY_DIR / "state"
-EVENT = struct.Struct("<qIHHi")
 EV_KEY, EV_REL = 1, 2
 REL_X, REL_WHEEL = 0, 8
 
@@ -142,14 +129,19 @@ def settings(game):
 
 # ---------------------------------------------------------------- binds
 
-def read_binds(game_dir):
-    """{role: set of evdev codes or "wheel"}, plus Source key names with a role the
-    input service does not forward."""
+_FORWARDED = object()
+
+
+def read_binds(game_dir, allowed=_FORWARDED):
+    """{role: set of evdev codes or "wheel"}, plus Source key names with a role that won't reach
+    the trainer: no code known, or not in `allowed` (a set of codes; None = every known key).
+    By default `allowed` is what the Linux input service forwards (forwarded())."""
     cfg = Path(game_dir) / "cfg"
     alias_map = binds.aliases(cfg)
     roles = {r: set() for r in ROLES.values()}
     unseen = []
-    allowed = forwarded()
+    if allowed is _FORWARDED:
+        allowed = forwarded()
     for line in binds.cfg_text(cfg / "config.cfg").splitlines():
         bind = binds.parse_bind(binds.strip_comment(line))
         if not bind:
@@ -164,156 +156,17 @@ def read_binds(game_dir):
     return roles, sorted(set(unseen))
 
 
-# ---------------------------------------------------------------- overlay
-
-def write_atlas(cfg):
-    from PIL import Image, ImageDraw, ImageFont
-    fonts = (glob.glob("/usr/share/fonts/**/DejaVuSansMono-Bold.ttf", recursive=True)
-             or glob.glob("/usr/share/fonts/**/*Mono*Bold*.ttf", recursive=True))
-    px = max(8, int(cfg["size"]))
-    font = ImageFont.truetype(fonts[0], px) if fonts else ImageFont.load_default()
-    stroke = max(2, px // 16)
-    _, top, _, bottom = font.getbbox("0123456789+-", stroke_width=stroke)
-    cell_w = int(font.getlength("0")) + 2 * stroke + 2
-    cell_h = int(bottom - top) + 2 * stroke + 2
-    colours = [cfg["colors"][k] for k in ("early", "perfect", "late")]
-    im = Image.new("RGBA", (cell_w * 12, cell_h * len(colours)), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(im)
-    for row, colour in enumerate(colours):
-        for i, c in enumerate("0123456789+-"):
-            draw.text((i * cell_w + cell_w / 2, row * cell_h + cell_h / 2), c, font=font,
-                      fill=colour, anchor="mm", stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
-    OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = ATLAS.with_suffix(".tmp.png")
-    im.save(tmp)
-    tmp.replace(ATLAS)
-
-
-class Overlay:
-    """Writes the state the overlay layer reads every frame (see overlay/src/layer.c)."""
-    FMT = struct.Struct("<IIIIIfff16s")
-
-    def __init__(self):
-        OVERLAY_DIR.mkdir(parents=True, exist_ok=True)
-        if not STATE.exists() or STATE.stat().st_size < self.FMT.size:
-            STATE.write_bytes(b"\0" * self.FMT.size)
-        self.file = open(STATE, "r+b")  # noqa: SIM115 - mapped for the overlay's whole life
-        self.map = mmap.mmap(self.file.fileno(), self.FMT.size)
-        self.seq = struct.unpack_from("<I", self.map, 4)[0] & ~1
-
-    def show(self, text, row, x, y, visible=True):
-        self.seq += 1
-        struct.pack_into("<I", self.map, 4, self.seq)  # odd: being written
-        self.map[:self.FMT.size] = self.FMT.pack(0x314F5953, self.seq, int(visible), row, 3,
-                                                 x, y, 1.0, text.encode()[:15])
-        self.seq += 1
-        struct.pack_into("<I", self.map, 4, self.seq)
-
-    def hide(self):
-        self.show("", 0, 0.5, 0.5, visible=False)
-
-
-# ---------------------------------------------------------------- constant tone
-
-class Tone:
-    """A tone that sounds while `mode` is set, streamed to PipeWire through pw-cat.
-    `pitches` maps each mode (a cue: "wrong", "none", "overlap") to its Hz.
-
-    Audio is written in 5 ms chunks paced by the clock, keeping only LEAD
-    seconds queued, so switching it on or off is heard within ~20 ms (a plain
-    pipe would buffer most of a second). Each pitch is pre-rendered as a loop of
-    chunks that holds a whole number of cycles, so the chunks join without
-    clicks; switching on, off or between pitches fades over one chunk."""
-    RATE = 48000
-    CHUNK = 240     # 5 ms
-    LEAD = 0.015
-
-    def __init__(self, volume, pitches):
-        self.mode = None
-        self.proc = None
-        player = shutil.which("pw-cat")
-        if not player:
-            return
-        self.proc = subprocess.Popen(
-            [player, "--playback", "--raw", "--rate", str(self.RATE), "--channels", "1",
-             "--format", "s16", "--latency", "10ms", "-"],
-            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            fcntl.fcntl(self.proc.stdin, 1031, 4096)  # F_SETPIPE_SZ: the smallest pipe
-        except OSError:
-            pass
-        amp = 32767 * max(0.0, min(1.0, volume))
-        pitches = {mode: max(40, int(hz)) for mode, hz in pitches.items()}
-        self.silence = bytes(2 * self.CHUNK)
-        # per mode: the loop of chunks (whole cycles overall) as float samples
-        self.loops = {}
-        for mode, hz in pitches.items():
-            count = Fraction(hz * self.CHUNK, self.RATE).denominator
-            samples = [amp * math.sin(2 * math.pi * hz * i / self.RATE)
-                       for i in range(count * self.CHUNK)]
-            self.loops[mode] = [samples[k * self.CHUNK:(k + 1) * self.CHUNK] for k in range(count)]
-        # steady chunks ready to write; only fades are computed on the fly
-        self.loop_bytes = {mode: [array.array("h", (int(x) for x in c)).tobytes() for c in loop]
-                           for mode, loop in self.loops.items()}
-        self.pos = {mode: 0 for mode in pitches}
-        self.ramp = [i / self.CHUNK for i in range(self.CHUNK)]
-
-    def _chunk(self, mode, envelope=None):
-        k = self.pos[mode] % len(self.loops[mode])
-        self.pos[mode] += 1
-        if envelope is None:
-            return self.loop_bytes[mode][k]
-        return array.array("h", (int(s * e) for s, e in zip(self.loops[mode][k], envelope))).tobytes()
-
-    def start(self):
-        if self.proc:
-            threading.Thread(target=self._feed, daemon=True).start()
-
-    def _feed(self):
-        start = time.monotonic()
-        written = 0
-        was = None
-        while True:
-            due = (time.monotonic() - start + self.LEAD) * self.RATE
-            if written >= due:
-                time.sleep(0.002)
-                continue
-            mode = self.mode
-            if mode == was:
-                data = self._chunk(mode) if mode else self.silence
-            elif mode is None:
-                data = self._chunk(was, [1 - r for r in self.ramp])
-            elif was is None:
-                data = self._chunk(mode, self.ramp)
-            else:
-                # other pitch: cross-fade so neither tone cuts off mid-wave
-                a = self._chunk(was, [1 - r for r in self.ramp])
-                b = self._chunk(mode, self.ramp)
-                data = array.array("h", (x + y for x, y in zip(
-                    array.array("h", a), array.array("h", b)))).tobytes()
-            try:
-                self.proc.stdin.write(data)
-                self.proc.stdin.flush()
-            except (BrokenPipeError, ValueError, OSError):
-                return
-            was = mode
-            written += self.CHUNK
-            if written + self.RATE < due:  # fell far behind (suspend): don't catch up
-                written = int(due)
-
-    def close(self):
-        if self.proc:
-            self.proc.kill()
-
-
 class CueSounds:
-    """Each cue's own sound: cues set to "tone" share one Tone (a mode per cue, at the cue's pitch),
-    the rest play their game sound through `play` on every cue (Trainer's on_wrong)."""
+    """Each cue's own sound: cues set to "tone" share one tone (a mode per cue, at the cue's pitch),
+    the rest play their game sound through `play` on every cue (Trainer's on_wrong).
 
-    def __init__(self, cfg, play, tone_class=None):
+    `tone_class` is the platform's tone (trainer_linux.Tone): built as tone_class(volume,
+    {cue: Hz}), with `mode` (the cue sounding, or None), start() and close()."""
+
+    def __init__(self, cfg, play, tone_class):
         self.cfg, self.play = cfg, play
         self.pitches = {cue: cfg[f"{cue}_pitch"] for cue in CUES if cfg[f"{cue}_sound"] == "tone"}
-        self.tone = (tone_class or Tone)(cfg["tone_volume"], self.pitches) if self.pitches else None
+        self.tone = tone_class(cfg["tone_volume"], self.pitches) if self.pitches else None
         if self.tone:
             self.tone.start()
 
@@ -326,6 +179,10 @@ class CueSounds:
         sound = self.cfg.get(f"{reason}_sound")
         if sound and sound != "tone":
             self.play(sound)
+
+    def close(self):
+        if self.tone:
+            self.tone.close()
 
 
 # ---------------------------------------------------------------- the trainer
@@ -501,64 +358,7 @@ class Trainer:
             self.on_wrong()
 
 
-# ---------------------------------------------------------------- focus
-
-class FocusWatch:
-    """Whether the game's window has focus, asked from Hyprland every 0.25 s.
-
-    The input service sees every key and mouse movement on the desktop, so
-    without this, scrolling in a browser while the game runs in the background
-    would count as jumping. With follow_mouse = 2 the game keeps keyboard focus
-    while the wheel scrolls the window under the cursor, so the cursor must be
-    inside the game's window too. Other desktops have no common way to ask, so
-    there the game counts as focused."""
-    INTERVAL = 0.25
-
-    def __init__(self, process):
-        self.process = process
-        self.focused = True
-        runtime = os.environ.get("XDG_RUNTIME_DIR")
-        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
-        self.path = os.path.join(runtime, "hypr", sig, ".socket.sock") if runtime and sig else None
-        if self.path and os.path.exists(self.path):
-            threading.Thread(target=self._watch, daemon=True).start()
-
-    def _ask(self, command):
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1)
-            s.connect(self.path)
-            s.sendall(command)
-            data = b""
-            while chunk := s.recv(65536):
-                data += chunk
-        import json
-        return json.loads(data or b"{}") or {}
-
-    def _check(self):
-        window = self._ask(b"j/activewindow")
-        with open(f"/proc/{window.get('pid')}/comm") as f:
-            if f.read().strip() != self.process:
-                return False
-        cursor = self._ask(b"j/cursorpos")
-        (x, y), (w, h) = window["at"], window["size"]
-        return x <= cursor["x"] < x + w and y <= cursor["y"] < y + h
-
-    def _watch(self):
-        while True:
-            try:
-                self.focused = self._check()
-            except (OSError, ValueError, TypeError, KeyError):
-                self.focused = False
-            time.sleep(self.INTERVAL)
-
-
 # ---------------------------------------------------------------- running
-
-def connect():
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(SOCKET)
-    return s
-
 
 def map_tickrate(cfg, game, name):
     """The tickrate for map `name`, or None when the name isn't known (CS:S's "Connected to" line)."""
@@ -593,22 +393,28 @@ class GameEvents:
             self.in_map = False
 
 
-def run(game):
+def run(game, platform, stop=None):
+    """The trainer for `game` until the input ends or `stop` (a threading.Event) is set; returns
+    the exit code. `platform` is everything that differs per OS (trainer_linux.Linux):
+      FORWARDED_ONLY  whether only the input service's forwarded keys arrive (read_binds)
+      UNSEEN, GONE    log text: keys that won't arrive, the input ending
+      Tone            CueSounds' tone_class
+      clock()         the clock the input's event times use
+      overlay(cfg)    where the offset is drawn (show(text, row, x, y), hide()), or None
+      open_input()    read(timeout) -> [(time, EV_KEY/EV_REL, evdev code, value)], or None
+                      once the input is gone; close(). None after printing why there's none.
+      focus(process)  an object whose `focused` says the game's window has focus
+      play(game_dir, sound, game)  a game sound"""
     cfg = settings(game)
     game_dir = yawcore.find_game(game)
     if not cfg["enabled"] or game_dir is None:
         return 0
-    roles, unseen = read_binds(game_dir)
+    roles, unseen = read_binds(game_dir) if platform.FORWARDED_ONLY else read_binds(game_dir, None)
     if unseen:
-        print(f"trainer: keys the input service does not forward: {', '.join(unseen)}", flush=True)
-    write_atlas(cfg)
-    overlay = Overlay()
-    overlay.hide()
-
-    try:
-        sock = connect()
-    except OSError as e:
-        print(f"trainer: no input service ({e}); install it from Source Yaw", flush=True)
+        print(f"trainer: {platform.UNSEEN}: {', '.join(unseen)}", flush=True)
+    overlay = platform.overlay(cfg)
+    source = platform.open_input()
+    if source is None:
         return 1
 
     shown_until = 0.0
@@ -618,46 +424,52 @@ def run(game):
 
     def offset(ticks):
         nonlocal shown_until
-        if not game_events.showing:
+        if overlay is None or not game_events.showing:
             return
         target = cfg["target"]
         row = 0 if ticks < target else 1 if ticks == target else 2
         overlay.show(f"{ticks:+d}" if ticks else "0", row, cfg["x"], cfg["y"])
         shown_until = time.monotonic() + cfg["hide_after"]
 
-    sounds = CueSounds(cfg, lambda sound: yawcore.play_sound(game_dir, sound, game))
+    sounds = CueSounds(cfg, lambda sound: platform.play(game_dir, sound, game), platform.Tone)
     trainer = Trainer(cfg, roles, game_events.tickrate, offset,
                       lambda: sounds.cue(trainer.wrong_active), sounds.state)
-    focus = FocusWatch(yawcore.GAMES[game]["process"])
-    # map loads and the offsets toggle come from the movekit session (after the input service
+    focus = platform.focus(yawcore.GAMES[game]["process"])
+    # map loads and the offsets toggle come from the movekit session (after the input
     # check above, so a trainer that gives up never holds the session's port)
     joined = session.join(log_path)
     print(f"trainer: session events ({joined.mode})", flush=True)
-    buf = b""
-    while True:
-        ready, _, _ = select.select([sock], [], [], 0.002)
-        if ready:
-            data = sock.recv(4096)
-            if not data:
-                print("trainer: input service went away", flush=True)
+    try:
+        while stop is None or not stop.is_set():
+            events = source.read(0.002)
+            if events is None:
+                print(f"trainer: {platform.GONE}", flush=True)
                 return 1
-            buf += data
-            while len(buf) >= EVENT.size:
-                sec, usec, etype, code, value = EVENT.unpack_from(buf)
-                buf = buf[EVENT.size:]
-                trainer.feed(sec + usec / 1e6, etype, code, value)
-        while not joined.events.empty():
-            was_showing = game_events.showing
-            game_events.handle(joined.events.get())
-            trainer.tickrate = game_events.tickrate
-            if was_showing and not game_events.showing:
+            for event in events:
+                trainer.feed(*event)
+            while not joined.events.empty():
+                was_showing = game_events.showing
+                game_events.handle(joined.events.get())
+                trainer.tickrate = game_events.tickrate
+                if overlay and was_showing and not game_events.showing:
+                    overlay.hide()
+                    shown_until = 0.0
+            trainer.focused = focus.focused and game_events.in_map
+            trainer.check(platform.clock())
+            if shown_until and time.monotonic() > shown_until:
                 overlay.hide()
                 shown_until = 0.0
-        trainer.focused = focus.focused and game_events.in_map
-        trainer.check(time.time())
-        if shown_until and time.monotonic() > shown_until:
-            overlay.hide()
-            shown_until = 0.0
+        return 0
+    finally:
+        sounds.close()
+        source.close()
+        joined.close()
+
+
+def platform():
+    """This OS's trainer_linux.Linux (or, from Phase 12, its Windows counterpart)."""
+    import trainer_linux
+    return trainer_linux.Linux()
 
 
 def main():
@@ -674,7 +486,7 @@ def main():
             print("not forwarded by the input service:", ", ".join(unseen))
         return 0
     try:
-        return run(game)
+        return run(game, platform())
     except KeyboardInterrupt:
         return 0
 

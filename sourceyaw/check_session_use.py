@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import crosshair_watch  # noqa: I001 - before movekit: yawcore (imported by both) puts it on the path
+import crosshair_watch  # before movekit: yawcore (imported by both) puts it on the path
 import trainer
 
 from movekit import session  # trainer put movekit on the path

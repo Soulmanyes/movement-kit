@@ -556,7 +556,7 @@ The owner wants the Source Yaw settings tidied before the Windows version (Phase
   - `check_modules.check_groups` covers module.json, the legacy table, the release copy, bad values, and every real module naming its games. Screenshot-checked.
   - Ships with the next `hub-v*` release. Modules don't need a new `needs_core`, because an old core ignores the field.
 
-## Phase 12: Source Yaw on Windows (owner, 2026-11-06; planned, waits for Phase 11)
+## Phase 12: Source Yaw on Windows (owner, 2026-11-06; step 1 built on `sy-windows`)
 
 Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Windows module too, installed from the hub's Modules page, with its settings in the hub section.
 
@@ -568,6 +568,7 @@ Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Wi
   3. Focus: `GetForegroundWindow`, then the process image name, plus the cursor inside `GetWindowRect`.
   4. Tone: a `winmm` `waveOut` backend with the same `mode`/`start`/`close` interface. Game sounds through `winsound`.
   5. Module: `win32` in `module.json`, Python install and launch hooks for Windows, the hub section hides the Crosshair and Offset display cards, KROSSHAIR, the input service and the launch-option text. `check_hub_section.py` expects the section on Windows from then on.
+- **Step 1 built (2026-11-06).** `trainer.py` keeps the neutral parts under its old name, because `settings_api` and the checks load it by path. That covers the cue logic, binds, settings, `GameEvents`, `CueSounds` (its `tone_class` is now required) and the main loop `run(game, platform, stop=None)`. `trainer_linux.py` holds the input socket, `Overlay`/`write_atlas`, the pw-cat `Tone`, `FocusWatch` and `Linux`, the platform object that `run` takes. Its docstring lists what a platform gives. `trainer.platform()` imports `trainer_linux` only when it runs. `read_binds(game_dir, allowed)`: `None` passes every known key. `run` closes the tone, input and session on exit, and a set `stop` ends it, for the Windows thread. `yawcore` imports Pillow only inside the crosshair functions. `check_trainer.py` runs `run` with a fake platform, and imports `trainer`/`settings_api` with Pillow, fcntl and `trainer_linux` blocked. `install.sh` copies `trainer_linux.py`.
 - **Testing.** Claude covers the key table and the split trainer with synthetic events on Linux, and the Windows CI imports every Windows module. The owner or the friend hand-tests on Windows. To check there: whether Raw Input on a hidden window still gets input while CS:S (`m_rawinput 1`) is in front.
 
 ## Later / undecided

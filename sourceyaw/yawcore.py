@@ -32,8 +32,6 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
-from PIL import Image
-
 # movekit (code shared by the movement tools): next to this file in an installed copy (install.sh
 # copies it), one folder up in the repo. Only that folder goes on the path, never ~/.local/share.
 _HERE = Path(__file__).resolve().parent
@@ -256,11 +254,18 @@ def crosshair_maker_png():
     return png if png.is_file() else None
 
 
+def _image():
+    """Pillow's Image, imported only by the crosshair colour code (Linux only), so this file
+    imports on Windows, where the core exe has no Pillow."""
+    from PIL import Image
+    return Image
+
+
 def plain_cross():
     """A simple 22x22 plus, for people without a crosshair of their own."""
     if not BUILTIN.exists():
         BUILTIN.parent.mkdir(parents=True, exist_ok=True)
-        im = Image.new("RGBA", (22, 22), (0, 0, 0, 0))
+        im = _image().new("RGBA", (22, 22), (0, 0, 0, 0))
         for i in range(1, 21):
             for j in (10, 11):
                 im.putpixel((j, i), (255, 255, 255, 255))
@@ -464,7 +469,7 @@ def _pixels(im):
 
 def main_color(png):
     """Most common visible colour of a crosshair, as #rrggbb."""
-    im = Image.open(png).convert("RGBA")
+    im = _image().open(png).convert("RGBA")
     counts = {}
     for r, g, b, a in _pixels(im):
         if a:
@@ -478,7 +483,7 @@ def main_color(png):
 def recolor(png, color):
     """Every visible pixel becomes `color`, alpha kept. Outlines lose their own colour."""
     rgb = tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
-    im = Image.open(png).convert("RGBA")
+    im = _image().open(png).convert("RGBA")
     im.putdata([(*rgb, a) if a else (r, g, b, a) for r, g, b, a in _pixels(im)])
     return im
 
