@@ -556,7 +556,7 @@ The owner wants the Source Yaw settings tidied before the Windows version (Phase
   - `check_modules.check_groups` covers module.json, the legacy table, the release copy, bad values, and every real module naming its games. Screenshot-checked.
   - Ships with the next `hub-v*` release. Modules don't need a new `needs_core`, because an old core ignores the field.
 
-## Phase 12: Source Yaw on Windows (owner, 2026-11-06; step 1 built on `sy-windows`)
+## Phase 12: Source Yaw on Windows (owner, 2026-11-06; built on `sy-windows`, waits for a Windows test)
 
 Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Windows module too, installed from the hub's Modules page, with its settings in the hub section.
 
@@ -569,6 +569,19 @@ Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Wi
   4. Tone: a `winmm` `waveOut` backend with the same `mode`/`start`/`close` interface. Game sounds through `winsound`.
   5. Module: `win32` in `module.json`, Python install and launch hooks for Windows, the hub section hides the Crosshair and Offset display cards, KROSSHAIR, the input service and the launch-option text. `check_hub_section.py` expects the section on Windows from then on.
 - **Step 1 built (2026-11-06).** `trainer.py` keeps the neutral parts under its old name, because `settings_api` and the checks load it by path. That covers the cue logic, binds, settings, `GameEvents`, `CueSounds` (its `tone_class` is now required) and the main loop `run(game, platform, stop=None)`. `trainer_linux.py` holds the input socket, `Overlay`/`write_atlas`, the pw-cat `Tone`, `FocusWatch` and `Linux`, the platform object that `run` takes. Its docstring lists what a platform gives. `trainer.platform()` imports `trainer_linux` only when it runs. `read_binds(game_dir, allowed)`: `None` passes every known key. `run` closes the tone, input and session on exit, and a set `stop` ends it, for the Windows thread. `yawcore` imports Pillow only inside the crosshair functions. `check_trainer.py` runs `run` with a fake platform, and imports `trainer`/`settings_api` with Pillow, fcntl and `trainer_linux` blocked. `install.sh` copies `trainer_linux.py`.
+- **Steps 2-5 built (2026-11-06), not yet tested on Windows.** The owner couldn't test then and asked for everything first, tested in one go.
+  - `trainer_win.py`: Raw Input on a hidden window in its own thread (`RIDEV_INPUTSINK`, perf_counter times, 1 ms timers while it runs). Focus is the foreground exe living under the game's install folder plus the cursor in its window, so no exe names are needed. The tone is a winmm waveOut ring of 4×5 ms buffers that logs how often it ran dry. Its samples come from `trainer.ToneSynth`, now shared with the Linux pw-cat player.
+  - `launch_win.py`, called from `module_hooks.launch` on win32, does `launch-hook.sh`'s job. It finds the game from the exe path or `-game`, runs `yawcore.apply_at_launch` (shared with `--apply`), and starts `mode_watch.run` and `trainer.run` as threads. An atexit step sets their stop event. Output goes to `%APPDATA%\sourceyaw\run.log`.
+  - `yawcore` on Windows keeps its config in `%APPDATA%\sourceyaw`, writes no crosshair colour for either game, plays game sounds through winsound and reads launch options from the Steam roots.
+  - The hub section is listed on Windows. `data-linux` hides the Crosshair and Offset display cards and the input service row, and the yawspeed rows lose their colour and preview columns. The launch option is the core exe's. Screenshot-checked with Windows mode forced on Linux.
+  - `module.json` lists win32. The two lazy Pillow imports sit in `try/except ImportError`, which `check_modules` accepts. The hub exe bundles `ctypes.wintypes`.
+  - The step 1 split had broken two hub buttons on Linux, the tone ▶ preview and Show in game. Both are fixed, and the checks now catch them.
+  - Tests:
+    - `check_launch_win.py`, run on Linux.
+    - `check_trainer.py`: struct layouts, key and mouse mapping, the folder test and ToneSynth fades.
+    - `check_hub_section.py`: Windows mode faked on Linux.
+    - The `sourceyaw-windows` CI job: `windows/check_windows.py` on windows-latest runs the real Win32 code. It covers SendInput into Raw Input, waveOut, `trainer.run`, the launch hook and the hub section.
+  - `windows/rawinput_probe.py` is the standalone probe for the owner's game test.
 - **Testing.** Claude covers the key table and the split trainer with synthetic events on Linux, and the Windows CI imports every Windows module. The owner or the friend hand-tests on Windows. To check there: whether Raw Input on a hidden window still gets input while CS:S (`m_rawinput 1`) is in front.
 
 ## Later / undecided

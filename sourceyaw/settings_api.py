@@ -154,6 +154,14 @@ def trainer_status(cstrike):
       command       the install command, to copy
       binds         note under "Keys", or None without a game folder"""
     trainer = _trainer_module()
+    if core.WINDOWS:
+        # Raw Input: no service to install, and every key with an evdev twin reaches the trainer
+        binds = None
+        if cstrike:
+            _, unseen = trainer.read_binds(cstrike, None)
+            binds = ("⚠ Source Yaw can't read these keys on Windows: " + ", ".join(unseen) if unseen
+                     else "Strafe, turn and jump keys come from your binds in the game")
+        return {"installed": True, "service": "", "command": "", "binds": binds}
     installed = trainer.forwarded() is not None
     if installed:
         service = "Installed: forwards only the keys in /etc/sourceyaw-inputd.conf"

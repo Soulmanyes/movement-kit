@@ -35,7 +35,10 @@ EVENT = struct.Struct("<qIHHi")
 # ---------------------------------------------------------------- overlay
 
 def write_atlas(cfg):
-    from PIL import Image, ImageDraw, ImageFont
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as e:  # Linux only; check_modules' import rule accepts it this way
+        raise RuntimeError("the offset display needs Pillow") from e
     fonts = (glob.glob("/usr/share/fonts/**/DejaVuSansMono-Bold.ttf", recursive=True)
              or glob.glob("/usr/share/fonts/**/*Mono*Bold*.ttf", recursive=True))
     px = max(8, int(cfg["size"]))

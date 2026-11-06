@@ -274,7 +274,10 @@ def crosshair_maker_png():
 def _image():
     """Pillow's Image, imported only by the crosshair colour code (Linux only), so this file
     imports on Windows, where the core exe has no Pillow."""
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError as e:  # also what check_modules' import rule accepts in a Windows module
+        raise RuntimeError("the crosshair colour needs Pillow (Linux only)") from e
     return Image
 
 
@@ -916,7 +919,8 @@ def play_sound(cstrike, sound, game="css"):
 
 def current_launch_options(game="css"):
     """The game's launch options in the most recently used Steam account, or None."""
-    files = sorted((HOME / ".local/share/Steam/userdata").glob("*/config/localconfig.vdf"),
+    roots = steam.steam_roots(flatpak=False) if WINDOWS else [HOME / ".local/share/Steam"]
+    files = sorted((vdf for root in roots for vdf in Path(root).glob("userdata/*/config/localconfig.vdf")),
                    key=lambda p: p.stat().st_mtime, reverse=True)
     for vdf in files:
         try:

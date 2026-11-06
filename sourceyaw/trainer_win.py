@@ -174,7 +174,9 @@ def _win32():
                 (m.waveOutUnprepareHeader, w.UINT, [w.HANDLE, p(WAVEHDR), w.UINT]),
                 (m.waveOutWrite, w.UINT, [w.HANDLE, p(WAVEHDR), w.UINT]),
                 (m.waveOutReset, w.UINT, [w.HANDLE]),
-                (m.waveOutClose, w.UINT, [w.HANDLE])):
+                (m.waveOutClose, w.UINT, [w.HANDLE]),
+                (m.timeBeginPeriod, w.UINT, [w.UINT]),
+                (m.timeEndPeriod, w.UINT, [w.UINT])):
             fn.restype, fn.argtypes = res, args
         _dlls.update(user32=u, kernel32=k, winmm=m)
     return _dlls["user32"], _dlls["kernel32"], _dlls["winmm"]
@@ -188,7 +190,11 @@ class RawInput:
     (GetMessageTime ticks in ~15.6 ms steps, a whole game tick).
 
     A thread of its own owns a hidden window registered with RIDEV_INPUTSINK, and pumps its
-    messages until close(). Raises OSError when Windows refuses the window or the registration."""
+    messages until close(). Raises OSError when Windows refuses the window or the registration.
+
+    While it runs, the process asks for 1 ms timers (timeBeginPeriod): by default Windows rounds
+    waits up to ~15.6 ms, so read()'s short timeout, and with it the trainer's checks, would run
+    a whole tick late."""
     _count = 0
 
     def __init__(self):
@@ -204,6 +210,7 @@ class RawInput:
         ready.wait(5)
         if self.hwnd is None:
             raise OSError(self.error or "Raw Input didn't start")
+        _win32()[2].timeBeginPeriod(1)
 
     def _run(self, ready):
         user32, kernel32, _ = _win32()
@@ -279,6 +286,7 @@ class RawInput:
         if self.hwnd and self.thread.is_alive():
             _dlls["user32"].PostMessageW(self.hwnd, WM_CLOSE, 0, 0)
             self.thread.join(1)
+            _dlls["winmm"].timeEndPeriod(1)
 
 
 # ---------------------------------------------------------------- focus
@@ -337,7 +345,8 @@ class Tone:
 
     BUFFERS chunks are queued at most, so switching it on or off is heard within about
     BUFFERS x 5 ms; a buffer is refilled as soon as waveOut marks it done. Too few buffers
-    would let the sound run dry (crackles) when Python is slow to refill."""
+    would let the sound run dry (crackles) when Python is slow to refill: `dry` counts the
+    times every buffer had finished before the next was written, logged at close."""
     BUFFERS = 4
 
     def __init__(self, synth):
@@ -345,6 +354,7 @@ class Tone:
         self.synth = synth
         self.closed = threading.Event()
         self.thread = None
+        self.dry = 0
         self.hwo = wintypes.HANDLE()
         _, _, winmm = _win32()
         rate = synth.RATE
@@ -374,6 +384,8 @@ class Tone:
                 if queued[i] and not h.dwFlags & WHDR_DONE:
                     time.sleep(0.001)
                     continue
+                if all(queued) and all(x.dwFlags & WHDR_DONE for x in headers):
+                    self.dry += 1
                 ctypes.memmove(data[i], self.synth.next(self.mode), size)
                 h.dwFlags &= ~WHDR_DONE
                 if winmm.waveOutWrite(self.hwo, ctypes.byref(h), hsize):
@@ -390,6 +402,7 @@ class Tone:
         self.closed.set()
         if self.thread:
             self.thread.join(1)
+            print(f"trainer: tone ran dry {self.dry} times", flush=True)
         elif self.hwo:
             _win32()[2].waveOutClose(self.hwo)
 

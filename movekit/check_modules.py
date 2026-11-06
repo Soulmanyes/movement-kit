@@ -183,7 +183,7 @@ def check_own_modules():
     expect(mgr.problems(), [], "problems in the kit's module.json files")
     expect(sorted(mgr.available()), sorted(found), "modules available on Linux")
     expect(sorted(modules.Manager(kit_root=KIT, data=TMP / "own-data", platform="win32").available()),
-           ["first-jump", "gain-converter", "jhud", "strafe-histogram", "strafe-review", "trainer-height", "zone-exit"], "modules available on Windows")
+           sorted(found), "modules available on Windows (every one since Source Yaw's Phase 12)")
     bad = TMP / "bad" / "alpha"
     bad.mkdir(parents=True)
     (bad / "tool.py").write_text('VERSION = "1.0.0"\n')

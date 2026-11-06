@@ -79,7 +79,8 @@
 			<div id="sy-entries"></div>
 		</section>
 
-		<section class="card">
+		<!-- data-linux: hidden on Windows, which has no crosshair colour, offset overlay or input service -->
+		<section class="card" data-linux>
 			<h2>Crosshair</h2>
 			<div class="sy-row">
 				<label class="sy-label" for="sy-crosshair">Change crosshair colour<div id="sy-color-note" class="muted"></div></label>
@@ -99,13 +100,13 @@
 		<section class="card">
 			<h2>Strafe trainer</h2>
 			<div class="muted sy-desc">While a jump key is held: sounds when you turn without that way's strafe key
-				or hold both strafe keys, and each strafe's offset on screen in ticks (minus: key early, plus: key late,
-				0: same tick).</div>
+				or hold both strafe keys<span data-linux>, and each strafe's offset on screen in ticks (minus: key early,
+				plus: key late, 0: same tick)</span>.</div>
 			<div class="sy-row">
 				<label class="sy-label" for="sy-t-enabled">Strafe trainer</label>
 				<input id="sy-t-enabled" type="checkbox" class="sy-switch">
 			</div>
-			<div class="sy-row">
+			<div class="sy-row" data-linux>
 				<div class="sy-label">Input service<div id="sy-service" class="muted"></div></div>
 				<button id="sy-service-copy" title="Copy the install command">Copy command</button>
 			</div>
@@ -121,7 +122,7 @@
 			</div>
 		</section>
 
-		<section class="card">
+		<section class="card" data-linux>
 			<h2>Offset display</h2>
 			<div class="sy-trainer">
 			<div class="sy-row">

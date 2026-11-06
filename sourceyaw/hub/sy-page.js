@@ -98,6 +98,7 @@
 
 	let previewTimer = null;
 	function refreshPreviews() {
+		if (st.windows) return;  // no crosshair colour on Windows
 		clearTimeout(previewTimer);
 		previewTimer = setTimeout(async () => {
 			const urls = await call("previews", { game: st.game, base, colors: entries.map((e) => e.color) },
@@ -119,14 +120,16 @@
 				title: "Start the game on this yawspeed" });
 			radio.onchange = () => { start = i; drawEntries(currentUrls()); changed(); };
 
-			const preview = el("img", { className: "sy-preview", alt: "", title: "Crosshair in this colour" });
+			const preview = el("img", { className: "sy-preview", alt: "", title: "Crosshair in this colour",
+				hidden: st.windows });
 			if (urls && urls[i]) preview.src = urls[i];
 
 			const speed = el("input", { type: "number", step: "10", title: "cl_yawspeed" });
 			speed.dataset.limit = "speed";
 			numberBox(speed, entry.speed, (v) => { entry.speed = v; changed(); });
 
-			const color = el("input", { type: "color", value: entry.color, title: "Crosshair colour" });
+			const color = el("input", { type: "color", value: entry.color, title: "Crosshair colour",
+				hidden: st.windows });
 			color.oninput = () => { entry.color = color.value; refreshPreviews(); changed(); };
 
 			const choices = st.sounds.some(([v]) => v === entry.sound) ? st.sounds
@@ -150,7 +153,7 @@
 				changed();
 			};
 
-			box.append(el("div", { className: "sy-entry" + (i === start ? " start" : "") },
+			box.append(el("div", { className: "sy-entry" + (i === start ? " start" : "") + (st.windows ? " sy-nocolor" : "") },
 				el("div", { className: "sy-move" }, up, down), radio,
 				el("span", { className: "sy-num", textContent: String(i + 1) }), preview, speed, color,
 				el("div", { className: "sy-sound-wrap" }, sound, play), remove));
@@ -560,6 +563,7 @@
 		$("sy-color-note").textContent = st.color_note;
 		$("sy-steam-note").textContent = st.steam_note;
 		document.querySelectorAll("[data-krosshair]").forEach((n) => { n.hidden = !st.uses_krosshair; });
+		document.querySelectorAll("[data-linux]").forEach((n) => { n.hidden = st.windows; });
 		if (st.uses_krosshair) {
 			showBase(st.base_options, st.base_shown);
 			showKrosshair(st.krosshair);

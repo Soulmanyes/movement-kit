@@ -1,9 +1,13 @@
 """The Source Yaw section (movekit/hub.py): the GTK window's settings as a hub page (Phase 3.6).
 
 The logic is settings_api.py and yawcore.py, loaded by path (hub.local_import), so sourceyaw/ never
-goes on sys.path. They need Pillow and the trainer's Linux modules, so the section is Linux-only.
-hub.discover() loads this file on every OS before it looks at "os", so the top of the file imports
-only the standard library and movekit.hub; settings_api loads on the first call.
+goes on sys.path. hub.discover() loads this file on every OS before it looks at "os", so the top of
+the file imports only the standard library and movekit.hub; settings_api loads on the first call.
+
+On Windows (Phase 12) the page hides what Windows doesn't have (data-linux in hub/index.html: the
+crosshair colour, the offset overlay, the input service), load() says so with "windows", and the
+launch option is the core exe's (movekit/dispatch.py). Pillow is only needed for the crosshair
+previews, which Windows doesn't draw.
 
 What the GTK window keeps in its widgets, the page keeps in its own state and sends back whole:
 `apply(game, form)` takes the form, clamps the numbers to the ranges the window's spin buttons
@@ -15,6 +19,7 @@ import base64
 import io
 import math
 import re
+import sys
 import threading
 
 from movekit.hub import local_import
@@ -148,9 +153,37 @@ def key_notes(game, key, offset_key, mode_key=""):
             "mode": mode_key_note(game, key, offset_key, mode_key)}
 
 
+# the core exe's names, now and before it was the hub (README: Steam launch option)
+WINDOWS_EXES = ("movement-kit.exe", "strafe-review.exe")
+
+
+def _windows_launch_option(game):
+    """Windows: the core exe before %command% (movekit/dispatch.py runs each module's launch step)."""
+    core = _core()
+    exe = sys.executable if getattr(sys, "frozen", False) else r"C:\path\to\movement-kit.exe"
+    run = f'"{exe}"'
+    current = core.current_launch_options(game)
+    if current and any(name in current.lower() for name in WINDOWS_EXES):
+        return {"text": current, "note": "Already set up", "already": True}
+    if current and "%command%" in current:
+        text = current.replace("%command%", f"{run} %command%", 1)
+    else:
+        text = " ".join(filter(None, [f"{run} %command%", current]))
+    if current is None:
+        note = "Couldn't read your Steam launch options. Put this before %command%"
+    elif current:
+        note = "Your current launch options with movement-kit.exe added. Replace them with this"
+    else:
+        note = "You have no launch options yet. Paste this in"
+    return {"text": text, "note": note + ". Every installed tool starts from this one launch option",
+            "already": False}
+
+
 def launch_option(game):
     """The launch options to paste into Steam and the note under them (Window.show_launch_option)."""
     core = _core()
+    if core.WINDOWS:
+        return _windows_launch_option(game)
     _cstrike(game)
     current = core.current_launch_options(game)
     run = core.runner()
@@ -264,8 +297,11 @@ def load(game=None):
         "uses_krosshair": uses_krosshair,
         "color_note": ("Shows a KROSSHAIR crosshair in the colour of the current yawspeed" if uses_krosshair
                        else f"Sets {info['name']}'s own crosshair to the colour of the current yawspeed"),
-        "steam_note": ("CS:S Properties → Launch Options. movekit-run applies these settings and runs the "
-                       "colour changer and strafe trainer while the game is open." if uses_krosshair
+        "windows": core.WINDOWS,
+        "steam_note": (f"{info['short']} Properties → Launch Options. movement-kit.exe applies these settings "
+                       "and runs the strafe trainer while the game is open." if core.WINDOWS
+                       else "CS:S Properties → Launch Options. movekit-run applies these settings and runs the "
+                            "colour changer and strafe trainer while the game is open." if uses_krosshair
                        else f"{info['short']} Properties → Launch Options. Only needed for the strafe "
                             "trainer: movekit-run starts it while the game is open."),
         "autoexec": bool(cstrike) and core.autoexec_runs_yaws(cstrike),
@@ -284,7 +320,7 @@ def load(game=None):
         "notes": key_notes(game, data["key"], trainer["offset_key"], data["mode_key"]),
         "krosshair": krosshair() if uses_krosshair else None,
         "launch": launch_option(game),
-        "previews": previews(game, data["base"], [e["color"] for e in entries]),
+        "previews": [] if core.WINDOWS else previews(game, data["base"], [e["color"] for e in entries]),
         "limits": {k: list(v) for k, v in LIMITS.items()},
     }
 
@@ -321,8 +357,11 @@ def _base_png(game, base):
 
 
 def previews(game, base, colors):
-    """Data URLs of the crosshair recoloured for each colour, in one call for every row."""
+    """Data URLs of the crosshair recoloured for each colour, in one call for every row (none on
+    Windows, which has no crosshair colour and no Pillow)."""
     core = _core()
+    if core.WINDOWS:
+        return []
     png = _base_png(game, base)
     out = []
     for color in colors:
@@ -479,7 +518,7 @@ def apply(game, form):
 SECTION = {
     "key": "sourceyaw",
     "title": "Source Yaw",
-    "os": ["linux"],
+    "os": ["linux", "win32"],
     "page": "hub/index.html",
     "api": {
         "load": load, "keys": keys, "set_game": set_game, "key_notes": key_notes,

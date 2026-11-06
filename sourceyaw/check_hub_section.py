@@ -3,7 +3,7 @@
 
 Usage: python sourceyaw/check_hub_section.py   (exits 1 on the first failure)
 
-Covers: discovery finding the section on Linux and leaving it out on Windows without a problem
+Covers: discovery finding the section on Linux and on Windows without a problem
 (hub_section.py loads on every OS); no bare yawcore, trainer or settings_api left behind, also after
 a call that loads the trainer; load() for both games; the key maps giving only bind names CS:S
 knows; the key, offset-key and launch-option notes in the retired GTK window's words; previews as 33x33 PNG data
@@ -11,7 +11,8 @@ URLs; the form's numbers kept in the window's ranges and a blank box or a bad co
 new_entry; set_autoexec; sounds, the tone, Show in game, KROSSHAIR's install and the file dialog
 with their side effects stubbed; and Apply writing byte-identical files to the GTK window's way
 (settings_api.collect + yawcore.apply with its rounding; the window retired in 3.8, the files must
-not change), for both games.
+not change), for both games. Then Windows (Phase 12), faked on Linux: load() saying so with no
+previews, the core exe's launch option, the trainer needing no input service, Show in game off.
 Everything runs in a temp folder: HOME and the XDG folders point there, the games are fake folders.
 """
 import base64
@@ -84,7 +85,7 @@ def main():
         expect("PIL" in sys.modules, False, "Pillow loaded with the sections")
         win, win_problems = hub.discover(KIT, platform="win32")
         expect([p for p in win_problems if p[0] == "sourceyaw"], [], "sourceyaw problems on Windows")
-        expect("sourceyaw" in [s.key for s in win], False, "sourceyaw listed on Windows")
+        expect("sourceyaw" in [s.key for s in win], True, "sourceyaw listed on Windows")
         bridge = hub.Bridge(sections, problems)
 
         def call(name, **args):
@@ -317,7 +318,39 @@ def main():
             expect(call("load", game=game)["entries"][2]["speed"], 293.9535, f"{game}: saved speed")
 
         expect([m for m in BARE if m in sys.modules], [], "bare modules at the end")
+        check_windows(call, core, games)
     print("ok: sourceyaw hub section")
+
+
+def check_windows(call, core, games):
+    """The section as Windows sees it, faked on Linux: yawcore's WINDOWS switch and no crosshair
+    colour (what yawcore sets at import on Windows), a Steam with launch options to read."""
+    core.WINDOWS = True
+    for game in core.GAMES.values():
+        game["colors"] = None
+    st = call("load", game="css")
+    expect((st["windows"], st["previews"], st["uses_krosshair"], st["krosshair"]), (True, [], False, None),
+           "Windows: load")
+    expect(st["steam_note"].startswith("CS:S Properties → Launch Options. movement-kit.exe"), True,
+           "Windows: Steam note")
+    expect(call("previews", game="css", base="builtin", colors=["#ff0000"]), [], "Windows: no previews")
+    for current, text, already in ((None, '"C:\\path\\to\\movement-kit.exe" %command%', False),
+                                   ("-novid %command% -tickrate 100",
+                                    '-novid "C:\\path\\to\\movement-kit.exe" %command% -tickrate 100', False),
+                                   ("-novid", '"C:\\path\\to\\movement-kit.exe" %command% -novid', False),
+                                   ('"D:\\Kit\\Movement-Kit.exe" %command%', '"D:\\Kit\\Movement-Kit.exe" %command%', True),
+                                   ('"D:\\strafe-review.exe" %command%', '"D:\\strafe-review.exe" %command%', True)):
+        core.current_launch_options = lambda game="css", current=current: current
+        got = call("launch_option", game="css")
+        expect((got["text"], got["already"]), (text, already), f"Windows: launch option from {current!r}")
+    expect(got["note"], "Already set up", "Windows: already set up")
+    status = call("trainer_status", game="css")
+    expect((status["installed"], status["service"], status["command"]), (True, "", ""),
+           "Windows: no input service")
+    (games["css"] / "cfg/config.cfg").write_text('bind "SPACE" "+jump"\nbind "F13" "+moveleft"\n')
+    expect(call("trainer_status", game="css")["binds"], "⚠ Source Yaw can't read these keys on Windows: f13 (strafe left)",
+           "Windows: keys with no code")
+    expect(call("show_in_game", on=True, game="css", trainer=st["trainer"]), False, "Windows: no Show in game")
 
 
 if __name__ == "__main__":
