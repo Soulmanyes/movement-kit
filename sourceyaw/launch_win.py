@@ -9,8 +9,9 @@ that process and live exactly as long as the game:
 No crosshair colour on Windows. Everything prints to %APPDATA%\\sourceyaw\\run.log, the only
 place a windowed exe's output and a thread's traceback can be read afterwards.
 
-Also `py launch_win.py GAME` from a checkout, to try the helpers without the hub: they run until
-Ctrl+C.
+Also `py launch_win.py GAME [--trainer]` from a checkout, to try the helpers without the hub (start
+the game yourself, then this): they run until Ctrl+C. --trainer turns the strafe trainer on for that
+run without saving it, as only the hub can switch it on otherwise.
 """
 
 import atexit  # noqa: I001, RUF100 - movekit must come after yawcore (see below)
@@ -85,6 +86,8 @@ def start(argv):
         stop.set()
         for thread in threads:
             thread.join(2)
+        alive = [t.name for t in threads if t.is_alive()]
+        print(f"sourceyaw: helpers stopped{' except ' + ', '.join(alive) if alive else ''}", flush=True)
     atexit.register(finish)
     print(f"sourceyaw: {yawcore.GAMES[game]['name']} started with "
           f"{', '.join(t.name for t in threads) or 'yaws.cfg only'}", flush=True)
@@ -92,8 +95,17 @@ def start(argv):
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in yawcore.GAMES:
-        sys.exit(f"usage: launch_win.py {'|'.join(yawcore.GAMES)}")
+    args = sys.argv[1:]
+    force = "--trainer" in args
+    args = [a for a in args if a != "--trainer"]
+    if len(args) != 1 or args[0] not in yawcore.GAMES:
+        sys.exit(f"usage: launch_win.py {'|'.join(yawcore.GAMES)} [--trainer]")
+    sys.argv[1:] = args
+    if force:
+        import trainer
+        saved = trainer.settings
+        trainer.settings = lambda game: {**saved(game), "enabled": True}
+        yawcore.trainer_on = lambda data: True
     game_dir = yawcore.find_game(sys.argv[1])
     if not game_dir:
         sys.exit(f"{yawcore.GAMES[sys.argv[1]]['name']} not found in your Steam libraries")

@@ -8,10 +8,12 @@ Usage: python sourceyaw/check_launch_win.py   (exits 1 on the first failure)
 Covers: which game Steam's command starts (exe folder, -game, neither), yaws.cfg written without
 colour lines, the list switcher and trainer started as threads that get the session's events,
 everything stopped and cleaned up at exit, all without Pillow (auto cfg cleared, sessions and input closed), a thread's
-error landing in run.log, and another game left alone.
+error landing in run.log, another game left alone, and a real launcher process exiting
+right after the game, through atexit.
 """
 import os
 import queue
+import subprocess
 import sys
 import tempfile
 import time
@@ -158,6 +160,36 @@ def main():
                (True, True, True), "run.log")
         expect(launch_win.start([r"D:\Games\other.exe"]), [], "another game: nothing started")
         expect(mode_watch.session is session, True, "mode_watch shares the session module")
+
+        # the real exit order: Python waits for non-daemon threads before atexit, so a helper that
+        # isn't a daemon would keep the launcher (and Steam's "running") alive after the game
+        data["trainer"] = {"enabled": False}  # the real trainer would need a real input service
+        yawcore.save_settings(data, "momentum")
+        auto.write_text("sourceyaw_arm_surf\n")
+        script = tmp / "launch.py"
+        script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "sys.modules['PIL'] = None\n"
+            f"sys.path.insert(0, {str(HERE)!r})\n"
+            "import launch_win, yawcore\n"
+            "for g in yawcore.GAMES.values():\n"
+            "    g['colors'] = None\n"
+            f"yawcore.find_game = lambda g: Path({str(dirs['momentum'])!r}) if g == 'momentum' else None\n"
+            f"launch_win.start([{str(dirs['momentum'].parent / 'momentum.exe')!r}])\n"
+            "import time; time.sleep(0.5)  # the game, briefly\n")
+        env = {**os.environ, "MOVEKIT_SESSION_PORT": "8797"}
+        started = time.monotonic()
+        try:
+            done = subprocess.run([sys.executable, str(script)], env=env, timeout=10, check=False,
+                                  capture_output=True, text=True)
+        except subprocess.TimeoutExpired:
+            fail("the launcher didn't exit after the game: a helper thread keeps it alive")
+        expect(done.returncode, 0, f"launcher exit code ({done.stderr[-300:]})")
+        expect(time.monotonic() - started < 8, True, "launcher exits soon after the game")
+        expect(auto.read_text(), "", "auto cfg cleared at the real exit")
+        expect(launch_win.LOG.read_text().rstrip().endswith("sourceyaw: helpers stopped"), True,
+               "run.log ends with the helpers stopped")
     print("check_launch_win: all passed")
 
 
