@@ -39,6 +39,7 @@
 			showPageError(null);
 		}
 		if (["install", "uninstall", "update", "update_all", "rollback"].includes(name)) hub.drawSide();
+		if (["update", "update_all", "rollback"].includes(name)) hub.whatsNew();
 		draw(reply.result || current);
 	}
 

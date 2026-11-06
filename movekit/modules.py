@@ -48,7 +48,7 @@ in the same layout as the repo, so a tool finds movekit the way it does in the r
 The previous version of each module is kept in <data>/previous/<key> for roll back.
 
 State, in <data>/modules.json: per key {"auto", "installed" (tag), "previous" (tag), "failed"
-(tag), "removed" (git checkout only)}, plus "checked" and "latest" (per key: tag, url, notes,
+(tag), "removed" (git checkout only), "seen" (the version whose notes were shown last)}, plus "checked" and "latest" (per key: tag, url, notes,
 asset) from the last look at GitHub. The core is the entry "core" (line hub-v*); how it installs
 an update is the caller's (see Manager.core_installer), since that differs by platform.
 Another program may change an auto switch in the same file while a Manager is open (Source Yaw's
@@ -79,7 +79,7 @@ from pathlib import Path
 
 from movekit import paths, updater
 
-CORE_VERSION = "1.7.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
+CORE_VERSION = "1.8.1"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
 CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
@@ -205,6 +205,13 @@ def data_paths(manifest):
         base = paths.data_dir(first) if where == "data" else paths.config_dir(first)
         out.append(base / rest if rest else base)
     return out
+
+
+def clean_notes(text):
+    """Release notes without GitHub's added "Full Changelog" line."""
+    lines = [ln for ln in text.replace("\r\n", "\n").split("\n")
+             if not ln.strip().startswith("**Full Changelog**")]
+    return "\n".join(lines).strip()
 
 
 def newer(tag, version):
@@ -470,6 +477,70 @@ class Manager:
         if isinstance(m.get("games"), list) and m["games"] and all(g in GAMES for g in m["games"]):
             out["games"] = m["games"]
         return out
+
+    # release notes after an update
+
+    def whats_new(self):
+        """The notes to show once after the core or a module updated: [{"key", "title", "releases":
+        [{"tag", "url", "notes"}] newest first}], [] when there is nothing. Reads GitHub only when a
+        version went up since its notes were last shown ("seen" in each key's entry). A first
+        install and a roll back show nothing; versions skipped by one update show too. Raises
+        OSError/ValueError when GitHub can't be read: try again later. Call mark_seen(keys) once
+        the notes are on screen."""
+        todo, quiet = {}, []
+        for key in [CORE, *sorted(self.installed())]:
+            mine = updater.parse_version(self.version(key) or "")
+            if not mine:
+                continue
+            entry = self.state.get("modules", {}).get(key, {})
+            seen = updater.parse_version(entry.get("seen") or "")
+            if seen is None:
+                # a module: a first install, or updated long ago by a hub from before "seen" (an
+                # update sets it). The core: updated by such a hub just now, since this is the
+                # core's first version with "seen": show this version's notes only.
+                if key != CORE or updater.parse_version(entry.get("installed") or "") != mine:
+                    quiet.append(key)
+                    continue
+                todo[key] = (mine, (0, 0, 0), True)
+            elif mine > seen:
+                todo[key] = (mine, seen, False)
+            elif mine < seen:  # rolled back: the next update shows its notes again
+                quiet.append(key)
+        if quiet:
+            self.mark_seen(quiet)
+        if not todo:
+            return []
+        found = {key: [] for key in todo}
+        for r in self.fetch():
+            if not isinstance(r, dict) or r.get("draft") or r.get("prerelease"):
+                continue
+            tag = r.get("tag_name")
+            v = updater.parse_version(tag) if isinstance(tag, str) else None
+            notes = clean_notes(r.get("body") or "")
+            if not v or not notes:
+                continue
+            key = CORE if tag.startswith(CORE_PREFIX) else tag.rsplit("-v", 1)[0]
+            if key not in todo:
+                continue
+            mine, seen, only_mine = todo[key]
+            if v == mine or (seen < v < mine and not only_mine):
+                found[key].append((v, {"tag": tag, "url": r.get("html_url", ""), "notes": notes}))
+        empty = [k for k, rel in found.items() if not rel]
+        if empty:  # no notes written for these versions
+            self.mark_seen(empty)
+        out = []
+        for key, rel in found.items():
+            if rel:
+                rel.sort(key=lambda x: x[0], reverse=True)
+                out.append({"key": key, "title": self.info(key)["title"], "releases": [r for _v, r in rel]})
+        return out
+
+    def mark_seen(self, keys):
+        for key in keys:
+            version = self.version(key)
+            if version:
+                self._entry(key)["seen"] = version
+        self._save()
 
     # one card's facts
 
@@ -817,9 +888,12 @@ class Manager:
             entry.pop("waiting_for_core", None)
             entry.pop("waiting_tag", None)
             self._check_needs(key, manifest)
+            before = None if first else self.version(key)
             self._swap(key, new, first)
             if not first:
                 entry["previous"] = entry.get("installed")
+                if before:  # whats_new shows the notes since this version
+                    entry.setdefault("seen", before)
 
         try:
             self._mark(key, latest["tag"], run)

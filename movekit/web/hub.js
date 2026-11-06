@@ -66,11 +66,91 @@ const hub = (() => {
 		return info;
 	}
 
+	// Release notes (GitHub Markdown) as elements: headings and **bold** in bold, `code` as code,
+	// list items as a list, links as their text. Built with text nodes, so notes can't inject HTML.
+	function notesElement(text) {
+		const box = document.createElement("div");
+		let list = null;
+		const inline = (parent, line) => {
+			line = line.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+			for (const part of line.split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+				if (!part) continue;
+				const tag = part.startsWith("**") ? "strong" : part.startsWith("`") ? "code" : null;
+				const el = tag ? document.createElement(tag) : document.createTextNode(part);
+				if (tag) el.textContent = part.slice(tag === "strong" ? 2 : 1, tag === "strong" ? -2 : -1);
+				parent.append(el);
+			}
+		};
+		for (const raw of text.split("\n")) {
+			const line = raw.trimEnd();
+			const item = line.match(/^\s*[-*+]\s+(.*)/);
+			if (item) {
+				if (!list) box.append((list = document.createElement("ul")));
+				const li = document.createElement("li");
+				inline(li, item[1]);
+				list.append(li);
+				continue;
+			}
+			list = null;
+			if (!line.trim()) continue;
+			const head = line.match(/^#+\s+(.*)/);
+			const p = document.createElement("p");
+			if (head) {
+				const b = document.createElement("strong");
+				inline(b, head[1]);
+				p.append(b);
+			} else inline(p, line);
+			box.append(p);
+		}
+		return box;
+	}
+
+	// The notes of what updated since they were last shown, once (Bridge.whats_new). Runs on every
+	// page load and after an update on the Modules page; the bridge waits for the start's auto update.
+	let notesOpen = false;
+	async function whatsNew() {
+		if (notesOpen) return;
+		const api = await ready;
+		if (!api.whats_new) return;
+		const items = await api.whats_new();
+		if (!items || !items.length || notesOpen) return;
+		notesOpen = true;
+		const dlg = document.createElement("dialog");
+		dlg.className = "hub-notes";
+		const h = document.createElement("h2");
+		h.textContent = "What's new";
+		dlg.append(h);
+		const body = document.createElement("div");
+		body.className = "hub-notes-body";
+		for (const it of items) {
+			for (const r of it.releases) {
+				const head = document.createElement("h3");
+				head.textContent = `${it.title} ${r.tag.replace(/^.*-v/, "v")}`;
+				body.append(head, notesElement(r.notes));
+			}
+		}
+		dlg.append(body);
+		const close = document.createElement("button");
+		close.className = "primary";
+		close.textContent = "Close";
+		close.addEventListener("click", () => dlg.close());
+		const row = document.createElement("div");
+		row.className = "hub-notes-buttons";
+		row.append(close);
+		dlg.append(row);
+		dlg.addEventListener("close", () => { dlg.remove(); notesOpen = false; });
+		document.body.append(dlg);
+		dlg.showModal();
+		close.focus();
+		api.notes_seen(items.map((it) => it.key));
+	}
+
 	const info = new Promise((resolve) => {
 		const go = () => drawSide().then(resolve);
 		if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go);
 		else go();
 	});
+	info.then(() => whatsNew()).catch(() => {});
 
-	return { ready, call, key, info, modules, drawSide };
+	return { ready, call, key, info, modules, drawSide, whatsNew };
 })();

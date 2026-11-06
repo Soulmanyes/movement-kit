@@ -452,6 +452,50 @@ def check_manager():
     calls()
 
 
+def check_whats_new():
+    """The notes shown once after an update: none for a first install or a roll back, every
+    version an update skipped, and only the current one for an update made before "seen"."""
+    gh = GitHub()
+    kit, data = TMP / "wn-kit", TMP / "wn-data"
+    mgr = modules.Manager(kit_root=kit, data=data, api=gh.base + "/releases?per_page=100")
+    gh.release("alpha-v1.0.0", "alpha-module.zip", module_zip("alpha", "1.0.0"))
+    gh.release(f"hub-v{CORE}")
+    mgr.check(force=True)
+    mgr.install("alpha")
+    expect(mgr.whats_new(), [], "notes after a first install (and a core never updated)")
+    expect(mgr.state["modules"]["alpha"]["seen"], "1.0.0", "seen after a first install")
+    gh.release("alpha-v1.1.0", "alpha-module.zip", module_zip("alpha", "1.1.0"))
+    gh.release("alpha-v1.1.5", "alpha-module.zip", module_zip("alpha", "1.1.5"), body="")
+    gh.release("alpha-v1.2.0", "alpha-module.zip", module_zip("alpha", "1.2.0"),
+               body="- two\r\n\r\n**Full Changelog**: x")
+    gh.release("alpha-v1.3.0", "alpha-module.zip", module_zip("alpha", "1.3.0"), draft=True)
+    mgr.check(force=True)
+    mgr.update("alpha")
+    got = mgr.whats_new()
+    expect([(i["key"], [r["tag"] for r in i["releases"]]) for i in got],
+           [("alpha", ["alpha-v1.2.0", "alpha-v1.1.0"])], "notes after an update that skipped 1.1.0")
+    expect(got[0]["releases"][0]["notes"], "- two", "notes without the Full Changelog line")
+    expect(mgr.whats_new(), got, "notes until marked seen")
+    mgr.mark_seen(["alpha"])
+    expect(mgr.whats_new(), [], "notes once marked seen")
+    mgr.rollback("alpha")
+    expect(mgr.whats_new(), [], "notes after a roll back")
+    expect(mgr.state["modules"]["alpha"]["seen"], "1.0.0", "seen after a roll back")
+    mgr.update("alpha")
+    expect([r["tag"] for r in mgr.whats_new()[0]["releases"]], ["alpha-v1.2.0", "alpha-v1.1.0"],
+           "notes after updating again from the roll back")
+    mgr.mark_seen(["alpha"])
+    del mgr.state["modules"]["alpha"]["seen"]
+    expect(mgr.whats_new(), [], "no notes for a module updated by a hub from before seen")
+    expect(mgr.state["modules"]["alpha"]["seen"], "1.2.0", "seen set quietly for that module")
+    core = mgr.state["modules"].setdefault("core", {})
+    core.pop("seen", None)
+    core["installed"] = f"hub-v{CORE}"
+    expect([(i["key"], [r["tag"] for r in i["releases"]]) for i in mgr.whats_new()],
+           [("core", [f"hub-v{CORE}"])], "notes of a core just updated by a core from before seen")
+    calls()
+
+
 def check_checkout():
     root = TMP / "checkout"
     (root / ".git").mkdir(parents=True)
@@ -671,6 +715,7 @@ def check_bridge():
 def main():
     check_own_modules()
     check_manager()
+    check_whats_new()
     check_checkout()
     check_groups()
     check_bridge()
