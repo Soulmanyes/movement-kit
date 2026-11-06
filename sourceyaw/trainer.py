@@ -520,14 +520,39 @@ def run(game, platform, stop=None):
         joined.close()
 
 
+def _sibling(name):
+    """trainer_linux or trainer_win, loaded from this file's folder under this module's naming:
+    the hub loads trainer by path under a prefixed name (settings_api), with sourceyaw/ not on
+    sys.path. Their `import yawcore` gets this file's yawcore."""
+    import importlib.util
+    prefix = __name__.rpartition(".")[0]
+    full = f"{prefix}.{name}" if prefix else name
+    if full in sys.modules:
+        return sys.modules[full]
+    spec = importlib.util.spec_from_file_location(full, Path(__file__).with_name(f"{name}.py"))
+    mod = importlib.util.module_from_spec(spec)
+    before = sys.modules.get("yawcore")
+    sys.modules["yawcore"] = yawcore
+    sys.modules[full] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except BaseException:
+        del sys.modules[full]
+        raise
+    finally:
+        if before is None:
+            sys.modules.pop("yawcore", None)
+        else:
+            sys.modules["yawcore"] = before
+    return mod
+
+
 def platform():
-    """This OS's platform for run(): trainer_win.Windows or trainer_linux.Linux, imported only here
+    """This OS's platform for run(): trainer_win.Windows or trainer_linux.Linux, loaded only here
     so neither OS loads the other's code."""
     if sys.platform == "win32":
-        import trainer_win
-        return trainer_win.Windows()
-    import trainer_linux
-    return trainer_linux.Linux()
+        return _sibling("trainer_win").Windows()
+    return _sibling("trainer_linux").Linux()
 
 
 def main():

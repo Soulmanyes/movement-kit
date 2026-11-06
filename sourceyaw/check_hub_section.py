@@ -201,9 +201,9 @@ def main():
         tones = []
 
         class FakeTone:
-            def __init__(self, volume, pitches):
+            def __init__(self, synth):
                 self.modes, self.closed = [], False
-                tones.append(((volume, pitches), self))
+                tones.append(((synth.volume, synth.pitches), self))
 
             def start(self):
                 pass
@@ -216,7 +216,10 @@ def main():
             def close(self):
                 self.closed = True
 
-        trainer.Tone = FakeTone
+        # the real platform (trainer_linux, loaded by path as in the hub) with only its tone faked
+        platform = trainer.platform()
+        expect(type(platform).__name__, "Linux", "the hub's trainer finds its platform")
+        type(platform).Tone = FakeTone
         expect(call("play_cue", game="css", sound="tone", tone_volume=45, pitch=330), True, "play the tone")
         time.sleep(0.8)
         (args, tone), = tones

@@ -380,7 +380,8 @@ def play_cue(game, sound, tone_volume, pitch):
         return play_sound(game, sound)
     volume = _number({"v": tone_volume}, "v", *LIMITS["tone_volume"]) / 100
     hz = _number({"v": pitch}, "v", *LIMITS["wrong_pitch"])
-    tone = _trainer().Tone(volume, {"cue": hz})
+    trainer = _trainer()
+    tone = trainer.platform().Tone(trainer.ToneSynth(volume, {"cue": hz}))
     tone.start()
     tone.mode = "cue"
     for delay, step in ((0.4, lambda: setattr(tone, "mode", None)), (0.6, tone.close)):
