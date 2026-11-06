@@ -4,7 +4,7 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 
 | Tool | What it does | Runs on |
 | --- | --- | --- |
-| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key (bhop and surf lists), colours the crosshair per yawspeed, trains strafes | Linux |
+| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key (bhop and surf lists), colours the crosshair per yawspeed (Linux), trains strafes | Windows, Linux |
 | [Strafe Review](strafe-review/) | Records every attempt per tick and reviews it in the browser | Windows, Linux |
 | [Gain Converter](gain-converter/) | Converts CS:S SSJ gain % to Momentum gain % and back | Windows, Linux |
 | [Strafe Trainer Height](trainer-height/) | Lets Momentum's strafe trainer be dragged taller in the HUD editor | Windows, Linux |
@@ -35,7 +35,7 @@ Then open the hub. It starts on the Modules page:
 
 - The cards come in groups: the core, the tools, then the HUD modules (the ones set up in Momentum's HUD editor), installed ones first. Tools that don't run on your OS are listed greyed out at the bottom, with no Install button.
 
-- **Install** on a tool's card downloads it and runs its installer (Strafe Review needs Momentum Mod installed; Source Yaw needs its system packages, see its README).
+- **Install** on a tool's card downloads it and runs its installer (Strafe Review needs Momentum Mod installed; Source Yaw on Linux needs its system packages, see its README). Each card says which games the tool works with.
 - **Update** shows when a new version is out, with **What's new** for its release notes. **Update all** at the top updates every card that has one.
 - After the hub or a tool updates, a **What's new** window shows the release notes once, including those of any versions skipped.
 - **Roll back** returns to the version before the last update.
@@ -63,7 +63,7 @@ hub/              the hub's Windows exe: entry point, build script and release l
 
 `movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. It also has the game session (`session.py`), the patched Momentum HUD files several tools share (`panorama.py`, which writes them into the game's `custom/0-movekit`), the launch wrapper (`movekit-run`) and a reader for Strafe Review's saved attempts (`attempts.py`, format in [strafe-review/FORMAT.md](strafe-review/FORMAT.md)). A tool imports it from the folder above its own: the repo root in a clone, the core's folder when the hub installed it (modules sit next to the core's `movekit`).
 
-`movekit/hub.py` is the hub: the Modules page (`movekit/modules.py` is the manager behind it) and one section per installed tool. Strafe Review (status, Open review and Stop), Gain Converter and Source Yaw (Linux only, the same settings as its own window) have sections, and the HUD settings (`hud/`, part of the core) show while Strafe Review, Strafe Trainer Height or a tool set up in the game's HUD editor (JHUD, Strafe Speed Histogram) is installed. It is the one part of `movekit` that needs a package outside the standard library: [pywebview](https://pywebview.flowrl.com/). A tool is a module through its `module.json` (key, release line, the core version it needs, its saved data, and a card for the HUD section if it has one) and `module_hooks.py` (install, uninstall, launch).
+`movekit/hub.py` is the hub: the Modules page (`movekit/modules.py` is the manager behind it) and one section per installed tool. Strafe Review (status, Open review and Stop), Gain Converter and Source Yaw (the same settings as its old window; on Windows without the crosshair and offset parts) have sections, and the HUD settings (`hud/`, part of the core) show while Strafe Review, Strafe Trainer Height or a tool set up in the game's HUD editor (JHUD, Strafe Speed Histogram) is installed. It is the one part of `movekit` that needs a package outside the standard library: [pywebview](https://pywebview.flowrl.com/). A tool is a module through its `module.json` (key, release line, the core version it needs, its saved data, and a card for the HUD section if it has one) and `module_hooks.py` (install, uninstall, launch).
 
 ## Launch option
 
