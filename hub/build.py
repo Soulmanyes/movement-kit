@@ -63,7 +63,8 @@ def kit_modules():
 def main():
     name = sys.argv[sys.argv.index("--name") + 1] if "--name" in sys.argv else "movement-kit"
     clean()
-    hidden = [*stdlib(), *kit_modules(), "webview", "hub_release"]
+    # ctypes.wintypes: a submodule, so stdlib() doesn't name it; Source Yaw's Windows trainer needs it
+    hidden = [*stdlib(), "ctypes.wintypes", *kit_modules(), "webview", "hub_release"]
     cmd = [
         sys.executable, "-m", "PyInstaller", "--onefile", "--windowed", "--noconfirm", "--clean",
         "--name", name, "--paths", str(KIT), "--paths", str(HERE),

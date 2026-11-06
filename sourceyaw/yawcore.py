@@ -37,7 +37,8 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
-from movekit import binds, cfgblock, keyvalues, steam, vpk  # after the path above
+# after the path above
+from movekit import binds, cfgblock, keyvalues, paths, steam, vpk
 from movekit import games as kit_games
 
 VERSION = "1.9.0"
@@ -47,7 +48,8 @@ HOME = Path.home()
 HERE = Path(__file__).resolve().parent
 XDG_CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 XDG_DATA = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
-CONFIG_DIR = XDG_CONFIG / "sourceyaw"
+# on Windows %APPDATA%\sourceyaw, the folder module.json's "config:sourceyaw" names (movekit/paths.py)
+CONFIG_DIR = paths.config_dir("sourceyaw") if sys.platform == "win32" else XDG_CONFIG / "sourceyaw"
 # the app was called CS:S Yaw before 1.2.0; its folders and markers are still recognised
 OLD_CONFIG_DIR = XDG_CONFIG / "css-yaw"
 SETTINGS = CONFIG_DIR / "settings.json"
@@ -86,6 +88,12 @@ GAMES = {
     "momentum": {"name": "Momentum Mod", "short": "Momentum Mod", "colors": "cvar",
                  "process": "momentum", "sound_vpks": ["mount/hl2_dir.vpk"]},
 }
+# no crosshair colour on Windows, for either game (Phase 12): KROSSHAIR is a Linux Vulkan layer,
+# and the owner left Momentum's cvar colour out there too
+WINDOWS = sys.platform == "win32"
+if WINDOWS:
+    for _game in GAMES.values():
+        _game["colors"] = None
 # first line of every yaws.cfg the app writes; anything else is the user's own file
 YAWS_HEADER = "// Written by Source Yaw."
 YAWS_HEADERS = (YAWS_HEADER, "// Written by CS:S Yaw.")
@@ -218,6 +226,12 @@ def find_game(game):
     return steam.game_dir(kit_games.GAMES[game], steam.steam_roots(flatpak=False))
 
 
+def in_folder(path, root):
+    """Whether `path` lies under folder `root` (case-insensitive, either slash, as on Windows)."""
+    path, root = str(path).replace("/", "\\").lower(), str(root).replace("/", "\\").lower().rstrip("\\")
+    return path.startswith(root + "\\")
+
+
 def find_cstrike():
     return find_game("css")
 
@@ -227,6 +241,9 @@ def installed_games():
 
 
 def game_running(game):
+    """Whether the game is running (Linux; on Windows always False, as no caller needs it there)."""
+    if WINDOWS:
+        return False
     name = GAMES[game]["process"]
     for proc in Path("/proc").iterdir():
         try:
@@ -582,7 +599,8 @@ def _yaws_cfg_modes(data, unbind, game):
                   "// list switcher); play is a local-only sound cue.",
                   "con_logfile yaw.log"]
     else:
-        lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour.")
+        lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
+                     if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
         if trainer_on(data) or auto_on(data):
             lines += ["// the strafe trainer and the list switcher read map loads from yaw.log",
                       "con_logfile yaw.log"]
@@ -643,7 +661,8 @@ def yaws_cfg(data, unbind=(), game="css"):
             "con_logfile yaw.log",
         ]
     else:
-        lines += ["// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."]
+        lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
+                     if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
         if trainer_on(data):
             lines += ["// the strafe trainer reads map loads from yaw.log to pick the tickrate",
                       "con_logfile yaw.log"]
@@ -812,7 +831,7 @@ def apply(data, cstrike, reset_current=False, game="css"):
                                  f"AUTO={1 if auto_on(data) else 0}\n")
     if krosshair:
         write_crosshairs(data, reset_current)
-    else:
+    elif GAMES[game]["colors"] == "cvar":
         write_color_cfgs(data, cstrike)
         if not data["crosshair"]:
             note = restore_crosshair_color(data, cstrike, game)
@@ -881,6 +900,10 @@ def play_sound(cstrike, sound, game="css"):
     path = sound_file(cstrike, sound, game)
     if not path:
         return False
+    if WINDOWS:
+        import winsound  # async: a new sound cuts the last one short
+        winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        return True
     for player in (["pw-play"], ["paplay"], ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]):
         if shutil.which(player[0]):
             subprocess.Popen([*player, str(path)], stdout=subprocess.DEVNULL,
@@ -955,6 +978,30 @@ def launch_option(current=None, run=None):
     return " ".join(filter(None, [f"{run} %command%", current])), False
 
 
+def set_up(game):
+    """Whether a launch of `game` should apply Source Yaw: it has saved settings, or it is CS:S
+    (a fresh install), so a game is never set up behind your back."""
+    return has_profile(game) or game == "css"
+
+
+def apply_at_launch(game):
+    """Rewrites `game`'s files from its saved settings right before it starts (launch-hook.sh
+    through --apply on Linux, launch_win.py on Windows), so the start yawspeed's colour is
+    correct. Prints the notes, or why it couldn't; True when it applied."""
+    game_dir = find_game(game)
+    if not game_dir:
+        print(f"{GAMES[game]['name']} not found in your Steam libraries")
+        return False
+    settings = load_settings(game)
+    problems = validate(settings)
+    if problems:
+        print(f"{GAMES[game]['name']}: " + "; ".join(problems))
+        return False
+    for note in apply(settings, game_dir, reset_current=True, game=game):
+        print(note)
+    return True
+
+
 if __name__ == "__main__":
     # `python3 yawcore.py --apply [game]`: rewrite a game's files from its saved settings
     #   (launch-hook.sh passes the game it is starting; without one: every game that has saved
@@ -971,19 +1018,8 @@ if __name__ == "__main__":
             remove_from_game(find_game(name), name)
         sys.exit(0)
     if len(args) == 2:
-        games = [args[1]] if has_profile(args[1]) or args[1] == "css" else []
+        games = [args[1]] if set_up(args[1]) else []
     else:
         games = [g for g in GAMES if has_profile(g)] or ["css"]
     for name in games:
-        game_dir = find_game(name)
-        if not game_dir:
-            print(f"{GAMES[name]['name']} not found in your Steam libraries")
-            continue
-        settings = load_settings(name)
-        problems = validate(settings)
-        if problems:
-            print(f"{GAMES[name]['name']}: " + "; ".join(problems))
-            continue
-        # runs right before the game starts, so the start yawspeed's colour is correct
-        for note in apply(settings, game_dir, reset_current=True, game=name):
-            print(note)
+        apply_at_launch(name)

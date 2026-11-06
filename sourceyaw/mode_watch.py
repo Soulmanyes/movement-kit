@@ -13,7 +13,8 @@ The game can't be sent commands from outside. So yaws.cfg binds the yaw key to
 The current list is known from those tokens only. A map name that isn't known changes nothing.
 The tokens and map loads come from the movekit session for LOG (movekit/session.py).
 """
-import signal  # noqa: I001 - movekit must come after yawcore (see below)
+import queue  # noqa: I001, RUF100 - movekit must come after yawcore (see below)
+import signal
 import sys
 from pathlib import Path
 
@@ -74,7 +75,9 @@ class Watcher:
         return None
 
 
-def run(log, game, port=session.PORT):
+def run(log, game, port=session.PORT, stop=None):
+    """Arms and clears the auto cfg from the session's events until `stop` (a threading.Event) is
+    set, or forever; clears it on the way out. On Windows it runs as a thread of the launch."""
     data = yawcore.load_settings(game)
     watcher = Watcher(Path(log).parent / "cfg" / f"{yawcore.AUTO_CFG}.cfg",
                       data.get("map_modes") or yawcore.DEFAULT_MAP_MODES)
@@ -82,8 +85,11 @@ def run(log, game, port=session.PORT):
     joined = session.join(log, port=port)
     print(f"mode: session events for {log} ({joined.mode})", flush=True)
     try:
-        while True:
-            event = joined.events.get()
+        while stop is None or not stop.is_set():
+            try:
+                event = joined.events.get(timeout=0.5)
+            except queue.Empty:
+                continue
             done = watcher.handle(event)
             if done:
                 print(f"mode: {event['data'].get('name')} -> arm {done}", flush=True)

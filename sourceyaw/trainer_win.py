@@ -4,7 +4,7 @@ desktop, with the standard library only (the hub exe bundles no Pillow or pywin3
   - keys and mouse from Raw Input: a hidden window registered with RIDEV_INPUTSINK, so input
     arrives while the game is in front, with no admin and nothing installed,
   - focus: the foreground window's program lives in the game's folder, cursor inside it,
-  - the constant tone through winmm's waveOut, game sounds through winsound,
+  - the constant tone through winmm's waveOut, game sounds through yawcore.play_sound (winsound),
   - no offset number on screen: drawing over CS:S means hooking DirectX, which risks VAC.
 
 `Windows` bundles them as trainer.run's `platform`. The Win32 calls are made inside functions
@@ -283,12 +283,6 @@ class RawInput:
 
 # ---------------------------------------------------------------- focus
 
-def in_folder(image, root):
-    """Whether the program at path `image` lives under folder `root` (case-insensitive, as on Windows)."""
-    image, root = str(image).replace("/", "\\").lower(), str(root).replace("/", "\\").lower().rstrip("\\")
-    return image.startswith(root + "\\")
-
-
 class Focus:
     """Whether the game's window has focus, asked every 0.25 s: the foreground window's program
     lives in the game's install folder (the mod folder's parent, so hl2.exe, cstrike_win64.exe or
@@ -319,7 +313,7 @@ class Focus:
                 return False
         finally:
             kernel32.CloseHandle(handle)
-        if not in_folder(buf.value, self.root):
+        if not yawcore.in_folder(buf.value, self.root):
             return False
         rect, point = wintypes.RECT(), wintypes.POINT()
         if not (user32.GetWindowRect(hwnd, ctypes.byref(rect)) and user32.GetCursorPos(ctypes.byref(point))):
@@ -424,10 +418,4 @@ class Windows:
         return Focus(game_dir)
 
     def play(self, game_dir, sound, game):
-        """A game sound, through winsound (async: a new sound cuts the last one short)."""
-        import winsound
-        path = yawcore.sound_file(game_dir, sound, game)
-        if not path:
-            return False
-        winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
-        return True
+        return yawcore.play_sound(game_dir, sound, game)  # winsound on Windows

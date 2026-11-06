@@ -244,9 +244,9 @@ def check_windows_parts():
            [[(1, TURN_L, 1)], [(1, TURN_R, 0)], [(1, 276, 0)], [(2, 8, -1)], [(2, 8, 1), (2, 0, -5)], []],
            "mouse")
     game = r"C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Source"
-    expect([w.in_folder(game + r"\cstrike_win64.exe", game.replace("\\", "/")),
-            w.in_folder(game.upper() + r"\BIN\WIN64\X.EXE", game),
-            w.in_folder(game + r" Beta\hl2.exe", game)], [True, True, False], "focus folder test")
+    expect([w.yawcore.in_folder(game + r"\cstrike_win64.exe", game.replace("\\", "/")),
+            w.yawcore.in_folder(game.upper() + r"\BIN\WIN64\X.EXE", game),
+            w.yawcore.in_folder(game + r" Beta\hl2.exe", game)], [True, True, False], "focus folder test")
 
 
 def check_neutral_import():
