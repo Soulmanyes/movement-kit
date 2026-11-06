@@ -176,8 +176,8 @@ def main():
         made, played = [], []
 
         class FakeTone:
-            def __init__(self, volume, pitches):
-                made.append((volume, pitches))
+            def __init__(self, synth):
+                made.append((synth.volume, synth.pitches))
                 self.mode = None
 
             def start(self):
@@ -202,7 +202,51 @@ def main():
 
         check_run(trainer, Path(tmp))
         check_neutral_import()
+        check_tone_synth(trainer)
+        check_windows_parts()
     print("check_trainer: all passed")
+
+
+def check_tone_synth(trainer):
+    """ToneSynth (shared by the Linux and Windows tone players): 5 ms chunks, silence when off,
+    fades in, holds, cross-fades between cues and fades out without a jump at a chunk's edge, also
+    when it comes back on mid-cycle."""
+    import array
+    import itertools
+    synth = trainer.ToneSynth(0.5, {"wrong": 220, "none": 147})
+    expect((synth.volume, synth.pitches), (0.5, {"wrong": 220, "none": 147}), "synth settings")
+    chunks = [synth.next(m) for m in (None, "wrong", "wrong", "none", "none", None, "wrong", "wrong", None, None)]
+    expect({len(c) for c in chunks}, {2 * synth.CHUNK}, "chunk size")
+    expect((chunks[0], chunks[-1]), (synth.silence, synth.silence), "silence when off")
+    samples = array.array("h", b"".join(chunks))
+    biggest = max(abs(b - a) for a, b in itertools.pairwise(samples))
+    expect(biggest < 0.5 * 32767 * 2 * 3.1416 * 220 / synth.RATE * 1.5, True,
+           f"no click between chunks (largest step {biggest})")
+    expect(max(samples) > 0.45 * 32767, True, "tone at its volume")
+
+
+def check_windows_parts():
+    """trainer_win's pure parts, checked on Linux: struct layouts as on 64-bit Windows, Raw Input
+    key and mouse data to evdev events, and the focus check's folder test."""
+    import ctypes
+
+    import trainer_win as w
+    sizes = {s.__name__: ctypes.sizeof(s) for s in (w.RAWINPUTHEADER, w.RAWMOUSE, w.RAWKEYBOARD,
+                                                     w.RAWINPUT, w.RAWINPUTDEVICE, w.WAVEHDR, w.WAVEFORMATEX)}
+    expect(sizes, {"RAWINPUTHEADER": 24, "RAWMOUSE": 24, "RAWKEYBOARD": 16, "RAWINPUT": 48,
+                   "RAWINPUTDEVICE": 16, "WAVEHDR": 48, "WAVEFORMATEX": 20}, "Win64 struct sizes")
+    expect((w.RAWMOUSE.usButtonFlags.offset, w.RAWMOUSE.lLastX.offset), (4, 12), "RAWMOUSE offsets")
+    expect([w.key_event(0x1E, 0), w.key_event(0x20, 1), w.key_event(0x39, 0), w.key_event(0x38, 2),
+            w.key_event(0x1D, 3), w.key_event(0x2A, 2)],
+           [(1, A, 1), (1, D, 0), (1, SPACE, 1), (1, 100, 1), (1, 97, 0), None], "keys")
+    expect([w.mouse_events(0, 0x0001, 0, 0), w.mouse_events(0, 0x0008, 0, 0), w.mouse_events(0, 0x0200, 0, 0),
+            w.mouse_events(0, 0x0400, 0xFF88, 0), w.mouse_events(0, 0x0400, 120, -5), w.mouse_events(1, 0, 0, 9)],
+           [[(1, TURN_L, 1)], [(1, TURN_R, 0)], [(1, 276, 0)], [(2, 8, -1)], [(2, 8, 1), (2, 0, -5)], []],
+           "mouse")
+    game = r"C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Source"
+    expect([w.in_folder(game + r"\cstrike_win64.exe", game.replace("\\", "/")),
+            w.in_folder(game.upper() + r"\BIN\WIN64\X.EXE", game),
+            w.in_folder(game + r" Beta\hl2.exe", game)], [True, True, False], "focus folder test")
 
 
 def check_neutral_import():
@@ -212,9 +256,9 @@ def check_neutral_import():
             "for m in ('PIL', 'fcntl', 'termios', 'trainer_linux'):\n"
             "    sys.modules[m] = None\n"
             f"sys.path[:0] = [{str(HERE)!r}]\n"
-            "import trainer, settings_api\n")
+            "import trainer, settings_api, trainer_win\n")
     done = subprocess.run([sys.executable, "-c", code], check=False, capture_output=True, text=True)
-    expect(done.stderr.strip().splitlines()[-1:], [], "trainer.py imports without Pillow, fcntl or trainer_linux")
+    expect(done.stderr.strip().splitlines()[-1:], [], "trainer.py and trainer_win import without Pillow, fcntl or trainer_linux")
 
 
 def check_run(trainer, tmp):
@@ -242,7 +286,7 @@ def check_run(trainer, tmp):
     trainer.session.join = FakeJoined
 
     class Tone:
-        def __init__(self, volume, pitches):
+        def __init__(self, synth):
             self._mode = None
 
         @property
@@ -302,7 +346,7 @@ def check_run(trainer, tmp):
         def open_input(self):
             return Source()
 
-        def focus(self, process):
+        def focus(self, game, game_dir):
             return type("Focus", (), {"focused": True})()
 
         def play(self, game_dir, sound, game):

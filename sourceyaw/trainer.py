@@ -22,8 +22,11 @@ that key too (see /etc/sourceyaw-inputd.conf).
   trainer.py GAME --binds    print which keys do what, then exit
 """
 
+import array  # noqa: I001, RUF100 - movekit must come after yawcore (see below)
+import math
 import sys
 import time
+from fractions import Fraction
 from pathlib import Path
 
 import yawcore
@@ -156,17 +159,68 @@ def read_binds(game_dir, allowed=_FORWARDED):
     return roles, sorted(set(unseen))
 
 
+class ToneSynth:
+    """The constant tone's samples, for each platform's tone player (trainer_linux.Tone,
+    trainer_win.Tone): next(mode) gives the next CHUNK of 16-bit mono samples at RATE, for the
+    cue `mode` sounding (None: silence).
+
+    Each pitch is pre-rendered as a loop of chunks that holds a whole number of cycles, so the
+    chunks join without clicks; switching on, off or between pitches fades over one chunk."""
+    RATE = 48000
+    CHUNK = 240     # 5 ms
+
+    def __init__(self, volume, pitches):
+        self.volume = max(0.0, min(1.0, volume))
+        self.pitches = pitches = {mode: max(40, int(hz)) for mode, hz in pitches.items()}
+        amp = 32767 * self.volume
+        self.silence = bytes(2 * self.CHUNK)
+        # per mode: the loop of chunks (whole cycles overall) as float samples
+        self.loops = {}
+        for mode, hz in pitches.items():
+            count = Fraction(hz * self.CHUNK, self.RATE).denominator
+            samples = [amp * math.sin(2 * math.pi * hz * i / self.RATE)
+                       for i in range(count * self.CHUNK)]
+            self.loops[mode] = [samples[k * self.CHUNK:(k + 1) * self.CHUNK] for k in range(count)]
+        # steady chunks ready to write; only fades are computed on the fly
+        self.loop_bytes = {mode: [array.array("h", (int(x) for x in c)).tobytes() for c in loop]
+                           for mode, loop in self.loops.items()}
+        self.pos = {mode: 0 for mode in pitches}
+        self.ramp = [i / self.CHUNK for i in range(self.CHUNK)]
+        self.was = None
+
+    def _chunk(self, mode, envelope=None):
+        k = self.pos[mode] % len(self.loops[mode])
+        self.pos[mode] += 1
+        if envelope is None:
+            return self.loop_bytes[mode][k]
+        return array.array("h", (int(s * e) for s, e in zip(self.loops[mode][k], envelope))).tobytes()
+
+    def next(self, mode):
+        was, self.was = self.was, mode
+        if mode == was:
+            return self._chunk(mode) if mode else self.silence
+        if mode is None:
+            return self._chunk(was, [1 - r for r in self.ramp])
+        if was is None:
+            return self._chunk(mode, self.ramp)
+        # other pitch: cross-fade so neither tone cuts off mid-wave
+        a = self._chunk(was, [1 - r for r in self.ramp])
+        b = self._chunk(mode, self.ramp)
+        return array.array("h", (x + y for x, y in zip(array.array("h", a), array.array("h", b)))).tobytes()
+
+
 class CueSounds:
     """Each cue's own sound: cues set to "tone" share one tone (a mode per cue, at the cue's pitch),
     the rest play their game sound through `play` on every cue (Trainer's on_wrong).
 
-    `tone_class` is the platform's tone (trainer_linux.Tone): built as tone_class(volume,
-    {cue: Hz}), with `mode` (the cue sounding, or None), start() and close()."""
+    `tone_class` is the platform's tone player (trainer_linux.Tone, trainer_win.Tone): built as
+    tone_class(ToneSynth(volume, {cue: Hz})), with `mode` (the cue sounding, or None), start()
+    and close(). The synth comes from here so the platform files never import trainer."""
 
     def __init__(self, cfg, play, tone_class):
         self.cfg, self.play = cfg, play
         self.pitches = {cue: cfg[f"{cue}_pitch"] for cue in CUES if cfg[f"{cue}_sound"] == "tone"}
-        self.tone = tone_class(cfg["tone_volume"], self.pitches) if self.pitches else None
+        self.tone = tone_class(ToneSynth(cfg["tone_volume"], self.pitches)) if self.pitches else None
         if self.tone:
             self.tone.start()
 
@@ -403,7 +457,7 @@ def run(game, platform, stop=None):
       overlay(cfg)    where the offset is drawn (show(text, row, x, y), hide()), or None
       open_input()    read(timeout) -> [(time, EV_KEY/EV_REL, evdev code, value)], or None
                       once the input is gone; close(). None after printing why there's none.
-      focus(process)  an object whose `focused` says the game's window has focus
+      focus(game, game_dir)  an object whose `focused` says the game's window has focus
       play(game_dir, sound, game)  a game sound"""
     cfg = settings(game)
     game_dir = yawcore.find_game(game)
@@ -434,7 +488,7 @@ def run(game, platform, stop=None):
     sounds = CueSounds(cfg, lambda sound: platform.play(game_dir, sound, game), platform.Tone)
     trainer = Trainer(cfg, roles, game_events.tickrate, offset,
                       lambda: sounds.cue(trainer.wrong_active), sounds.state)
-    focus = platform.focus(yawcore.GAMES[game]["process"])
+    focus = platform.focus(game, game_dir)
     # map loads and the offsets toggle come from the movekit session (after the input
     # check above, so a trainer that gives up never holds the session's port)
     joined = session.join(log_path)
@@ -467,7 +521,11 @@ def run(game, platform, stop=None):
 
 
 def platform():
-    """This OS's trainer_linux.Linux (or, from Phase 12, its Windows counterpart)."""
+    """This OS's platform for run(): trainer_win.Windows or trainer_linux.Linux, imported only here
+    so neither OS loads the other's code."""
+    if sys.platform == "win32":
+        import trainer_win
+        return trainer_win.Windows()
     import trainer_linux
     return trainer_linux.Linux()
 

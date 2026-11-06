@@ -10,11 +10,9 @@
 file only when it runs on Linux, so nothing here has to import on Windows.
 """
 
-import array
 import fcntl
 import glob
 import json
-import math
 import mmap
 import os
 import select
@@ -24,7 +22,6 @@ import struct
 import subprocess
 import threading
 import time
-from fractions import Fraction
 
 import yawcore
 
@@ -87,89 +84,50 @@ class Overlay:
 # ---------------------------------------------------------------- constant tone
 
 class Tone:
-    """A tone that sounds while `mode` is set, streamed to PipeWire through pw-cat.
-    `pitches` maps each mode (a cue: "wrong", "none", "overlap") to its Hz.
+    """A tone that sounds while `mode` is set (a cue: "wrong", "none", "overlap"; None for
+    silence), streamed to PipeWire through pw-cat. `synth` is the trainer.ToneSynth giving the samples.
 
     Audio is written in 5 ms chunks paced by the clock, keeping only LEAD
     seconds queued, so switching it on or off is heard within ~20 ms (a plain
-    pipe would buffer most of a second). Each pitch is pre-rendered as a loop of
-    chunks that holds a whole number of cycles, so the chunks join without
-    clicks; switching on, off or between pitches fades over one chunk."""
-    RATE = 48000
-    CHUNK = 240     # 5 ms
+    pipe would buffer most of a second)."""
     LEAD = 0.015
 
-    def __init__(self, volume, pitches):
+    def __init__(self, synth):
         self.mode = None
         self.proc = None
+        self.synth = synth
         player = shutil.which("pw-cat")
         if not player:
             return
         self.proc = subprocess.Popen(
-            [player, "--playback", "--raw", "--rate", str(self.RATE), "--channels", "1",
+            [player, "--playback", "--raw", "--rate", str(self.synth.RATE), "--channels", "1",
              "--format", "s16", "--latency", "10ms", "-"],
             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             fcntl.fcntl(self.proc.stdin, 1031, 4096)  # F_SETPIPE_SZ: the smallest pipe
         except OSError:
             pass
-        amp = 32767 * max(0.0, min(1.0, volume))
-        pitches = {mode: max(40, int(hz)) for mode, hz in pitches.items()}
-        self.silence = bytes(2 * self.CHUNK)
-        # per mode: the loop of chunks (whole cycles overall) as float samples
-        self.loops = {}
-        for mode, hz in pitches.items():
-            count = Fraction(hz * self.CHUNK, self.RATE).denominator
-            samples = [amp * math.sin(2 * math.pi * hz * i / self.RATE)
-                       for i in range(count * self.CHUNK)]
-            self.loops[mode] = [samples[k * self.CHUNK:(k + 1) * self.CHUNK] for k in range(count)]
-        # steady chunks ready to write; only fades are computed on the fly
-        self.loop_bytes = {mode: [array.array("h", (int(x) for x in c)).tobytes() for c in loop]
-                           for mode, loop in self.loops.items()}
-        self.pos = {mode: 0 for mode in pitches}
-        self.ramp = [i / self.CHUNK for i in range(self.CHUNK)]
-
-    def _chunk(self, mode, envelope=None):
-        k = self.pos[mode] % len(self.loops[mode])
-        self.pos[mode] += 1
-        if envelope is None:
-            return self.loop_bytes[mode][k]
-        return array.array("h", (int(s * e) for s, e in zip(self.loops[mode][k], envelope))).tobytes()
 
     def start(self):
         if self.proc:
             threading.Thread(target=self._feed, daemon=True).start()
 
     def _feed(self):
+        rate, chunk = self.synth.RATE, self.synth.CHUNK
         start = time.monotonic()
         written = 0
-        was = None
         while True:
-            due = (time.monotonic() - start + self.LEAD) * self.RATE
+            due = (time.monotonic() - start + self.LEAD) * rate
             if written >= due:
                 time.sleep(0.002)
                 continue
-            mode = self.mode
-            if mode == was:
-                data = self._chunk(mode) if mode else self.silence
-            elif mode is None:
-                data = self._chunk(was, [1 - r for r in self.ramp])
-            elif was is None:
-                data = self._chunk(mode, self.ramp)
-            else:
-                # other pitch: cross-fade so neither tone cuts off mid-wave
-                a = self._chunk(was, [1 - r for r in self.ramp])
-                b = self._chunk(mode, self.ramp)
-                data = array.array("h", (x + y for x, y in zip(
-                    array.array("h", a), array.array("h", b)))).tobytes()
             try:
-                self.proc.stdin.write(data)
+                self.proc.stdin.write(self.synth.next(self.mode))
                 self.proc.stdin.flush()
             except (BrokenPipeError, ValueError, OSError):
                 return
-            was = mode
-            written += self.CHUNK
-            if written + self.RATE < due:  # fell far behind (suspend): don't catch up
+            written += chunk
+            if written + rate < due:  # fell far behind (suspend): don't catch up
                 written = int(due)
 
     def close(self):
@@ -282,8 +240,8 @@ class Linux:
             print(f"trainer: no input service ({e}); install it from Source Yaw", flush=True)
             return None
 
-    def focus(self, process):
-        return FocusWatch(process)
+    def focus(self, game, game_dir):
+        return FocusWatch(yawcore.GAMES[game]["process"])
 
     def play(self, game_dir, sound, game):
         return yawcore.play_sound(game_dir, sound, game)
