@@ -521,6 +521,55 @@ The owner wants to see how good a surf run's pre jump is: the speed leaving the 
 - **10.3 In game (2026-11-04).** The owner: "looks good". `ZXCHECK` lines over ~20 exits: the run's own split stayed `[0, 0, 0]` (later NaN) for at least 0.5 s after the exit, so the shown speed is the player's velocity at the event. No run was finished, so whether that matches the tick the PB's split was taken at is not checked; the diff may be off by a few u/s. The temporary lines are removed.
 - **Switch fix (2026-11-04), wrong diagnosis.** The owner unticked First Jump and a jump-1 line still showed. All four HUD modules were changed to read the customizer's own record (`HudCustomizerHandler.components[ID].enabled`) before `panel.enabled`, and First Jump and Zone Exit hide or bring back the customizer sample when the switch changes; released that way. The real cause: the game's `custom/0-strafe-review` still held the recorder from 2026-11-03 (`SHOW_LINE = true`), which draws Strafe Review's old jump-1 line (`SRLINE` in yaw.log). Strafe Review's launch hook only starts the server and never copies the recorder, so a repo checkout keeps an old recorder until `strafe-review/install.py` runs. Rerun 2026-11-04. The switch change is harmless and stays.
 
+## Phase 11: Source Yaw section cleanup and the overlap cue (owner, 2026-11-06; branch `sy-cleanup`)
+
+The owner wants the Source Yaw settings tidied before the Windows version (Phase 12), so the Windows step only has to hide whole cards.
+
+- **Cards, one long page (owner's pick over tabs or sidebar entries).** One card per kind of option, in this order:
+  1. Setup: game, Load from autoexec.cfg, Steam launch options.
+  2. Yaw cycle: cycle key, mode key, auto by map prefix, the yawspeed lists.
+  3. Crosshair: colour switch, base crosshair, KROSSHAIR.
+  4. Strafe trainer: on/off, input service, keys, tickrate.
+  5. Offset display: show offset, offset key, position, best offset, size and colours.
+  6. Trainer sounds: sound or tone, pitch and volume, ticks and repeat, the cue switches.
+- **Overlap cue (new).** Plays when both strafe keys are held at once while a jump key is held.
+  - Own tick setting, `overlap_ticks` (default 1, 1-20).
+  - Own tone pitch, `overlap_pitch` (default 110 Hz, low as the owner's friends need).
+  - Switch `cue_overlap` (default on). With a game sound picked instead of the tone, the overlap plays that sound with the same repeat rule.
+  - When an overlap and a wrong-key turn happen together, the overlap wins: it is the cause.
+- No behaviour change otherwise. The checks (`sourceyaw/check_*.py`) still pass, and the page gets a screenshot check.
+- **Built 2026-11-06 (branch `sy-cleanup`, not committed; waiting on the owner's look and in-game test).**
+  - Page: the six cards, with the yawspeed list under a "Yawspeeds" sub-head in the Yaw cycle card, and the `+ Add` button there. The three trainer cards dim together while the trainer is off. Screenshot-checked on the owner's settings.
+  - `trainer.py`: `TRAINER_DEFAULTS` gets `cue_overlap`, `overlap_ticks` and `overlap_pitch`, and `Tone` gets an "overlap" pitch. The overlap counts from the key press that made it (in `feed`), and the cue needs a jump key held. When it fires, the wrong-key wait restarts, so a wrong turn after a long overlap still waits its `wrong_ticks`. An overlap tone that ends while the wrong turn is still under `wrong_ticks` stops at once and doesn't linger.
+  - `hub_section.play_cue(..., overlap_pitch, which)`: the overlap row has its own ▶ button.
+  - Checks: new `sourceyaw/check_trainer.py` (synthetic key events). It catches four mutations: no jump needed, no tick wait, the lingering overlap tone, and the wrong-key wait not restarting. `check_settings_api` and `check_hub_section` cover the new fields, clamping and the overlap tone. Every `sourceyaw/check_*.py` passes.
+  - The owner's game runs the installed copy in `~/.local/share/sourceyaw`, so the overlap cue is heard only after `sh sourceyaw/install.sh` from this branch.
+- **Per-cue sounds (owner, 2026-11-06, after seeing the page).** The owner wanted each cue's sound customisable and asked what Ticks and Hz meant. Picked: one row per cue with its own sound (tone or a game sound), "Pitch (Hz)" and "Wait (ticks)", plus a ▶ button and a switch. Volume and "Repeat (s)" stay shared at the top of the card, and the card's description explains both terms.
+  - Settings: `<cue>_sound`, `<cue>_pitch` and `<cue>_ticks` for `wrong`, `none` and `overlap` (`trainer.CUES`).
+  - `trainer.migrate` maps 1.9.0's shared `sound` and `tone_pitch` (no-key at 2/3 of the pitch) and `wrong_ticks` onto them. An old `sound: ""` turns both wrong-key cues off.
+  - `trainer_value` still writes `sound` and `tone_pitch` from the other-key cue, so a roll back to 1.9.0 reads sensible values.
+  - `trainer.CueSounds` gives tone cues one shared `Tone` at their own pitches and plays game sounds for the rest. `Tone(volume, pitches)` now takes a dict. `play_cue(game, sound, tone_volume, pitch)` plays one cue.
+  - Checks: per-cue waits, `CueSounds`, the migration and the roll-back keys. Mutations caught: one shared wait, the tone left on for a game-sound cue, no migration.
+- **Game badges on the Modules page (owner, 2026-11-06; a core change on the same branch).** Each module card shows which games it works with, one badge per game ("CS:S", "Momentum Mod"), on supported and unsupported cards alike.
+  - `module.json` gets `"games"` (keys from `movekit/games.py`). It is checked like `group`, and a release's module.json copy carries it.
+  - `LEGACY_GAMES` covers releases from before the field. Gain Converter and Source Yaw say both games; every other module says Momentum.
+  - `check_modules.check_groups` covers module.json, the legacy table, the release copy, bad values, and every real module naming its games. Screenshot-checked.
+  - Ships with the next `hub-v*` release. Modules don't need a new `needs_core`, because an old core ignores the field.
+
+## Phase 12: Source Yaw on Windows (owner, 2026-11-06; planned, waits for Phase 11)
+
+Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Windows module too, installed from the hub's Modules page, with its settings in the hub section.
+
+- **Scope (owner).** The yaw cycle (binds, sounds) and the strafe trainer, for CS:S and Momentum. No crosshair colour on Windows for either game ("the colour can be left out"). The trainer gives the tone cue only, with no offset number on screen, because hooking DirectX in CS:S risks VAC.
+- **What is known.** Windows launch hooks run inside the core exe's process (`movekit/dispatch.py`), so a trainer thread lives exactly as long as the game. The exe bundles the standard library only, with no Pillow, so Windows code uses ctypes, `winsound` and `winmm`.
+- **Steps.**
+  1. Split `trainer.py`. `Trainer`, `GameEvents`, `read_binds`, `settings` and `map_tickrate` go into a platform-neutral module. The input service socket, `FocusWatch`, the pw-cat `Tone`, `Overlay` and `write_atlas` stay Linux-only. Linux behaviour stays the same.
+  2. Windows input: Raw Input with `RIDEV_INPUTSINK` on a hidden window, no admin. It gives the same `(time, EV_KEY/EV_REL, evdev code, value)` events: `MakeCode` equals the evdev code for the basic keys, E0 keys are mapped (right Alt 100, right Ctrl 97), mouse buttons are 272-276, the wheel is `REL_WHEEL` and `lLastX` is `REL_X`. Time comes from `perf_counter` when `WM_INPUT` arrives, not `GetMessageTime` (about 15.6 ms, a whole tick).
+  3. Focus: `GetForegroundWindow`, then the process image name, plus the cursor inside `GetWindowRect`.
+  4. Tone: a `winmm` `waveOut` backend with the same `mode`/`start`/`close` interface. Game sounds through `winsound`.
+  5. Module: `win32` in `module.json`, Python install and launch hooks for Windows, the hub section hides the Crosshair and Offset display cards, KROSSHAIR, the input service and the launch-option text. `check_hub_section.py` expects the section on Windows from then on.
+- **Testing.** Claude covers the key table and the split trainer with synthetic events on Linux, and the Windows CI imports every Windows module. The owner or the friend hand-tests on Windows. To check there: whether Raw Input on a hidden window still gets input while CS:S (`m_rawinput 1`) is in front.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).
