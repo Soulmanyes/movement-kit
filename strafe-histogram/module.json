@@ -2,6 +2,7 @@
   "key": "strafe-histogram",
   "title": "Strafe Speed Histogram",
   "summary": "While you bhop or surf in Momentum Mod: one bar per air tick for how fast you turned against the optimal, scrolling up from the bottom.",
+  "games": ["momentum"],
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-histogram-v",
   "version_from": "install.py",

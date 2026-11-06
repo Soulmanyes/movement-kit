@@ -2,6 +2,7 @@
   "key": "zone-exit",
   "title": "Zone Exit Speed",
   "summary": "When a surf run starts in Momentum Mod: your 3D speed leaving the start zone, coloured by how good it is, and the difference to your PB's.",
+  "games": ["momentum"],
   "os": ["linux", "win32"],
   "tag_prefix": "zone-exit-v",
   "version_from": "install.py",

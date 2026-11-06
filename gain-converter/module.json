@@ -2,6 +2,7 @@
   "key": "gain-converter",
   "title": "Gain Converter",
   "summary": "Converts strafe gain between CS:S and Momentum Mod, with the curve it uses.",
+  "games": ["css", "momentum"],
   "os": [
     "linux",
     "win32"

@@ -90,6 +90,9 @@ button.danger { border-color: var(--warn); color: var(--warn); }
 .mod-head h2 { margin: 0; }
 .mod-head .ver { color: var(--muted); }
 .mod-head .badge { font-size: 12px; padding: 1px 7px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }
+/* which games a module works with: filled, so it reads as a label and not as a button */
+.mod-head .mod-game { color: var(--text); background: color-mix(in srgb, var(--accent) 22%, var(--card));
+	border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); font-weight: 500; }
 .mod-buttons { margin-left: auto; display: flex; gap: 8px; }
 .mod-summary { color: var(--muted); margin: 6px 0 8px; }
 .mod-status { margin: 4px 0; }

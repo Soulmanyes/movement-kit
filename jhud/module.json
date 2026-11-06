@@ -2,6 +2,7 @@
   "key": "jhud",
   "title": "JHUD",
   "summary": "After every bhop or surf jump in Momentum Mod: the jump's speed, gain % and sync in the middle of the screen, in one colour, coloured by gain, or by speed pace.",
+  "games": ["momentum"],
   "os": ["linux", "win32"],
   "tag_prefix": "jhud-v",
   "version_from": "install.py",

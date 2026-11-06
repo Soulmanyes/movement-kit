@@ -2,6 +2,7 @@
   "key": "strafe-review",
   "title": "Strafe Review",
   "summary": "Records your Momentum Mod runs and shows every jump and strafe on a review page.",
+  "games": ["momentum"],
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-review-v",
   "version_from": "collector/collector.py",

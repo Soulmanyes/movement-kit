@@ -77,7 +77,7 @@
 			return b;
 		};
 
-		const head = el("div", { className: "mod-head" }, el("h2", { textContent: c.title }));
+		const head = el("div", { className: "mod-head" }, el("h2", { textContent: c.title }), ...gameBadges(c));
 		if (c.installed && c.version) head.append(el("span", { className: "ver", textContent: "v" + c.version }));
 		if (c.checkout && c.key !== "core") head.append(el("span", { className: "badge", textContent: "git checkout" }));
 		head.append(buttons);
@@ -165,6 +165,13 @@
 		return node;
 	}
 
+	// the games a module works with (module.json "games"), one badge each
+	const GAME_NAMES = { css: "CS:S", momentum: "Momentum Mod" };
+	function gameBadges(c) {
+		return (c.games || []).map((g) => el("span", { className: "badge mod-game",
+			textContent: GAME_NAMES[g] || g, title: `Works with ${GAME_NAMES[g] || g}` }));
+	}
+
 	const OS_NAMES = { linux: "Linux", win32: "Windows", darwin: "macOS" };
 	const osName = (p) => OS_NAMES[Object.keys(OS_NAMES).find((k) => (p || "").startsWith(k))] || p;
 
@@ -177,7 +184,7 @@
 	function unavailable(c) {
 		const only = c.os.map(osName).join(" and ");
 		return el("div", { className: "card mod-unavailable" },
-			el("div", { className: "mod-head" }, el("h2", { textContent: c.title })),
+			el("div", { className: "mod-head" }, el("h2", { textContent: c.title }), ...gameBadges(c)),
 			c.summary ? el("div", { className: "mod-summary", textContent: c.summary }) : "",
 			el("div", { className: "mod-status muted", textContent: only ? `${only} only` : "Not for this OS" }));
 	}

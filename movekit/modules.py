@@ -15,8 +15,11 @@ A module is a tool folder with a module.json:
      "hud_card": {"title": "...", "text": "..."},
                                                 optional: a card on the hub's HUD section, for modules
                                                 set up in Momentum's own HUD customizer (JHUD, ...)
-     "group": "hud"}                            optional, "tool" (default) or "hud": the Modules page lists
+     "group": "hud",                            optional, "tool" (default) or "hud": the Modules page lists
                                                 the HUD modules after the tools
+     "games": ["momentum"]}                     the games it works with, keys of movekit/games.py
+                                                ("css", "momentum"); the Modules page shows them on
+                                                its card
 
 and, if it changes anything outside its own folder, a module_hooks.py with any of:
 
@@ -88,6 +91,11 @@ MANIFEST = "module.json"
 GROUPS = ("tool", "hud")
 # modules released before module.json had "group"
 LEGACY_GROUPS = {"jhud": "hud", "trainer-height": "hud", "strafe-histogram": "hud"}
+GAMES = ("css", "momentum")
+# modules released before module.json had "games"
+LEGACY_GAMES = {**{k: ["momentum"] for k in ("strafe-review", "jhud", "trainer-height", "strafe-histogram",
+                                             "first-jump", "zone-exit")},
+                "gain-converter": ["css", "momentum"], "sourceyaw": ["css", "momentum"]}
 HOOKS = "module_hooks.py"
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 DATA_RE = re.compile(r"^(data|config):([A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*)$")
@@ -172,6 +180,10 @@ def read_manifest(folder):
         raise ValueError("hud_card must be {\"title\": text, \"text\": text}")
     if m.get("group") is not None and m["group"] not in GROUPS:  # left unset: LEGACY_GROUPS, else "tool"
         raise ValueError(f"group must be one of {', '.join(GROUPS)}")
+    games = m.get("games")  # left unset: LEGACY_GAMES, else none shown
+    if games is not None and not (isinstance(games, list) and games and len(set(games)) == len(games)
+                                  and all(g in GAMES for g in games)):
+        raise ValueError(f"games must list one or more of {', '.join(GAMES)}")
     return m
 
 
@@ -455,6 +467,8 @@ class Manager:
             out["os"] = m["os"]
         if m.get("group") in GROUPS:
             out["group"] = m["group"]
+        if isinstance(m.get("games"), list) and m["games"] and all(g in GAMES for g in m["games"]):
+            out["games"] = m["games"]
         return out
 
     # one card's facts
@@ -476,7 +490,8 @@ class Manager:
             remote = (latest or {}).get("manifest") or {}
             manifest = self.available().get(key) or self.local().get(key) or {
                 "title": remote.get("title", key), "summary": remote.get("summary", ""),
-                "needs": remote.get("needs", []), "os": remote.get("os"), "group": remote.get("group")}
+                "needs": remote.get("needs", []), "os": remote.get("os"), "group": remote.get("group"),
+                "games": remote.get("games")}
             installed = key in self.installed()
         supported = key == CORE or self.supports(manifest)
         group = "core" if key == CORE else manifest.get("group") or LEGACY_GROUPS.get(key, "tool")
@@ -499,6 +514,9 @@ class Manager:
             "can_install": not installed and supported and (
                 self.checkout and key in self.available() or bool(latest and latest.get("asset") and not waiting)),
             "group": group, "supported": supported, "os": list(manifest.get("os") or []),
+            # in movekit/games.py's order, so "both" always reads the same way
+            "games": [] if key == CORE else [g for g in GAMES if g in (manifest.get("games")
+                                                                      or LEGACY_GAMES.get(key, []))],
             "can_rollback": (not self.checkout and installed and key != CORE
                              and (self.data / "previous" / key).is_dir()),
             "previous": entry.get("previous") if not self.checkout else None,
