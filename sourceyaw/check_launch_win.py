@@ -7,7 +7,7 @@ Usage: python sourceyaw/check_launch_win.py   (exits 1 on the first failure)
 
 Covers: which game Steam's command starts (exe folder, -game, neither), yaws.cfg written without
 colour lines, the list switcher and trainer started as threads that get the session's events,
-everything stopped and cleaned up at exit (auto cfg cleared, sessions and input closed), a thread's
+everything stopped and cleaned up at exit, all without Pillow (auto cfg cleared, sessions and input closed), a thread's
 error landing in run.log, and another game left alone.
 """
 import os
@@ -44,6 +44,7 @@ def main():
         os.environ.update(HOME=str(tmp), XDG_CONFIG_HOME=f"{tmp}/config", XDG_DATA_HOME=f"{tmp}/data",
                           XDG_CACHE_HOME=f"{tmp}/cache")
         sys.path.insert(0, str(HERE))
+        sys.modules["PIL"] = None  # the hub exe has no Pillow
         import launch_win  # noqa: I001, RUF100 - movekit after yawcore, which puts it on the path
         import mode_watch
         import trainer

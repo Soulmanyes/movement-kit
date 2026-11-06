@@ -435,7 +435,9 @@ def load_settings(game="css"):
         for entry in lst["entries"]:
             if not entry.get("color"):
                 original = data.get("original_color")
+                # no colour on Windows: a placeholder, kept for when the profile is used on Linux
                 entry["color"] = (rgba_to_hex(original) if original
+                                  else "#ffffff" if GAMES[game]["colors"] is None
                                   else main_color(resolve_base(data)))
     return data
 
