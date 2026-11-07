@@ -114,7 +114,7 @@ function loadScript() {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${src}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, fitLayout, gainOf, gainBand, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, NONE, fitLayout, gainOf, gainBand, trainerPair, gradient, gainRatio, onGround, optimalAt, barLength, barSide, barColor, mixColor, markers,
 	rowStyle, settings };`, ctx);
 	return ctx.__api;
 }
@@ -125,7 +125,8 @@ const frame = () => { const s = schedules; schedules = []; s.forEach((x) => x.fn
 // ---- settings against install.py's kv3 entry ----
 const ids = api.STYLES.filter((r) => r[2] !== api.NONE).map((r) => r[0]);
 expect([...ids].sort(), Object.keys(api.DEFAULTS).sort(), 'every setting row has a default and back');
-const grouped = api.STYLES.flatMap((r) => r[3] || []);
+const groups = new Set(api.STYLES.filter((r) => r[2] === api.NONE).map((r) => r[0]));
+const grouped = api.STYLES.flatMap((r) => r[3] || []).filter((id) => !groups.has(id));
 expect([...grouped].sort(), [...ids].sort(), 'every setting sits under exactly one row');
 const py = fs.readFileSync(INSTALL, 'utf8');
 const entry = /ENTRY = """([\s\S]*?)"""/.exec(py);
@@ -134,7 +135,7 @@ const dyn = /dynamicStyles = \s*\{([\s\S]*?)\}/.exec(entry[1]);
 const kv = {};
 for (const m of dyn[1].matchAll(/^\s*(\w+) = (.+?)\s*$/gm)) {
 	const v = m[2];
-	kv[m[1]] = v === 'true' ? true : v === 'false' ? false : /^"/.test(v) ? v.slice(1, -1) : Number(v);
+	kv[m[1]] = v === 'true' ? true : v === 'false' ? false : /^"/.test(v) ? v.slice(1, -1) : /^\[/.test(v) ? JSON.parse(v) : Number(v);
 }
 expect(kv, Object.fromEntries(Object.keys(kv).map((k) => [k, api.DEFAULTS[k]])), 'kv3 values = DEFAULTS');
 expect(Object.keys(kv).sort(), Object.keys(api.DEFAULTS).sort(), 'kv3 keys = DEFAULTS keys');
@@ -148,7 +149,8 @@ for (const [id, , type, , extra] of api.STYLES) {
 }
 
 // ---- plain functions ----
-const S = { ...api.DEFAULTS };
+expect(api.DEFAULTS.colorBy, 'trainer', 'coloured like the strafe trainer by default');
+const S = { ...api.DEFAULTS, colorBy: 'plain' };
 const S3 = { ...S, optimalAt: 'three' };
 expect([api.optimalAt(S), api.optimalAt(S3)], [0.5, 0.75], 'optimal in the middle by default, or at 3/4');
 expect([0, -0.5, NaN, 0.5, 1, 1.5, 2, 3].map((r) => api.barLength(r, S)), [0, 0, 0, 0.25, 0.5, 0.75, 1, 1], 'length, optimal in the middle');
@@ -185,6 +187,19 @@ expect(api.barColor(1, 'right', { ...GN, fromSides: true }), GN.highColor, 'gain
 // exact edges: ratio 0.5 gains exactly 75 %, which is the middle colour at either threshold
 expect([api.gainBand(0.5, { ...GN, gainLow: 750, gainHigh: 900 }), api.gainBand(0.5, { ...GN, gainLow: 0, gainHigh: 750 })],
 	[GN.midColor, GN.midColor], 'a gain equal to a threshold: the middle colour (86.5-92 % inclusive)');
+// colour like the strafe trainer: its getColorPair (scripts/hud/strafe-trainer.ts) with its defaults
+const T = { ...api.DEFAULTS };
+const lerp = (a, b, t) => [api.mixColor(a[0], b[0], t), api.mixColor(a[1], b[1], t)];
+expect([1.05, 1.0, 0.97, 0.95, 0.8, 0.3, -10, -5].map((g) => api.trainerPair(g, T)),
+	[T.trExtra, T.trPerfect, T.trGood, lerp(T.trSlow, T.trGood, 1), T.trSlow, T.trNeutral, T.trStop, T.trStop], 'trainer bands');
+expect([api.trainerPair(0.9, T), api.trainerPair(0.625, T), api.trainerPair(-2.5, T)],
+	[lerp(T.trSlow, T.trGood, (0.9 - 0.85) / (0.95 - 0.85)), lerp(T.trNeutral, T.trSlow, (0.625 - 0.5) / (0.75 - 0.5)), lerp(T.trNeutral, T.trStop, 0.5)], 'trainer fades between bands');
+expect(api.trainerPair(0.97, { ...T, trGoodFrom: 980 }), lerp(T.trSlow, T.trGood, (0.97 - 0.85) / (0.98 - 0.85)), 'trainer bands can be moved');
+expect(api.trainerPair(0.9, { ...T, trSlowFadeFrom: 950 }), T.trSlow, 'a fade with no width: no fade, no error');
+expect(api.trainerPair(-1, { ...T, trStopAt: 0 }), T.trStop, 'stop at 0: any loss is stop');
+expect(api.barColor(1, 'left', T, 1), `gradient(linear, 0% 0%, 0% 100%, from(${T.trPerfect[0]}), to(${T.trPerfect[1]}))`, 'trainer: a gradient, as the trainer draws');
+expect(api.barColor(1, 'right', { ...T, fromSides: true }, 0.3), api.gradient(T.trNeutral), 'trainer beats the edge colours, by gain not yaw ratio');
+expect([api.gainRatio(0.5, 1), api.gainRatio(0, 0), api.gainRatio(1, 0)], [0.5, 0, 0], 'gain ratio, 0 when it cannot be had');
 expect(api.rowStyle(1.5, true, SS), { width: 75, side: 'left', color: S.leftColor }, 'a row from the sides: the left colour');
 expect(api.rowStyle(1.5, true, { ...SS, swapSides: true }).color, S.rightColor, 'swapped: the colour stays with its edge');
 expect(api.rowStyle(0.333, false, S).width, 16.7, 'width rounded to 0.1 %');
@@ -247,6 +262,11 @@ for (let f = 0; f < 20; f++) { time += 0.01; frame(); }
 expect([P.visible, shownRows(P).length], [true, 100], 'standing still: the bars stay');
 // a setting that changes the rows builds them again (empty); one that doesn't keeps them
 const cb = (id, v) => loaded.props.dynamicStyles[id].callbackFunc(null, v);
+expect(rowsOf(P)[99].style.backgroundColor, api.gradient(api.DEFAULTS.trPerfect), 'by default in game: the trainer colour of the tick gain (1 = perfect)');
+expect(loaded.props.dynamicStyles.trExtra.type, 6, 'trainer colours: gradient pickers');
+expect(loaded.props.dynamicStyles.colorBy.children.slice(0, 2), ['trBands', 'trColours'].map((styleID) => ({ styleID, showWhen: ['trainer'] })),
+	'trainer bands and colours show only while colouring like the trainer');
+cb('colorBy', 'plain');
 cb('barColor', 'rgba(1, 2, 3, 1)');
 jump(400, 4);
 expect([rowsOf(P).length, shownRows(P).length, rowsOf(P)[99].style.backgroundColor], [100, 100, 'rgba(1, 2, 3, 1)'],

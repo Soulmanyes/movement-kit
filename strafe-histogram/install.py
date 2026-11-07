@@ -29,7 +29,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import games, panorama, steam  # after the path above
 
-VERSION = "1.1.0"  # the Strafe Speed Histogram's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.2.0"  # the Strafe Speed Histogram's (module.json reads it); bump in the same commit as the release tag
 TOOL = "strafe-histogram"
 FOLDER = "movekit-strafe-histogram"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 50  # after Strafe Review's (20), Strafe Trainer Height's (30) and JHUD's (40); all only sync the kit
@@ -55,7 +55,7 @@ ENTRY = """    MovekitStrafeHist =
             swapSides = false
             leftColor = "rgba(92, 160, 255, 0.9)"
             rightColor = "rgba(255, 170, 80, 0.9)"
-            colorBy = "plain"
+            colorBy = "trainer"
             barColor = "rgba(255, 255, 255, 0.85)"
             goodColor = "rgba(123, 216, 143, 1)"
             badColor = "rgba(255, 92, 92, 1)"
@@ -65,6 +65,19 @@ ENTRY = """    MovekitStrafeHist =
             lowColor = "rgba(255, 176, 50, 1)"
             midColor = "rgba(123, 216, 143, 1)"
             highColor = "rgba(92, 160, 255, 1)"
+            trExtraFrom = 1020
+            trPerfectFrom = 990
+            trGoodFrom = 950
+            trSlowFadeFrom = 850
+            trSlowFrom = 750
+            trNeutralFadeFrom = 500
+            trStopAt = 5000
+            trExtra = ["rgba(24, 150, 211, 1)", "rgba(87, 200, 255, 1)"]
+            trPerfect = ["rgba(87, 200, 255, 1)", "rgba(113, 240, 255, 1)"]
+            trGood = ["rgba(21, 152, 86, 1)", "rgba(122, 238, 122, 1)"]
+            trSlow = ["rgba(248, 222, 74, 1)", "rgba(255, 238, 0, 1)"]
+            trNeutral = ["rgba(178, 178, 178, 1)", "rgba(255, 255, 255, 1)"]
+            trStop = ["rgba(211, 24, 24, 1)", "rgba(255, 87, 87, 1)"]
             showMarker = true
             markerColor = "rgba(255, 220, 90, 0.9)"
         }

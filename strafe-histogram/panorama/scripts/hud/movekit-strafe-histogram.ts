@@ -23,6 +23,7 @@ const NUMBER_ENTRY = 1;
 const CHECKBOX = 2;
 const DROPDOWN = 4;
 const COLOR_PICKER = 5;
+const GRADIENT_PICKER = 6;
 
 const GROUND_VZ = 1; // Strafe Review's data.js: a steady vz under this is ground
 
@@ -91,11 +92,48 @@ function gainBand(ratio: number, s: Settings): string {
 	return g <= +s.gainHigh / 10 ? s.midColor : s.highColor;
 }
 
-// A bar's colour: one colour (colorBy 'plain'; growing from the sides, one per screen side, leftColor and
+// colorBy 'trainer': the colouring of Momentum's own strafe trainer (scripts/hud/strafe-trainer.ts,
+// getColorPair, as its bar calls it), from the tick's gain against the ideal gain (speedGain / idealGain, 1 =
+// ideal). Each colour is a gradient pair [top, bottom], as the trainer's; between two bands it fades from one
+// pair to the other. The band edges are settings, in tenths of a % as gainLow's (1020 = 1.02): above
+// trExtraFrom extra, above trPerfectFrom perfect, above trGoodFrom good, fading to slow at trSlowFadeFrom,
+// slow down to trSlowFrom, fading to neutral at trNeutralFadeFrom, neutral down to 0, then fading to stop at
+// -trStopAt. The defaults are the trainer's (1.02, 0.99, 0.95, 0.85, 0.75, 0.5, -5).
+function trainerPair(gain: number, s: Settings): [string, string] {
+	const r = isFinite(gain) ? gain : 0;
+	const at = (id: string) => +s[id] / 1000;
+	const fade = (a: [string, string], b: [string, string], t: number): [string, string] => [mixColor(a[0], b[0], t), mixColor(a[1], b[1], t)];
+	const share = (v: number, lo: number, hi: number) => (hi > lo ? (v - lo) / (hi - lo) : 1);
+	const stop = at('trStopAt');
+	if (r > at('trExtraFrom')) return s.trExtra;
+	if (r > at('trPerfectFrom')) return s.trPerfect;
+	if (r > at('trGoodFrom')) return s.trGood;
+	if (r <= -stop) return s.trStop;
+	if (r > at('trSlowFadeFrom')) return fade(s.trSlow, s.trGood, share(r, at('trSlowFadeFrom'), at('trGoodFrom')));
+	if (r > at('trSlowFrom')) return s.trSlow;
+	if (r > at('trNeutralFadeFrom')) return fade(s.trNeutral, s.trSlow, share(r, at('trNeutralFadeFrom'), at('trSlowFrom')));
+	if (r > 0) return s.trNeutral;
+	return fade(s.trNeutral, s.trStop, stop > 0 ? -r / stop : 1);
+}
+
+// A pair as the trainer draws it: top to bottom
+function gradient(pair: [string, string]): string {
+	return `gradient(linear, 0% 0%, 0% 100%, from(${pair[0]}), to(${pair[1]}))`;
+}
+
+// The gain ratio of a tick (speedGain / idealGain), 0 when it can't be had (the trainer's NaNCheck)
+function gainRatio(speedGain: number, idealGain: number): number {
+	const r = speedGain / idealGain;
+	return isFinite(r) ? r : 0;
+}
+
+// A bar's colour: by the strafe trainer's colours (colorBy 'trainer', trainerPair, from gain: the tick's gain
+// ratio), one colour (colorBy 'plain'; growing from the sides, one per screen side, leftColor and
 // rightColor, so a colour stays with its edge when the sides are swapped), or by how far the ratio is from 1
 // (colorBy 'good'): goodColor at 1, badColor at badPct % away or more, too slow and too fast alike, or by
 // the gain its turn speed gives (colorBy 'gain', gainBand)
-function barColor(ratio: number, side: 'left' | 'right', s: Settings): string {
+function barColor(ratio: number, side: 'left' | 'right', s: Settings, gain = 0): string {
+	if (s.colorBy === 'trainer') return gradient(trainerPair(gain, s));
 	if (s.colorBy === 'gain') return gainBand(ratio, s);
 	if (s.colorBy !== 'good') return s.fromSides ? (side === 'left' ? s.leftColor : s.rightColor) : s.barColor;
 	const far = Math.max(1, +s.badPct || 50) / 100;
@@ -110,9 +148,9 @@ function markers(s: Settings): number[] {
 }
 
 // How one row is drawn: width in % of the panel, the side it grows from, its colour
-function rowStyle(ratio: number, strafeRight: boolean, s: Settings): { width: number; side: 'left' | 'right'; color: string } {
+function rowStyle(ratio: number, strafeRight: boolean, s: Settings, gain = 0): { width: number; side: 'left' | 'right'; color: string } {
 	const side = barSide(strafeRight, s);
-	return { width: Math.round(barLength(ratio, s) * 1000) / 10, side, color: barColor(ratio, side, s) };
+	return { width: Math.round(barLength(ratio, s) * 1000) / 10, side, color: barColor(ratio, side, s, gain) };
 }
 
 const DEFAULTS: Settings = {
@@ -124,7 +162,7 @@ const DEFAULTS: Settings = {
 	swapSides: false,
 	leftColor: 'rgba(92, 160, 255, 0.9)',
 	rightColor: 'rgba(255, 170, 80, 0.9)',
-	colorBy: 'plain',
+	colorBy: 'trainer',
 	barColor: 'rgba(255, 255, 255, 0.85)',
 	goodColor: 'rgba(123, 216, 143, 1)',
 	badColor: 'rgba(255, 92, 92, 1)',
@@ -134,6 +172,20 @@ const DEFAULTS: Settings = {
 	lowColor: 'rgba(255, 176, 50, 1)',
 	midColor: 'rgba(123, 216, 143, 1)',
 	highColor: 'rgba(92, 160, 255, 1)',
+	// Momentum's strafe trainer's defaults (its hud_default.kv3 StrafeTrainer entry and getColorPair)
+	trExtraFrom: 1020,
+	trPerfectFrom: 990,
+	trGoodFrom: 950,
+	trSlowFadeFrom: 850,
+	trSlowFrom: 750,
+	trNeutralFadeFrom: 500,
+	trStopAt: 5000,
+	trExtra: ['rgba(24, 150, 211, 1)', 'rgba(87, 200, 255, 1)'],
+	trPerfect: ['rgba(87, 200, 255, 1)', 'rgba(113, 240, 255, 1)'],
+	trGood: ['rgba(21, 152, 86, 1)', 'rgba(122, 238, 122, 1)'],
+	trSlow: ['rgba(248, 222, 74, 1)', 'rgba(255, 238, 0, 1)'],
+	trNeutral: ['rgba(178, 178, 178, 1)', 'rgba(255, 255, 255, 1)'],
+	trStop: ['rgba(211, 24, 24, 1)', 'rgba(255, 87, 87, 1)'],
 	showMarker: true,
 	markerColor: 'rgba(255, 220, 90, 0.9)'
 };
@@ -143,6 +195,7 @@ const OPTIMAL_AT = [
 	{ label: '3/4 of the width', value: 'three' }
 ];
 const COLOR_BY = [
+	{ label: 'Like the strafe trainer (gain vs ideal)', value: 'trainer' },
 	{ label: 'Plain (one colour)', value: 'plain' },
 	{ label: 'How good (by distance from optimal)', value: 'good' },
 	{ label: 'Gain % (what the turn speed gains)', value: 'gain' }
@@ -158,6 +211,10 @@ const PLAIN = ['plain'];
 const SIDES = [true]; // a tick box hands showWhen its checked state
 const GOOD = ['good'];
 const GAIN = ['gain'];
+const TRAINER = ['trainer'];
+const TR_BANDS = ['trExtraFrom', 'trPerfectFrom', 'trGoodFrom', 'trSlowFadeFrom', 'trSlowFrom', 'trNeutralFadeFrom', 'trStopAt'];
+const TR_COLOURS = ['trExtra', 'trPerfect', 'trGood', 'trSlow', 'trNeutral', 'trStop'];
+const BAND_RANGE = { range: { min: 0, max: 9999 } };
 const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['bars', 'Bars', NONE, ['rows', 'rowHeight', 'optimalAt', 'fromSides']],
 	['rows', 'Ticks shown (10-1000)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 9999, increment: 10 } }],
@@ -169,9 +226,24 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 	['leftColor', 'Bars from the left edge (Plain)', COLOR_PICKER],
 	['rightColor', 'Bars from the right edge (Plain)', COLOR_PICKER],
 	['colours', 'Colours', NONE, ['colorBy', 'showMarker', 'markerColor', 'backgroundColor']],
-	['colorBy', 'Colour by', DROPDOWN, ['barColor', 'goodColor', 'badColor', 'badPct', 'gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor'],
-		{ options: COLOR_BY, showWhen: { barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD,
+	['colorBy', 'Colour by', DROPDOWN, ['trBands', 'trColours', 'barColor', 'goodColor', 'badColor', 'badPct', 'gainLow', 'gainHigh', 'lowColor', 'midColor', 'highColor'],
+		{ options: COLOR_BY, showWhen: { trBands: TRAINER, trColours: TRAINER, barColor: PLAIN, goodColor: GOOD, badColor: GOOD, badPct: GOOD,
 			gainLow: GAIN, gainHigh: GAIN, lowColor: GAIN, midColor: GAIN, highColor: GAIN } }],
+	['trBands', 'Bands (gain vs ideal, tenths of a %: 950 = 95 %)', NONE, TR_BANDS],
+	['trExtraFrom', 'Extra above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trPerfectFrom', 'Perfect above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trGoodFrom', 'Good above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trSlowFadeFrom', 'Slow fading to good above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trSlowFrom', 'Slow above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trNeutralFadeFrom', 'Neutral fading to slow above', NUMBER_ENTRY, undefined, BAND_RANGE],
+	['trStopAt', 'Stop at or below minus (5000 = -500 %)', NUMBER_ENTRY, undefined, { range: { min: 0, max: 99999 } }],
+	['trColours', 'Band colours', NONE, TR_COLOURS],
+	['trExtra', 'Extra', GRADIENT_PICKER],
+	['trPerfect', 'Perfect', GRADIENT_PICKER],
+	['trGood', 'Good', GRADIENT_PICKER],
+	['trSlow', 'Slow', GRADIENT_PICKER],
+	['trNeutral', 'Neutral', GRADIENT_PICKER],
+	['trStop', 'Stop (turning against the strafe)', GRADIENT_PICKER],
 	['barColor', 'Bar colour', COLOR_PICKER],
 	['goodColor', 'At optimal', COLOR_PICKER],
 	['badColor', 'Far from optimal', COLOR_PICKER],
@@ -187,11 +259,12 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 ];
 
 // Shown while the customizer is open, so there is something to drag: [ratio, strafeRight], four strafes
-const SAMPLE: [number, boolean][] = [];
+// [ratio, strafeRight, gain ratio (from the gain curve, as a sample has no game stats)]
+const SAMPLE: [number, boolean, number][] = [];
 for (let i = 0; i < 100; i++) {
 	const k = i % 25;
 	const r = k < 3 ? 0.4 + 0.2 * k : k > 21 ? 1.3 - 0.1 * (k - 21) : 0.85 + 0.3 * Math.abs(Math.sin(i * 1.7));
-	SAMPLE.push([r, Math.floor(i / 25) % 2 === 1]);
+	SAMPLE.push([r, Math.floor(i / 25) % 2 === 1, gainOf(r) / 100]);
 }
 
 // ---- Panorama ----
@@ -213,7 +286,7 @@ let spectating = false;
 let lastKey = '';
 let lastTick = -1;
 let prevVz = 0; // the vz of the tick before the pending one
-let pending: { ratio: number; right: boolean; vz: number } | null = null; // the last tick, drawn when the next comes
+let pending: { ratio: number; right: boolean; gain: number; vz: number } | null = null; // the last tick, drawn when the next comes
 // The rows are built once; each new tick moves the top row to the bottom and restyles only that one, so
 // a tick costs one panel move, not a redraw. Rows with no bar yet are hidden, so the list (aligned to the
 // bottom) starts at the bottom and grows up. Built again when a setting changes them (layoutKey).
@@ -279,12 +352,12 @@ function ensureBuilt() {
 }
 
 // One new tick at the bottom: the top row moves to the bottom and is painted
-function addRow(ratio: number, strafeRight: boolean) {
+function addRow(ratio: number, strafeRight: boolean, gain: number) {
 	ensureBuilt();
 	const row = rows.shift()!;
 	list!.MoveChildAfter(row, rows[rows.length - 1]);
 	rows.push(row);
-	const st = rowStyle(ratio, strafeRight, settings);
+	const st = rowStyle(ratio, strafeRight, settings, gain);
 	row.style.width = `${st.width}%`;
 	row.style.horizontalAlign = st.side;
 	row.style.backgroundColor = st.color;
@@ -294,7 +367,7 @@ function addRow(ratio: number, strafeRight: boolean) {
 
 function showSample() {
 	build();
-	for (const [r, right] of SAMPLE.slice(-rows.length)) addRow(r, right);
+	for (const [r, right, gain] of SAMPLE.slice(-rows.length)) addRow(r, right, gain);
 }
 
 function hide() {
@@ -338,11 +411,11 @@ function sample() {
 	lastKey = key;
 	lastTick = Math.max(floorTick, lastTick + 1);
 	if (pending) {
-		if (!onGround(pending.vz, prevVz, vel.z)) addRow(pending.ratio, pending.right);
+		if (!onGround(pending.vz, prevVz, vel.z)) addRow(pending.ratio, pending.right, pending.gain);
 		prevVz = pending.vz;
 	}
 	// strafeRight is 1 (right), -1 (left) or 0 (no key), not a bool (the recorder's 'right' column)
-	pending = { ratio: stats.yawRatio, right: stats.strafeRight > 0, vz: vel.z };
+	pending = { ratio: stats.yawRatio, right: stats.strafeRight > 0, gain: gainRatio(stats.speedGain, stats.idealGain), vz: vel.z };
 }
 
 function loop() {
