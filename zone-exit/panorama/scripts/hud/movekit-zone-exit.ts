@@ -94,10 +94,20 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 // Shown while the customizer is open, so there is something to drag
 const SAMPLE = { speed: 418.4, comparison: 410.1 };
 
-// A velocity's length (x, y and z), from either shape; NaN when there is none
+// Downward speed counted at most (u/s), a fixed limit (owner, 2026-11-07). Why 322 (surf_deadline, 2026-11-07, getpos_exact every tick
+// and a stage replay): a crouched jump (+302, then 12 less per tick) on flat ground is at -322 on the
+// last tick it can be over the floor. A start zone that ends at the floor's edge can still read -334 when
+// the player's box is within about 1 unit of the edge on that tick: it neither lands nor leaves the zone,
+// and leaves on the next tick. The game stores that -334 too (the replay's effectiveStartVelocity), but
+// it comes from the edge, not the pre; surfers count about 478 as the top. Rising speed isn't limited.
+const MAX_FALL = 322;
+
+// A velocity's length (x, y and z), from either shape, with at most MAX_FALL of downward speed; NaN when
+// there is none
 function speed3(v: Vec): number {
 	if (!v) return NaN;
-	const [x, y, z] = Array.isArray(v) ? v : [v.x, v.y, v.z];
+	const [x, y, rawZ] = Array.isArray(v) ? v : [v.x, v.y, v.z];
+	const z = Math.max(rawZ, -MAX_FALL);
 	return Math.sqrt(x * x + y * y + z * z);
 }
 

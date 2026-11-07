@@ -8,7 +8,8 @@
 // install.py's hud_default.kv3 entry (same keys, same values); speed3 on both velocity shapes, the band
 // colours and the line text; the Panorama side, with the probe's numbers (2026-11-04, surf_aura): the
 // customizer gets the component for surf only, a start zone exit shows the player's 3D speed and the
-// difference to the comparison run's split, a filled split wins over the player's velocity, stages,
+// difference to the comparison run's split, a filled split wins over the player's velocity, falling
+// speed counted up to 322, stages,
 // replays, spectating, other modes, another track's comparison and a panel switched off show nothing or
 // no diff, the fade, the customizer's sample, panorama_reload.
 'use strict';
@@ -136,6 +137,8 @@ const CMP = 422.4737; // the probe's PB split, 3D
 expect(+api.speed3(G.comparison.runSplits.segments[0].effectiveStartVelocity).toFixed(4), CMP, 'speed3 of a split array');
 expect(+api.speed3({ x: 3, y: 4, z: 12 }).toFixed(4), 13, 'speed3 of {x, y, z}, z counts');
 expect([null, undefined].map((v) => isNaN(api.speed3(v))), [true, true], 'speed3 of nothing is NaN');
+expect(+api.speed3([0, 0, -334]).toFixed(4), 322, 'speed3 counts falling speed up to 322');
+expect(+api.speed3({ x: 0, y: 0, z: 400 }).toFixed(4), 400, 'speed3 doesn\'t limit rising speed');
 expect([300, 399.9, 400, 410, 420, 420.1, 500, NaN].map((v) => api.bandColor(v, S)), [LOW, LOW, MID, MID, MID, HIGH, HIGH, LOW],
 	'bands: amber under 400, green 400-420 (both in), blue above');
 expect(api.bandColor(350, { ...S, speedLow: 300, speedHigh: 340 }), HIGH, 'band speeds can be set');
@@ -203,6 +206,22 @@ expect(texts(panel)[0][0], '430', 'a filled split wins over the player\'s veloci
 G.splits = { segments: [{ effectiveStartVelocity: [0, 0, 0] }] };
 runSchedules();
 runSchedules();
+// the -334 exit on surf_deadline (stage replay, 2026-11-07): 484.0 counted in full, 475.8 with falling speed
+// counted up to 322
+const plain = G.velocity;
+G.velocity = { x: 331.2524719238281, y: 113.99437713623047, z: -334.0066223144531 };
+exit();
+expect(texts(panel), [['476', '+54']], 'falling speed counted up to 322');
+runSchedules();
+runSchedules();
+const pb = G.comparison;
+G.comparison = { trackId: TRACK, runSplits: { segments: [{ effectiveStartVelocity: [331.2524719238281, 113.99437713623047, -334.0066223144531] }] } };
+exit();
+expect(texts(panel), [['476', '+0']], 'the comparison\'s falling speed is counted up to 322 too');
+runSchedules();
+runSchedules();
+G.comparison = pb;
+G.velocity = plain;
 G.status = { ...G.status, majorNum: 2 };
 quiet('a stage start shows nothing', () => (G.status = { ...G.status, majorNum: 1 }));
 G.status = { ...G.status, state: 1 };

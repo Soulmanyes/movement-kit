@@ -3,6 +3,7 @@
 When you leave the start zone in [Momentum Mod](https://momentum-mod.org/)'s surf mode, Zone Exit Speed shows how good your pre jump was:
 
 - **Your speed** at the moment the timer starts, in x, y and z together. The start zone caps horizontal speed, so the vertical part of the pre jump is what tells a good exit from a bad one. The number is amber below 400 u/s, green from 400 to 420 u/s and blue above 420 u/s. Those speeds depend on the map, so set your own.
+- **Falling speed counts up to 322 u/s.** On a start zone that ends at the floor's edge, a crouched jump is falling at 322 u/s on the last tick it can be over the floor. Sometimes the game reads 334 u/s: the player's box is within about 1 unit of the edge on that tick, so it neither lands nor leaves the zone and leaves one tick later. That comes from the edge, not from the pre, so it counts as 322, which puts the top at about 478. The comparison run's speed is counted the same way.
 - **The difference** to the comparison run's exit speed, for example `+7` in green or `-29` in red. The comparison run is the one Momentum loads for its own split comparisons, normally your PB on that map. With none loaded, or one for another track, it doesn't show.
 
 It stays for 3 seconds, then fades out. It shows only for your own runs on the main start, not at stage starts, on replays or while spectating.
