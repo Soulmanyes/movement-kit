@@ -2,7 +2,7 @@
 
 The panel itself is set up in Momentum's HUD customizer. The sound can't be: the game can't read the
 kit's files, so Apply saves it (settings.py) and runs install.py's install again, which writes it into
-the panel script's copy in the game. A running game picks the new copy up at the next map load.
+the panel script's copy in the game. A running game picks the new copy up after panorama_reload in its console.
 
 hub.discover() loads this file on every OS before it looks at "os", so the top imports only the
 standard library and movekit; the siblings load on the first call through hub.local_import.

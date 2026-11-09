@@ -39,7 +39,7 @@
 		try {
 			const got = await call("apply", { sound: form() }, "Not saved");
 			show(got);
-			toast(got.written ? "Saved. A running game uses it from the next map load." : "Saved");
+			toast(got.written ? "Saved. In a running game, type panorama_reload in the console." : "Saved");
 		} catch {
 			$("zp-apply").disabled = false;
 		}

@@ -6,7 +6,7 @@
   "os": ["linux", "win32"],
   "tag_prefix": "z-penalty-v",
   "version_from": "install.py",
-  "needs_core": "1.5.0",
+  "needs_core": "1.10.0",
   "needs": [],
   "data": [],
   "group": "hud",
