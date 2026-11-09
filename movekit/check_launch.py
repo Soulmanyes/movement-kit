@@ -149,13 +149,30 @@ def main():
         check("already ran further out", tools_of("movekit-run", MOMENTUM,
                                                   {launch.RAN_ENV: "strafe-review"}),
               ("momentum", ["sourceyaw"]))
+        # Strafe Trainer, split out of Source Yaw: runs under Source Yaw's old names too
+        _, st_hook = tool_copy(tools, "strafe-trainer", "ST")
+        launch.register("strafe-trainer", 55, st_hook)
+        check("split-out tool: with movekit-run", tools_of("movekit-run", MOMENTUM),
+              ("momentum", ["strafe-review", "sourceyaw", "strafe-trainer"]))
+        check("split-out tool: runs under the old name of the tool it left", tools_of("sourceyaw-run", CSS),
+              ("css", ["sourceyaw", "strafe-trainer"]))
+        check("split-out tool: not under another tool's old name", tools_of("strafe-review-run", MOMENTUM),
+              ("momentum", ["strafe-review"]))
+        check("split-out tool: already ran further out", tools_of("movekit-run", MOMENTUM,
+                                                                  {launch.RAN_ENV: "strafe-trainer"}),
+              ("momentum", ["strafe-review", "sourceyaw"]))
 
         settings = launch.settings_file()
         settings.parent.mkdir(parents=True)
         settings.write_text('[launch]\nmomentum = ["sourceyaw"]\n')
-        check("settings: game listed", tools_of("movekit-run", MOMENTUM), ("momentum", ["sourceyaw"]))
+        check("settings: game listed (a split-out tool with the one it left)", tools_of("movekit-run", MOMENTUM),
+              ("momentum", ["sourceyaw", "strafe-trainer"]))
         check("settings: game left out runs all", tools_of("movekit-run", CSS),
-              ("css", ["strafe-review", "sourceyaw"]))
+              ("css", ["strafe-review", "sourceyaw", "strafe-trainer"]))
+        settings.write_text('[launch]\nmomentum = ["strafe-trainer"]\n')
+        check("settings: a split-out tool alone", tools_of("movekit-run", MOMENTUM), ("momentum", ["strafe-trainer"]))
+        launch.unregister("strafe-trainer")
+        settings.write_text('[launch]\nmomentum = ["sourceyaw"]\n')
         check("settings: old name still obeys them", tools_of("strafe-review-run", MOMENTUM),
               ("momentum", []))
         settings.write_text('[launch\nmomentum = "x"\n')

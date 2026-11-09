@@ -10,7 +10,8 @@ starts the game (see movekit-run for what a hook may do):
 
 Hooks run in order, lowest first; the links live in $XDG_DATA_HOME/movekit/hooks as
 <order>-<tool>. Which tools run for which game is the [launch] table of the one settings file,
-$XDG_CONFIG_HOME/movekit/settings.toml; a game it leaves out runs every registered hook:
+$XDG_CONFIG_HOME/movekit/settings.toml; a game it leaves out runs every registered hook. A tool
+split out of another (SPLIT_FROM) also runs where that one is listed:
 
     [launch]
     momentum = ["strafe-review", "sourceyaw"]
@@ -43,6 +44,9 @@ WRAPPER = "movekit-run"
 # names from before movekit-run, each limited to its own tool
 OLD_NAMES = {"sourceyaw-run": "sourceyaw", "css-yaw-run": "sourceyaw", "yaw-run": "sourceyaw",
              "strafe-review-run": "strafe-review"}
+# tools split out of another (Phase 13): they run wherever the tool they left runs, so an old
+# per-tool name or a [launch] list written before the split keeps starting them
+SPLIT_FROM = {"strafe-trainer": "sourceyaw"}
 # tools a wrapper further out already ran (an old name chained after movekit-run, or two old
 # names chained); set by movekit-run for the command it starts
 RAN_ENV = "MOVEKIT_RAN"
@@ -124,7 +128,8 @@ def plan(name, args, env=None):
     wanted = enabled(game)
     run = []
     for tool, (order, hook) in sorted(hooks.items(), key=lambda kv: (kv[1][0], kv[0])):
-        if (only and tool != only) or tool in ran or (wanted is not None and tool not in wanted):
+        names = {tool, SPLIT_FROM.get(tool)}
+        if (only and only not in names) or tool in ran or (wanted is not None and not names & set(wanted)):
             continue
         run.append((tool, hook))
     return game, run

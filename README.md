@@ -82,7 +82,7 @@ momentum = ["strafe-review", "sourceyaw"]
 css = ["sourceyaw"]
 ```
 
-The older per-tool options still work and start only their own tool: `sourceyaw-run %command%`, `strafe-review-run sourceyaw-run %command%`. On Windows, a launch option that still names `strafe-review.exe` keeps working (see Releases).
+The older per-tool options still work and start only their own tool: `sourceyaw-run %command%`, `strafe-review-run sourceyaw-run %command%`. Strafe Trainer, which was part of Source Yaw until 1.11.0, runs wherever Source Yaw does: under `sourceyaw-run`, and for a game whose `[launch]` list names `sourceyaw`. On Windows, a launch option that still names `strafe-review.exe` keeps working (see Releases).
 
 ## Releases
 

@@ -8,10 +8,12 @@ Covers: the one-time copy of the trainer settings from Source Yaw (old cue keys 
 Yaw's file untouched, a game with its own profile kept, the old CS:S-only file); the autoexec block
 (console log, offset alias and key, a stale key unbound, the key left out while another tool binds
 it, the block gone when off, uninstall); the hub section's load, offset-key note and Apply; and the
-rollback guard (no trainer while a Source Yaw with its own trainer.py is installed).
+rollback guard (no trainer while a Source Yaw with its own trainer.py is installed), in launch_win
+and, on Linux, in launch-hook.sh.
 """
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -77,6 +79,13 @@ def check_import():
     raw = TMP / "old-settings.json"
     raw.write_text(json.dumps({"key": "f", "trainer": {"enabled": True}}))
     expect(store.sourceyaw_trainers(raw), {"css": {"enabled": True}}, "CS:S-only file from before Momentum")
+    # the install hook does the import (the section shows the copied values at once)
+    install = local_import(str(HERE / "x.py"), "install")
+    install.build_overlay = install.link_launcher = lambda *a, **k: None  # no compiler or hooks folder here
+    store.SETTINGS.unlink()
+    install.install(quiet=True)
+    expect((store.saved("css").get("enabled"), store.saved("css").get("offset_key")), (True, "o"),
+           "install() copies the settings from Source Yaw")
 
 
 def check_block(css):
@@ -129,6 +138,30 @@ def check_guard(css):
     (kit / "sourceyaw" / "trainer.py").unlink()
     store.save("css", {**store.saved("css"), "enabled": False})
     expect(launch_win.start([exe], kit=kit), [], "no trainer while it is off")
+    if sys.platform.startswith("linux"):
+        check_hook_guard()
+
+
+def run_hook():
+    """launch-hook.sh sourced the way movekit-run does (inside a function, $GAME and $HOOK_DIR
+    set); returns (SOURCEYAW_OVERLAY after it, run.log)."""
+    script = 'hook() { . "$HOOK_DIR/launch-hook.sh"; }; hook; echo "overlay=${SOURCEYAW_OVERLAY-}"'
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False,
+                         env={**os.environ, "GAME": "css", "HOOK_DIR": str(HERE), "HELPERS": ""})
+    log = (TMP / "config" / "strafe-trainer" / "run.log").read_text()
+    return out.stdout.strip().rpartition("overlay=")[2], log
+
+
+def check_hook_guard():
+    old = TMP / "data" / "sourceyaw" / "trainer.py"  # a Source Yaw 1.10 install on Linux
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text("")
+    overlay, log = run_hook()
+    expect((overlay, "still has its own trainer" in log, "game: css" in log), ("", True, False),
+           "launch hook: skipped next to a Source Yaw with its own trainer")
+    old.unlink()
+    overlay, log = run_hook()
+    expect((overlay, "game: css" in log), ("", True), "launch hook: runs, no overlay while the trainer is off")
 
 
 def main():

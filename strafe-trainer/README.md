@@ -2,8 +2,9 @@
 
 A strafe trainer for Counter-Strike: Source and Momentum Mod on Linux and Windows. It plays a sound
 when you turn without the matching strafe key or hold both, and on Linux it shows each strafe's
-key timing in ticks on screen. It was part of [Source Yaw](../sourceyaw/) until Source Yaw 1.11.0;
-updating Source Yaw installs it, with your trainer settings copied over.
+key timing in ticks on screen. It was part of [Source Yaw](../sourceyaw/) until Source Yaw 1.11.0.
+If you had the trainer on in Source Yaw, updating Source Yaw installs it, with your trainer
+settings copied over.
 
 - **Sounds:** three cues, each with its own switch, sound, pitch and wait (see [Cues](#cues)).
 - **Offset** (Linux): for each strafe, the ticks between turning the other way and switching

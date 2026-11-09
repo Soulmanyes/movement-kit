@@ -633,6 +633,8 @@ The strafe trainer leaves Source Yaw and becomes its own module, so either can b
   - Checks moved with the code: `strafe-trainer/check_settings_api.py`, `check_hub_section.py`, `check_launch_win.py`, `check_game_events.py` (from `check_session_use.py`), `check_install.py` (import, block, section, guard), `windows/check_windows.py` (Raw Input, tone, trainer.run, launch, hub; CI `strafe-trainer-windows.yml`). Source Yaw's checks lost their trainer parts and assert it is gone; `check_modes.py` compares against 1.8.0 with the trainer off and catches all 11 mutations. `check_modules.py` lists `strafe-trainer`; `module-release.yml` takes `strafe-trainer-v*`.
   - READMEs: `strafe-trainer/README.md` (new, overlay GPL-3 credit), Source Yaw's without the trainer, the root list, layout and licence line. Both pages screenshot-checked.
   - Not run here: the Windows checks (CI on push).
+  - Follow-ups (same day): `movekit/launch.py` `SPLIT_FROM` runs Strafe Trainer wherever Source Yaw runs (under `sourceyaw-run` and for a `[launch]` list naming `sourceyaw`), so old launch options keep the trainer; `check_launch.py` covers it. `sourceyaw/check_settings_api.py` calls the real `split_out` hook. `check_install.py` covers `install()` doing the import and `launch-hook.sh`'s guard; the guard and import mutations are caught. `sourceyaw/install.sh` ran in a sandbox HOME over a fake 1.10 copy: leftovers and its own manifest gone, Strafe Trainer's manifest kept through install and `--uninstall`.
+  - For 13.5: retake `sourceyaw/docs/screenshot.png` (still shows the trainer cards).
 
 ## Later / undecided
 

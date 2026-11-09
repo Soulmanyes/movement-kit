@@ -6,11 +6,13 @@ Usage: python sourceyaw/check_settings_api.py   (exits 1 on the first failure)
 Covers, loaded the hub's way (hub.local_import, sourceyaw/ not on sys.path): setup_problem (found,
 not found, Flatpak-only), base_options (with and without crosshair-maker, a custom image), collect
 feeding yawcore.validate and keeping a saved "trainer" dict as it was (for a roll back: the trainer
-is its own module since Phase 13, checked by strafe-trainer/check_settings_api.py); no bare yawcore
+is its own module since Phase 13, checked by strafe-trainer/check_settings_api.py),
+module_hooks.split_out (Strafe Trainer named only when a game had the trainer on); no bare yawcore
 left behind, and local_import returning the same modules. Then, in a child process the app's way
 (sourceyaw/ on sys.path, settings_api imported first): the plain yawcore is the one it uses.
 HOME and the XDG folders point into the temp folder.
 """
+import json
 import os
 import subprocess
 import sys
@@ -94,6 +96,26 @@ def main():
         data = api.collect("f", True, 1, "builtin", None, value, entries, surf=surf, mode_key="g", separate=True)
         expect((data["surf"], data["mode_key"], data["auto_mode"]), (surf, "g", True), "collect with a surf list")
         expect(core.validate(data), [], "collected surf settings validate")
+
+        # module_hooks.split_out: Strafe Trainer installed on update only when a game had the trainer on
+        from movekit import paths
+        hooks = hub.local_import(HERE / "module_hooks.py", "module_hooks")
+        settings = paths.config_dir("sourceyaw") / "settings.json"
+        settings.unlink(missing_ok=True)
+        expect(hooks.split_out(None), [], "split_out with no settings")
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        for raw, want, what in (
+                ({"profiles": {"css": {"trainer": {"enabled": False}}, "momentum": {"key": "q"}}}, [],
+                 "split_out with the trainer off everywhere"),
+                ({"profiles": {"css": {"trainer": {"enabled": False}},
+                               "momentum": {"trainer": {"enabled": True}}}}, ["strafe-trainer"],
+                 "split_out with the trainer on in one game"),
+                ({"key": "q", "trainer": {"enabled": True}}, ["strafe-trainer"],
+                 "split_out on the old CS:S-only file")):
+            settings.write_text(json.dumps(raw))
+            expect(hooks.split_out(None), want, what)
+        settings.write_text("{not json")
+        expect(hooks.split_out(None), [], "split_out with a broken file")
 
         bare = [m for m in ("yawcore", "settings_api") if m in sys.modules]
         expect(bare, [], "bare modules after loading the hub's way")

@@ -15,7 +15,8 @@ yawspeed cycle without the crosshair colour; see [On Windows](#on-windows).
   that's the game's own crosshair. CS:S has no crosshair without a weapon, so there it's a
   [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair.
 - **Strafe trainer:** moved to its own module, [Strafe Trainer](../strafe-trainer/), in 1.11.0.
-  Updating Source Yaw installs it, with your trainer settings copied over.
+  If you had the trainer on, updating Source Yaw installs it, with your trainer settings copied
+  over. Otherwise install it from its card on the Modules page.
 - **Settings in the hub:** its settings are a section of
   [Soulmanyes's Movement Kit](../README.md), whose Modules page also installs its updates.
 
@@ -79,7 +80,8 @@ That's all Momentum Mod needs. For CS:S's crosshair colours, also:
    If Steam can't find `movekit-run` (it lives in `~/.local/bin`), the app shows the full
    path instead. `movekit-run` is the launch option all of the movement tools share: it
    starts each one that is installed (see the repository's README to turn one off per game).
-   `sourceyaw-run`, its name before, still works and starts only Source Yaw.
+   `sourceyaw-run`, its name before, still works and starts only Source Yaw (and Strafe
+   Trainer, which was part of it until 1.11.0).
 
 To remove the app, press **Uninstall** on its card in the hub, or run the install command with
 `--uninstall`. Then take `movekit-run` (or `sourceyaw-run`) out of the launch options, unless
