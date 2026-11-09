@@ -1,7 +1,7 @@
 """Z Penalty's hub settings: the constant tone that sounds on the desktop while the penalty is on.
 
 Saved in <config>/movekit/z-penalty.json (paths.config_dir). The tone runner (tone_run.py, beside the
-game) reads the file again whenever it changes, so a change applies to a running game at once.
+game) reads the file again every half second, so a change applies to a running game at once.
 
 A file from before the tone (it held a game sound's `name`) still loads: unknown keys are ignored.
 """

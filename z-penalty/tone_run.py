@@ -8,7 +8,7 @@ the tone (movekit.tone) on and off.
 
 The tone also stops on a map unload and after MAX_ON seconds without a ZPEN_OFF (the longest
 stretch seen was 39 ticks, under 0.6 s), so a crash or alt-tab mid-climb can't leave it sounding.
-The settings file is read again when it changes: switching the tone on or off, its pitch or its
+The settings file is read again every half second: switching the tone on or off, its pitch or its
 volume applies at once.
 
 Linux: launch-hook.sh runs `python3 tone_run.py` in the background while Momentum runs. Windows:
@@ -44,7 +44,6 @@ class Runner:
         self.cfg = None
         self.tone = None
         self.on_since = None
-        self._stamp = None
         self._looked = -SETTINGS_EVERY
 
     def _make(self, cfg):
@@ -60,20 +59,15 @@ class Runner:
         self.cfg = cfg
 
     def reload(self):
-        """Read the settings again if the file changed (or on the first call)."""
+        """Read the settings again every SETTINGS_EVERY seconds; a change rebuilds the tone. The file is
+        a few bytes, and a timestamp check misses two saves close together on Windows (CI, 2026-11-09)."""
         now = self.clock()
         if now - self._looked < SETTINGS_EVERY:
             return
         self._looked = now
-        try:
-            stamp = self.settings.file().stat().st_mtime_ns
-        except OSError:
-            stamp = None
-        if self.cfg is None or stamp != self._stamp:
-            self._stamp = stamp
-            cfg = self.settings.load()
-            if cfg != self.cfg:
-                self._make(cfg)
+        cfg = self.settings.load()
+        if cfg != self.cfg:
+            self._make(cfg)
 
     def handle(self, event):
         kind, data = event["type"], event["data"]
