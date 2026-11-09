@@ -620,6 +620,13 @@ The strafe trainer leaves Source Yaw and becomes its own module, so either can b
   - Modules page: a strip on the new module's card, "Installed because it moved out of Source Yaw. " (accent border; generic, since any module may split) or "Strafe Trainer moved out of Source Yaw. Installing it failed: ..." (amber, the card's Install button does the rest), each with Dismiss. Screenshot-checked.
   - Checks: `check_modules.py` `check_split_out` (not released yet, install by hand clears the note, released, already installed, broken hook, uninstall) plus the bridge call; caught both mutations (no `_split_out` call, failure note not cleared). New `movekit/check_helpers.py`. `check_hub`, `check_steam`, `check_launch`, `check_panorama`, `check_linux_core`, `check_logtail`, `check_attempts` pass.
   - Left for 13.5: `CORE_VERSION` and `hub_release.VERSION` to 1.10.0.
+- **13.1b built (2026-11-09).** What a Strafe Trainer-only install needs that only Source Yaw had, moved into the core as the one copy:
+  - `movekit/launchopt.py`: `current(game)`, `steam_path`, `runner`, `with_runner(options, run, also)` (`also`: a tool's old wrapper names that still run it; `sourceyaw-run` runs only Source Yaw) and `offer(game, also)`, the page's `{text, note, already}` for Linux (movekit-run) and Windows (the core exe). `movekit/bindnames.py`: `VALID`, `CODES`, `MOUSE`, `capture_info()`. yawcore's `current_launch_options`, `runner`, `launch_option` and `VALID_KEYS` call these.
+  - `movekit/web/form.css` (`mk-` rows, switches, segments, key chips, dialogs, toasts, launch box) and `movekit/web/section.js` (`mk.toast`, `call`, `copy`, `note`, `options`, `numberBox`, `keys.open` key capture with numpad-by-code, wheel and side-button blocking, `leaveGuard`).
+  - `sourceyaw/module.json` `needs_core` 1.10.0 (yawcore imports the new core modules).
+  - **13.3 must** move Source Yaw's page onto `form.css`/`section.js` and drop its `sy-` copies of those rules and helpers, and `hub_section.KEY_CODES`/`MOUSE_BUTTONS`/`_windows_launch_option`, so each exists once.
+  - `check_helpers.py` covers `with_runner` (incl. `sourceyaw-run` not counting for another tool) and that every capture name is a bind name.
+- **13.2 and 13.3 go together** (one commit when the checks are green): once the trainer files move, Source Yaw's section, `install.sh` and launch hook break until 13.3 is done.
 
 ## Later / undecided
 

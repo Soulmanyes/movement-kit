@@ -6,7 +6,7 @@
   "os": ["linux", "win32"],
   "tag_prefix": "sourceyaw-v",
   "version_from": "yawcore.py",
-  "needs_core": "1.7.0",
+  "needs_core": "1.10.0",
   "needs": [],
   "data": ["config:sourceyaw"]
 }

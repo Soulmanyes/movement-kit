@@ -37,7 +37,17 @@ _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
 # after the path above
-from movekit import binds, cfgblock, files, keyvalues, maps, paths, sounds, steam
+from movekit import (
+    bindnames,
+    binds,
+    cfgblock,
+    files,
+    launchopt,
+    maps,
+    paths,
+    sounds,
+    steam,
+)
 from movekit import games as kit_games
 
 VERSION = "1.10.1"
@@ -121,20 +131,7 @@ OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS, OFFSETS_ALIAS)
 SOUNDS = sounds.SOUNDS
 
 # key names the Source engine accepts in `bind`
-VALID_KEYS = set(
-    [chr(c) for c in range(ord("a"), ord("z") + 1)]
-    + [str(d) for d in range(10)]
-    + [f"f{n}" for n in range(1, 13)]
-    + [f"mouse{n}" for n in range(1, 6)]
-    + ["mwheelup", "mwheeldown", "space", "tab", "enter", "escape", "backspace",
-       "capslock", "shift", "rshift", "ctrl", "rctrl", "alt", "ralt", "lwin",
-       "rwin", "app", "ins", "del", "home", "end", "pgup", "pgdn", "uparrow",
-       "downarrow", "leftarrow", "rightarrow", "pause", "scrolllock", "numlock",
-       "kp_ins", "kp_end", "kp_downarrow", "kp_pgdn", "kp_leftarrow", "kp_5",
-       "kp_rightarrow", "kp_home", "kp_uparrow", "kp_pgup", "kp_enter", "kp_del",
-       "kp_slash", "kp_multiply", "kp_minus", "kp_plus", "semicolon", "'", "`",
-       "-", "=", "[", "]", "\\", ",", ".", "/"]
-)
+VALID_KEYS = bindnames.VALID  # in movekit since Phase 13, shared with the strafe trainer
 
 DEFAULTS = {
     "key": "q",
@@ -873,68 +870,22 @@ def play_sound(cstrike, sound, game="css"):
 # ---------------------------------------------------------------- launch option
 
 def current_launch_options(game="css"):
-    """The game's launch options in the most recently used Steam account, or None."""
-    roots = steam.steam_roots(flatpak=False) if WINDOWS else [HOME / ".local/share/Steam"]
-    files = sorted((vdf for root in roots for vdf in Path(root).glob("userdata/*/config/localconfig.vdf")),
-                   key=lambda p: p.stat().st_mtime, reverse=True)
-    for vdf in files:
-        try:
-            tree = keyvalues.parse(vdf.read_text(errors="replace"))
-        except OSError:
-            continue
-        node = tree.get("userlocalconfigstore", {})
-        for key in ("software", "valve", "steam", "apps"):
-            node = node.get(key, {}) if isinstance(node, dict) else {}
-        for appid in kit_games.GAMES[game].appids:
-            app = node.get(appid) if isinstance(node, dict) else None
-            if isinstance(app, dict):
-                return app.get("launchoptions", "")
-        if isinstance(node, dict):
-            return ""
-    return None
+    """The game's launch options in the most recently used Steam account, or None (movekit.launchopt)."""
+    return launchopt.current(game)
 
 
-def steam_path():
-    """PATH Steam runs with: from the running Steam if there is one, otherwise this
-    session's (Steam started from the desktop gets the same)."""
-    for proc in Path("/proc").iterdir():
-        try:
-            if proc.name.isdigit() and (proc / "comm").read_text().strip() == "steam":
-                env = (proc / "environ").read_bytes().split(b"\0")
-                for item in env:
-                    if item.startswith(b"PATH="):
-                        return item[5:].decode(errors="replace")
-        except OSError:
-            continue
-    return os.environ.get("PATH", "")
+steam_path = launchopt.steam_path
 
 
 def runner():
-    """How the launch option should call the wrapper: the short name when Steam can
-    find it in ~/.local/bin, otherwise the full path."""
-    if str(BIN_DIR) in steam_path().split(":"):
-        return RUNNER
-    return shlex.quote(str(Path(kit_games.__file__).resolve().with_name(RUNNER)))
+    """How the launch option should call the wrapper (movekit.launchopt.runner)."""
+    return launchopt.runner()
 
 
 def launch_option(current=None, run=None):
-    """The full launch options with the wrapper added, and whether it was there already."""
-    run = run or runner()
-    current = (current or "").strip()
-    names = "|".join(re.escape(n) for n in (RUNNER, *OLD_RUNNERS))
-    wrapper = rf"(?<![^\s/])(?:\S*/)?(?:{names})(?=\s|$)"
-    found = re.search(wrapper, current)
-    if found:
-        # already there. A short old name still works (install.sh keeps them as links);
-        # otherwise make it the form that works here (short name or full path)
-        if "/" not in found.group(0) and run == RUNNER:
-            return current, True
-        fixed = re.sub(wrapper, lambda _: run, current)
-        return fixed, fixed == current
-    if "%command%" in current:
-        return current.replace("%command%", f"{run} %command%", 1), False
-    # options without %command% are passed to the game as arguments
-    return " ".join(filter(None, [f"{run} %command%", current])), False
+    """The full launch options with the wrapper added, and whether it was there already. Source
+    Yaw's old wrapper names count too (install.sh keeps them as links)."""
+    return launchopt.with_runner(current, run, OLD_RUNNERS)
 
 
 def set_up(game):

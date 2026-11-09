@@ -15,7 +15,15 @@ os.environ["XDG_DATA_HOME"] = str(TMP / "data")  # keys.py's file; before moveki
 os.environ["LOCALAPPDATA"] = str(TMP / "data")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from movekit import files, games, keys, maps, sounds  # after the path above
+from movekit import (  # after the path above
+    bindnames,
+    files,
+    games,
+    keys,
+    launchopt,
+    maps,
+    sounds,
+)
 
 
 def check(what, got, want):
@@ -74,6 +82,23 @@ def main():
     check("missing sound (no VPKs here)", sounds.sound_file(mod, "buttons/button10", "css", cache), None)
     check("available", sounds.available(mod, "css", cache), ["buttons/blip1", "buttons/blip2"])
     check("play a missing sound", sounds.play(mod, "buttons/button10", "css", cache), False)
+
+    # launchopt: movekit-run counts for every tool; a tool's old names only where it says so
+    check("added before %command%", launchopt.with_runner("game-performance %command%", "movekit-run"),
+          ("game-performance movekit-run %command%", False))
+    check("movekit-run already there", launchopt.with_runner("movekit-run %command%", "movekit-run"),
+          ("movekit-run %command%", True))
+    check("sourceyaw-run doesn't run another tool",
+          launchopt.with_runner("sourceyaw-run %command%", "movekit-run"),
+          ("sourceyaw-run movekit-run %command%", False))
+    check("sourceyaw-run runs Source Yaw",
+          launchopt.with_runner("sourceyaw-run %command%", "movekit-run", ("sourceyaw-run",)),
+          ("sourceyaw-run %command%", True))
+
+    # bindnames: every name the capture can produce is a bind name
+    info = bindnames.capture_info()
+    check("capture names are bind names",
+          set(info["codes"].values()) | set(info["mouse"].values()) <= bindnames.VALID, True)
     import shutil
     shutil.rmtree(TMP, ignore_errors=True)
     print("check_helpers: all passed")
