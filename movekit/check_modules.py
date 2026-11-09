@@ -73,7 +73,7 @@ from movekit import modules  # after the path and environment above
 CORE = modules.CORE_VERSION
 _major, _minor, *_ = CORE.split(".")
 NEXT_CORE = f"{_major}.{int(_minor) + 1}.0"  # a hub-v* release newer than this core
-HOOK_NAMES = {"install", "uninstall", "stop", "start", "launch"}
+HOOK_NAMES = {"install", "uninstall", "stop", "start", "launch", "split_out"}
 ALLOWED = (set(sys.stdlib_module_names) - {"tkinter", "turtle", "idlelib", "test", "ensurepip"}) \
     | {"movekit", "hud", "webview", "__future__"}
 SKIP = {"build", "dist", "__pycache__", "probe"}  # build output, and tools that never ship
@@ -210,6 +210,7 @@ from pathlib import Path
 from movekit.modules import module_version
 
 BROKEN = {broken}
+SPLIT = {split}
 
 
 def _note(ctx, what):
@@ -234,10 +235,16 @@ def stop(ctx):
 
 def start(ctx):
     _note(ctx, "start")
+
+
+def split_out(ctx):
+    if SPLIT == "boom":
+        raise RuntimeError("split hook broke")
+    return SPLIT
 '''
 
 
-def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=False):
+def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=False, split=()):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr(f"{key}/module.json", json.dumps({
@@ -248,7 +255,7 @@ def module_zip(key, version, needs=(), needs_core="1.0.0", broken=False, evil=Fa
         hook = zipfile.ZipInfo(f"{key}/launch-hook.sh")
         hook.external_attr = 0o100755 << 16
         z.writestr(hook, "#!/bin/sh\n")
-        z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken))
+        z.writestr(f"{key}/module_hooks.py", HOOKS_SRC.format(broken=broken, split=repr(split if isinstance(split, str) else list(split))))
         z.writestr(f"{key}/hub_section.py", f"SECTION = {{'key': '{key}', 'title': '{key.title()}', "
                    f"'os': ['linux', 'win32'], 'page': 'page.html', 'api': {{'hello': lambda: '{version}'}}}}\n")
         z.writestr(f"{key}/page.html", "<!DOCTYPE html><title>x</title>")
@@ -449,6 +456,68 @@ def check_manager():
     expect((data / "previous" / "alpha").exists(), False, "previous version after uninstall")
     expect(mgr.installed(), {}, "installed after both uninstalls")
     expect(mgr.info("alpha")["auto"], True, "alpha's auto switch kept for a reinstall")
+    calls()
+
+
+def check_split_out():
+    """A module update installs the modules its split_out hook names (Phase 13: the Strafe Trainer
+    leaving Source Yaw), notes it on their cards, and never fails the update over them."""
+    gh = GitHub()
+    kit, data = TMP / "skit", TMP / "smgr"
+    mgr = modules.Manager(kit_root=kit, data=data, api=gh.base + "/releases?per_page=100")
+    gh.release("src-v1.0.0", "src-module.zip", module_zip("src", "1.0.0"))
+    mgr.check(force=True)
+    mgr.install("src")
+    calls()
+
+    # the split-out module isn't released yet: the update works, its card says the install failed
+    gh.release("src-v1.1.0", "src-module.zip", module_zip("src", "1.1.0", split=["dlt", "src", "core", 5]))
+    mgr.check(force=True)
+    mgr.update("src")
+    expect(mgr.version("src"), "1.1.0", "src after an update whose split-out install failed")
+    note = mgr.info("dlt")["split_from"]
+    expect((note["from"], note["from_title"], "No dlt module release" in (note["error"] or "")),
+           ("src", "Src", True), "dlt's note after the failed split-out install")
+    expect(mgr.info("src")["split_from"], None, "no note on the module that split")
+    calls()
+    # installing it by hand clears the failure note
+    gh.release("dlt-v1.0.0", "dlt-module.zip", module_zip("dlt", "1.0.0"))
+    mgr.check(force=True)
+    mgr.install("dlt")
+    expect((mgr.version("dlt"), mgr.info("dlt")["split_from"]), ("1.0.0", None),
+           "dlt installed by hand: the failure note goes")
+    mgr.uninstall("dlt")
+    calls()
+
+    # released: the update installs it, and the card says why until dismissed
+    gh.release("src-v1.2.0", "src-module.zip", module_zip("src", "1.2.0", split=["dlt"]))
+    mgr.check(force=True)
+    mgr.update("src")
+    expect(calls(), ["dlt-install-1.0.0", "src-install-1.2.0", "src-start-1.2.0", "src-stop-1.1.0"],
+           "hooks on an update that splits a module out")
+    expect(mgr.info("dlt")["split_from"], {"from": "src", "from_title": "Src", "error": None},
+           "dlt's note after the split-out install")
+    expect(sorted(mgr.installed()), ["dlt", "src"], "installed after the split")
+    mgr.dismiss_split("dlt")
+    expect(mgr.info("dlt")["split_from"], None, "note after dismiss")
+
+    # already installed: nothing again; a broken hook doesn't fail the update
+    gh.release("src-v1.3.0", "src-module.zip", module_zip("src", "1.3.0", split=["dlt"]))
+    mgr.check(force=True)
+    mgr.update("src")
+    expect((mgr.info("dlt")["split_from"], "dlt-install-1.0.0" in calls()), (None, False),
+           "an update naming an installed module")
+    gh.release("src-v1.4.0", "src-module.zip", module_zip("src", "1.4.0", split="boom"))
+    mgr.check(force=True)
+    mgr.update("src")
+    expect(mgr.version("src"), "1.4.0", "update with a broken split_out hook")
+    # the module's uninstall forgets the note with the rest of its entry
+    gh.release("src-v1.5.0", "src-module.zip", module_zip("src", "1.5.0", split=["dlt"]))
+    mgr.uninstall("dlt")
+    mgr.check(force=True)
+    mgr.update("src")
+    mgr.uninstall("dlt")
+    expect(mgr.info("dlt")["split_from"], None, "note after uninstalling the split-out module")
     calls()
 
 
@@ -705,6 +774,11 @@ def check_bridge():
     expect((cards["delta"]["waiting_for_core"], cards["delta"]["can_install"]), ("9.0.0", False),
            "delta needs a newer core: no install offered")
     expect(cards["alpha"]["title"], "Alpha", "alpha's card (no module.json copy) from its installed files")
+    mgr._entry("alpha")["split_from"] = {"from": "beta", "error": None}
+    mgr._save()
+    r = bridge.modules("dismiss_split", {"key": "alpha"})
+    expect((r["ok"], next(c for c in r["result"]["cards"] if c["key"] == "alpha")["split_from"]), (True, None),
+           "dismiss_split through the bridge")
     r = bridge.modules("uninstall", {"key": "alpha", "delete_data": False})
     expect(r["ok"], True, f"uninstall through the bridge: {r}")
     expect(([s["key"] for s in bridge.sections()["sections"]], sorted(served)), ([], []),
@@ -715,6 +789,7 @@ def check_bridge():
 def main():
     check_own_modules()
     check_manager()
+    check_split_out()
     check_whats_new()
     check_checkout()
     check_groups()

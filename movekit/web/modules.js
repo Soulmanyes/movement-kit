@@ -92,6 +92,20 @@
 			if (line) node.append(line);
 		}
 
+		// installed by another module's update because it moved out of that module (split_out)
+		if (c.split_from) {
+			const s = c.split_from;
+			const text = s.error
+				? `${c.title} moved out of ${s.from_title}. Installing it failed: ${s.error}`
+				: `Installed because it moved out of ${s.from_title}.`;
+			const row = el("div", { className: s.error ? "mod-split error" : "mod-split" }, el("span", { textContent: text }));
+			const ok = el("button", { textContent: "Dismiss" });
+			ok.disabled = anyBusy;
+			ok.addEventListener("click", () => act("dismiss_split", { key: c.key }, c.key));
+			row.append(ok);
+			node.append(row);
+		}
+
 		if (!c.installed && c.can_install) {
 			button("Install", "primary", () => act("install", { key: c.key }, c.key));
 		}

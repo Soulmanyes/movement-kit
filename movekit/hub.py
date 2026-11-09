@@ -207,7 +207,7 @@ class Bridge:
     uninstall, update or roll back rediscovers them, and the page server sees the change."""
 
     _MODULE_CALLS = ("cards", "check", "install", "update", "update_all", "rollback", "uninstall",
-                    "set_auto")
+                    "set_auto", "dismiss_split")
 
     def __init__(self, sections, problems=(), manager=None, root=KIT, served=None):
         self._manager = manager
@@ -253,7 +253,7 @@ class Bridge:
 
     def modules(self, name, args=None):
         """The Modules page's calls: cards, check, install(key), update(key), update_all,
-        rollback(key), uninstall(key, delete_data), set_auto(key, value). Every reply carries the
+        rollback(key), uninstall(key, delete_data), set_auto(key, value), dismiss_split(key). Every reply carries the
         cards as they are after the call."""
         m = self._manager
         if m is None:
@@ -279,7 +279,7 @@ class Bridge:
                     raise RuntimeError("; ".join(f"{k}: {e}" for k, e in errors.items()))
             else:
                 getattr(m, name)(**args)
-                if name != "set_auto":
+                if name not in ("set_auto", "dismiss_split"):
                     self._refresh()
         except TypeError as e:
             return {"ok": False, "error": f"modules.{name}: {e}", "result": self._cards_safe()}

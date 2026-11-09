@@ -37,3 +37,9 @@ def write_atomic(path, text):
     except BaseException:
         os.unlink(tmp)
         raise
+
+
+def in_folder(path, root):
+    """Whether `path` lies under folder `root` (case-insensitive, either slash, as on Windows)."""
+    path, root = str(path).replace("/", "\\").lower(), str(root).replace("/", "\\").lower().rstrip("\\")
+    return path.startswith(root + "\\")

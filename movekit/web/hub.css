@@ -104,6 +104,9 @@ button.danger { border-color: var(--warn); color: var(--warn); }
 /* auto-update off has to be seen without a popup: a full-width amber strip with its button */
 .mod-auto-off { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--warn); border-radius: 6px; background: rgba(255, 180, 84, 0.14); color: var(--warn); font-weight: 600; }
 .mod-auto-off button { margin-left: auto; border-color: var(--warn); }
+.mod-split { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); }
+.mod-split.error { border-color: var(--warn); background: rgba(255, 180, 84, 0.14); color: var(--warn); font-weight: 600; }
+.mod-split button { margin-left: auto; flex: none; }
 .mod-auto-on { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--good); }
 .mod-auto-on button { margin-left: auto; }
 .mod-confirm { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 6px; background: var(--bg); }

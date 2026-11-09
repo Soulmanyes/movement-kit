@@ -32,6 +32,10 @@ and, if it changes anything outside its own folder, a module_hooks.py with any o
     uninstall(ctx)             before the folder goes; takes those out again
     stop(ctx) -> bool          stop what the module runs; True if something was running
     start(ctx)                 start it again after an update, when stop said it was running
+    split_out(ctx) -> [keys]   after an update: modules split out of this one that should be
+                               installed now (Source Yaw: the Strafe Trainer, when it was on).
+                               The manager installs the ones that aren't, and the new module's
+                               card says why ("split_from"); a failed install says so there too.
 
 ctx is a Context: the module's folder, the kit root, and script(), which runs one of the module's
 scripts in a fresh process (python, or the core exe's --run-script). Hooks raise RuntimeError with
@@ -48,8 +52,9 @@ in the same layout as the repo, so a tool finds movekit the way it does in the r
 The previous version of each module is kept in <data>/previous/<key> for roll back.
 
 State, in <data>/modules.json: per key {"auto", "installed" (tag), "previous" (tag), "failed"
-(tag), "removed" (git checkout only), "seen" (the version whose notes were shown last)}, plus "checked" and "latest" (per key: tag, url, notes,
-asset) from the last look at GitHub. The core is the entry "core" (line hub-v*); how it installs
+(tag), "removed" (git checkout only), "seen" (the version whose notes were shown last),
+"split_from" ({"from": key, "error": text or None}, until dismissed)}, plus "checked" and "latest"
+(per key: tag, url, notes, asset) from the last look at GitHub. The core is the entry "core" (line hub-v*); how it installs
 an update is the caller's (see Manager.core_installer), since that differs by platform.
 Another program may change an auto switch in the same file while a Manager is open (Source Yaw's
 GTK window, through `python3 -m movekit.modules`): every save and every cards() takes the switches
@@ -592,11 +597,26 @@ class Manager:
                              and (self.data / "previous" / key).is_dir()),
             "previous": entry.get("previous") if not self.checkout else None,
             "failed": entry.get("failed"),
+            "split_from": self._split_note(entry),
             "waiting_for_core": waiting,
             "needed_by": [k for k, m in self.installed().items() if key in m["needs"]],
             "needs_missing": [k for k in manifest.get("needs", []) if k not in self.installed()],
             "checkout": self.checkout,
         }
+
+    def _split_note(self, entry):
+        """A card's "split_from": {"from", "from_title", "error"} or None (see split_out)."""
+        note = entry.get("split_from")
+        if not isinstance(note, dict) or not isinstance(note.get("from"), str):
+            return None
+        src = note["from"]
+        title = (self.available().get(src) or self.local().get(src) or {}).get("title", src)
+        return {"from": src, "from_title": title, "error": note.get("error")}
+
+    def dismiss_split(self, key):
+        """Hide a card's split_from note."""
+        self._entry(key).pop("split_from", None)
+        self._save()
 
     def _too_new(self, latest):
         """The core version a release says it needs, when that's newer than this core."""
@@ -691,10 +711,17 @@ class Manager:
 
     # changes
 
-    @_exclusive
     def install(self, key):
         """Install a module that isn't installed: the newest release (or, in a git checkout, run
-        its install hook from the checkout and show it again)."""
+        its install hook from the checkout and show it again). A split_from note that said the
+        install failed goes once it worked."""
+        self._install(key)
+        note = self.state.get("modules", {}).get(key, {}).get("split_from")
+        if isinstance(note, dict) and note.get("error"):
+            self.dismiss_split(key)
+
+    @_exclusive
+    def _install(self, key):
         if key in self.installed():
             raise RuntimeError(f"{key} is already installed")
         known = self.local().get(key) or (self.state.get("latest", {}).get(key) or {}).get("manifest") or {}
@@ -713,9 +740,34 @@ class Manager:
             raise RuntimeError(f"No {key} module release on GitHub yet")
         self._put(key, latest, first=True)
 
-    @_exclusive
     def update(self, key):
-        """Install the newest release of an installed module (or of the core)."""
+        """Install the newest release of an installed module (or of the core), then the modules
+        its split_out hook names. Those come after the lock is let go (_install takes it again)."""
+        self._update(key)
+        if key != CORE:
+            self._split_out(key)
+
+    def _split_out(self, key):
+        """Install what the updated module's split_out hook names and isn't installed, noting on
+        each new card where it came from. A failed install is noted, never raised: the update
+        itself worked."""
+        try:
+            wanted = self._call(key, "split_out") or []
+        except Exception:  # noqa: BLE001 - a broken hook mustn't fail the update that worked
+            return
+        for new in wanted:
+            if not isinstance(new, str) or new == key or new == CORE or new in self.installed():
+                continue
+            error = None
+            try:
+                self._install(new)
+            except Exception as e:  # noqa: BLE001 - the card shows it, with an Install button
+                error = str(e) or type(e).__name__
+            self._entry(new)["split_from"] = {"from": key, "error": error}
+            self._save()
+
+    @_exclusive
+    def _update(self, key):
         if self.checkout:
             raise RuntimeError("This copy is a git checkout: git pull updates it")
         latest = self.check().get(key)

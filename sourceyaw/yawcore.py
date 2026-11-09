@@ -25,7 +25,6 @@ import platform
 import re
 import shlex
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -38,7 +37,7 @@ _HERE = Path(__file__).resolve().parent
 if not (_HERE / "movekit").is_dir() and (_HERE.parent / "movekit").is_dir():
     sys.path.insert(1, str(_HERE.parent))
 # after the path above
-from movekit import binds, cfgblock, keyvalues, paths, steam, vpk
+from movekit import binds, cfgblock, files, keyvalues, maps, paths, sounds, steam
 from movekit import games as kit_games
 
 VERSION = "1.10.1"
@@ -79,14 +78,12 @@ KROSSHAIR_JSON = XDG_DATA / "vulkan/implicit_layer.d/sourceyaw-krosshair.json"
 
 # colors: "krosshair" = KROSSHAIR image swapped by the watcher (CS:S has no crosshair
 # without a weapon); "cvar" = the game's own cl_crosshair_color, set from yaws.cfg.
-# sound_vpks are relative to the game's install folder.
+# process: the Linux process name, from movekit.games (sound VPKs live there too).
 GAMES = {
     "css": {"name": "Counter-Strike: Source", "short": "CS:S", "colors": "krosshair",
-            "process": "cstrike_linux64",
-            "sound_vpks": ["cstrike/cstrike_pak_dir.vpk", "hl2/hl2_sound_misc_dir.vpk",
-                           "hl2/hl2_misc_dir.vpk"]},
+            "process": kit_games.CSS.process},
     "momentum": {"name": "Momentum Mod", "short": "Momentum Mod", "colors": "cvar",
-                 "process": "momentum", "sound_vpks": ["mount/hl2_dir.vpk"]},
+                 "process": kit_games.MOMENTUM.process},
 }
 # no crosshair colour on Windows, for either game (Phase 12): KROSSHAIR is a Linux Vulkan layer,
 # and the owner left Momentum's cvar colour out there too
@@ -120,10 +117,8 @@ DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
 # commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
 OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS, OFFSETS_ALIAS)
 
-# short UI sounds to offer; the app only lists the ones this game install has
-SOUNDS = ["buttons/blip1", "buttons/blip2", "buttons/button10", "buttons/button11",
-          "buttons/button14", "buttons/button15", "buttons/button16", "buttons/button17",
-          "buttons/button18", "buttons/button19"]
+# short UI sounds to offer (movekit.sounds); the app only lists the ones this game install has
+SOUNDS = sounds.SOUNDS
 
 # key names the Source engine accepts in `bind`
 VALID_KEYS = set(
@@ -165,15 +160,7 @@ def token(value, surf=False):
     return f"{SURF_PREFIX if surf else 'YAW_'}{fmt_speed(value)}"
 
 
-def prefix_value(name, table, default=None):
-    """table[prefix] for the first prefix map `name` starts with (any case), else `default`.
-    None for a name that isn't known (CS:S's "Connected to" line)."""
-    if name is None:
-        return None
-    for prefix, value in table.items():
-        if name.lower().startswith(prefix.lower()):
-            return value
-    return default
+prefix_value = maps.prefix_value  # in movekit since Phase 13, shared with the strafe trainer
 
 
 def surf_on(data):
@@ -222,14 +209,12 @@ def map_mode(data, name):
 
 def find_game(game):
     """The game's mod folder (cstrike, momentum), or None. Flatpak Steam is left out:
-    movekit-run can't run inside its sandbox (see flatpak_steam_only)."""
-    return steam.game_dir(kit_games.GAMES[game], steam.steam_roots(flatpak=False))
+    movekit-run can't run inside its sandbox (see flatpak_steam_only). A function here, not an
+    alias, so the checks can swap it."""
+    return kit_games.find(game)
 
 
-def in_folder(path, root):
-    """Whether `path` lies under folder `root` (case-insensitive, either slash, as on Windows)."""
-    path, root = str(path).replace("/", "\\").lower(), str(root).replace("/", "\\").lower().rstrip("\\")
-    return path.startswith(root + "\\")
+in_folder = files.in_folder  # in movekit since Phase 13
 
 
 def find_cstrike():
@@ -871,50 +856,18 @@ def remove_from_game(cstrike, game="css"):
 
 # ---------------------------------------------------------------- sound preview
 
-SOUND_CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "sourceyaw/sounds"
 def sound_file(cstrike, sound, game="css"):
-    """Local file for a `play` sound name like buttons/blip1, extracting it if needed.
-    `cstrike` is the game's mod folder; sound_vpks are where the game looks, in order."""
-    install = cstrike.parent
-    for ext in (".wav", ".mp3"):
-        rel = f"sound/{sound}{ext}"
-        loose = cstrike / rel
-        if loose.is_file():
-            return loose
-        cached = SOUND_CACHE / game / f"{sound}{ext}"
-        if cached.is_file():
-            return cached
-        for vpk_name in GAMES[game]["sound_vpks"]:
-            try:
-                data = vpk.read_file(install / vpk_name, rel)
-            except (OSError, ValueError):
-                continue
-            if data:
-                cached.parent.mkdir(parents=True, exist_ok=True)
-                cached.write_bytes(data)
-                return cached
-    return None
+    """Local file for a `play` sound name like buttons/blip1 (movekit.sounds), or None."""
+    return sounds.sound_file(cstrike, sound, game)
 
 
 def available_sounds(cstrike, game="css"):
-    return [s for s in SOUNDS if sound_file(cstrike, s, game)]
+    return sounds.available(cstrike, game)
 
 
 def play_sound(cstrike, sound, game="css"):
     """Plays a game sound on the desktop. False if the game doesn't have it."""
-    path = sound_file(cstrike, sound, game)
-    if not path:
-        return False
-    if WINDOWS:
-        import winsound  # async: a new sound cuts the last one short
-        winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
-        return True
-    for player in (["pw-play"], ["paplay"], ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"]):
-        if shutil.which(player[0]):
-            subprocess.Popen([*player, str(path)], stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-            return True
-    return False
+    return sounds.play(cstrike, sound, game)
 
 
 # ---------------------------------------------------------------- launch option
