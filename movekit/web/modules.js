@@ -53,6 +53,10 @@
 			return el("div", { className: "mod-status error",
 				textContent: `${ver(c.latest.tag)} needs core v${c.waiting_for_core}: update the core first.` });
 		}
+		if (c.restart) {
+			return el("div", { className: "mod-status new",
+				textContent: `${ver(c.restart)} is installed. Restart the hub to start using it.` });
+		}
 		if (!c.installed) {
 			return c.can_install ? null
 				: el("div", { className: "mod-status muted", textContent: "No release of it on GitHub yet." });
@@ -108,6 +112,16 @@
 
 		if (!c.installed && c.can_install) {
 			button("Install", "primary", () => act("install", { key: c.key }, c.key));
+		}
+		if (c.restart) {
+			button("Restart hub", "primary", async () => {
+				delete errors[c.key];
+				const reply = await hub.restart();
+				if (!reply.ok) {
+					errors[c.key] = reply.error;
+					draw(current);
+				}
+			});
 		}
 		if (c.can_update) {
 			button(`Update to ${ver(c.latest.tag)}`, "primary", () => act("update", { key: c.key }, c.key));

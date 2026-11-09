@@ -84,7 +84,7 @@ from pathlib import Path
 
 from movekit import paths, updater
 
-CORE_VERSION = "1.11.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
+CORE_VERSION = "1.11.1"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
 CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
@@ -555,6 +555,15 @@ class Manager:
         m = self.available().get(key)
         return module_version(self.folder(key), m) if m else None
 
+    def core_pending(self):
+        """The hub-v* tag installed over this core while it runs, when that's newer than the
+        running version: the update is on disk and starts with the next hub start. Else None, and
+        always in a git checkout, which git pull updates (its state file may be the installed kit's)."""
+        if self.checkout:
+            return None
+        tag = self.state.get("modules", {}).get(CORE, {}).get("installed")
+        return tag if tag and newer(tag, self.core_version) else None
+
     def info(self, key):
         """What the hub shows on a module's (or the core's) card."""
         latest = self.state.get("latest", {}).get(key)
@@ -572,7 +581,8 @@ class Manager:
         supported = key == CORE or self.supports(manifest)
         group = "core" if key == CORE else manifest.get("group") or LEGACY_GROUPS.get(key, "tool")
         version = self.version(key) if installed else None
-        update = bool(installed and latest and newer(latest["tag"], version))
+        pending = self.core_pending() if key == CORE else None
+        update = bool(installed and latest and newer(latest["tag"], pending or version))
         # a waiting mark counts only for the release that set it; a newer one may not need it
         waiting = (entry.get("waiting_for_core") if latest and entry.get("waiting_tag") == latest["tag"]
                    else None) or (self._too_new(latest) if key != CORE else None)
@@ -598,6 +608,7 @@ class Manager:
             "previous": entry.get("previous") if not self.checkout else None,
             "failed": entry.get("failed"),
             "split_from": self._split_note(entry),
+            "restart": pending,  # the core only: installed, runs after the hub restarts
             "waiting_for_core": waiting,
             "needed_by": [k for k, m in self.installed().items() if key in m["needs"]],
             "needs_missing": [k for k in manifest.get("needs", []) if k not in self.installed()],
@@ -774,6 +785,9 @@ class Manager:
         if key == CORE:
             if not latest or not newer(latest["tag"], self.core_version):
                 raise RuntimeError("The core is up to date")
+            pending = self.core_pending()
+            if pending and not newer(latest["tag"], pending):
+                raise RuntimeError(f"{pending} is installed already: restart the hub to use it")
             if not self.core_installer:
                 raise RuntimeError("This core can't update itself")
             self._mark(key, latest["tag"], lambda: self.core_installer(latest))

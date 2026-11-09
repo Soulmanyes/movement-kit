@@ -5,6 +5,6 @@ The installed file keeps its name: a copy that came from Strafe Review's line is
 strafe-review.exe, because Steam's launch option points at that path; the core update takes EXE from
 the zip and puts it in under the running exe's name.
 """
-VERSION = "1.11.0"  # bump in the same commit as the hub-v* tag
+VERSION = "1.11.1"  # bump in the same commit as the hub-v* tag
 ASSET = "hub-windows.zip"  # windows-release.yml names the zip <tool>-windows.zip
 EXE = "movement-kit.exe"

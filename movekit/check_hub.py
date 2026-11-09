@@ -157,7 +157,13 @@ def main():
             r = bridge.call(k, n)
             check(r["ok"] is False and text in r["error"], f"{k}.{n} refused: {r['error']}")
         public = [a for a in dir(bridge) if not a.startswith("_")]
-        check(sorted(public) == ["call", "modules", "notes_seen", "sections", "whats_new"],
+        check(bridge.restart()["ok"] is False, "restart() with no window refuses")
+        check(hub.relaunch_command(["hub.py", "--section", "x"], "/usr/bin/python3", frozen=False)
+              == ["/usr/bin/python3", str(Path("hub.py").resolve()), "--section", "x"],
+              "relaunch: python with this script's full path and the same arguments")
+        check(hub.relaunch_command(["C:/kit/movement-kit.exe", "--x"], "C:/kit/movement-kit.exe", frozen=True)
+              == ["C:/kit/movement-kit.exe", "--x"], "relaunch: the exe itself in the Windows build")
+        check(sorted(public) == ["call", "modules", "notes_seen", "restart", "sections", "whats_new"],
               f"only call(), sections(), modules(), whats_new() and notes_seen() are public: {public}")
         r = bridge.modules("cards")
         check(r == {"ok": False, "error": "no module manager"}, f"modules() with no manager: {r}")

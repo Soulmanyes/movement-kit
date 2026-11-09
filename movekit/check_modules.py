@@ -415,6 +415,14 @@ def check_manager():
     expect(mgr.update_all(), {"alpha": None, "beta": None, "core": None}, "update_all")
     expect((mgr.version("alpha"), mgr.version("beta")), ("1.5.0", "1.1.0"), "versions after update_all")
     expect([c["tag"] for c in core_installs], [f"hub-v{NEXT_CORE}"], "core installer calls")
+    # the new core is on disk but this one still runs: the card asks for a restart, not the update again
+    core_card = mgr.info("core")
+    expect((core_card["restart"], core_card["update"], core_card["can_update"], core_card["version"]),
+           (f"hub-v{NEXT_CORE}", False, False, CORE), "core card after its update, before a restart")
+    raises(lambda: mgr.update("core"), "restart the hub", "updating the core again before a restart")
+    expect(mgr.auto_update().get("core"), None, "auto update leaves an installed core alone")
+    expect(len(core_installs), 1, "no second core install")
+    expect(mgr.info("alpha")["restart"], None, "restart is the core's only")
     calls()
 
     # a swap that fails halfway (Windows: a file still in use) puts everything back
@@ -577,6 +585,10 @@ def check_checkout():
     expect((card["checkout"], card["can_update"], card["can_rollback"]), (True, False, False),
            "a checkout's card")
     raises(lambda: mgr.update("alpha"), "git pull", "update in a checkout")
+    # a checkout may read the installed kit's state file, whose core can be newer: no restart offer
+    mgr.state.setdefault("modules", {}).setdefault("core", {})["installed"] = f"hub-v{NEXT_CORE}"
+    expect(mgr.info("core")["restart"], None, "a checkout never asks for a restart")
+    mgr.state["modules"]["core"].pop("installed")
     mgr.uninstall("alpha", delete_data=False)
     expect(calls(), ["alpha-stop-1.0.0", "alpha-uninstall-1.0.0"], "hooks on a checkout uninstall")
     expect(((alpha / "tool.py").is_file(), mgr.installed()), (True, {}), "checkout uninstall")

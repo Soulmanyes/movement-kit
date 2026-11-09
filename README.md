@@ -90,7 +90,7 @@ The older per-tool options still work and start only their own tool: `sourceyaw-
 
 ## Releases
 
-Each tool keeps its own version and its own tags: `sourceyaw-v1.8.0`, `strafe-review-v1.6.0`, `gain-converter-v1.3.0`. A pushed tool tag attaches `<tool>-module.zip` (the tool's folder) and `<tool>-module.json` (its manifest) to that release; the hub only offers releases that have them. The hub itself, the core, has the line `hub-v*`: the Windows exe (`hub-windows.zip`) and, on Linux, the source archive that `install-hub.sh` installs. Its card on the Modules page updates it like a tool.
+Each tool keeps its own version and its own tags: `sourceyaw-v1.8.0`, `strafe-review-v1.6.0`, `gain-converter-v1.3.0`. A pushed tool tag attaches `<tool>-module.zip` (the tool's folder) and `<tool>-module.json` (its manifest) to that release; the hub only offers releases that have them. The hub itself, the core, has the line `hub-v*`: the Windows exe (`hub-windows.zip`) and, on Linux, the source archive that `install-hub.sh` installs. Its card on the Modules page updates it like a tool. The running hub keeps its old version until it starts again, so after a core update the card says so and offers **Restart hub**.
 
 A `strafe-review-v*` tag also builds `strafe-review-windows.zip`, the hub exe under Strafe Review's old name, so a copy of the old standalone exe that updates itself turns into the hub, installs the Strafe Review module on its first start, and keeps its Steam launch option.
 

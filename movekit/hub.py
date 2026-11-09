@@ -203,7 +203,8 @@ def kit_sections(manager, root=KIT, platform=sys.platform):
 
 
 class Bridge:
-    """What pages reach as pywebview.api. Only call(), sections() and modules() are public;
+    """What pages reach as pywebview.api: call(), sections(), modules(), whats_new(), notes_seen()
+    and restart() are public;
     pywebview exposes every public attribute, so everything else here starts with an underscore.
 
     With a manager (movekit/modules.py), the sections follow what is installed: an install,
@@ -220,6 +221,7 @@ class Bridge:
         self._busy = None  # what the manager is doing, shown on the Modules page
         self._last = {}    # the last auto update's results
         self._auto_done = threading.Event()  # set once the start's auto update has run
+        self._window = None  # the pywebview window, set by run(); restart() closes it
         self._set(sections, problems)
 
     def _set(self, sections, problems):
@@ -313,6 +315,22 @@ class Bridge:
             known = {"core", *self._manager.installed()}  # "core": modules.CORE
             self._manager.mark_seen([k for k in keys if k in known])
         return True
+
+    def restart(self):
+        """Start a new hub and close this one, so a core update on disk runs (the card's
+        "Restart hub"). {ok, error}: the window stays when the new hub can't start."""
+        if self._window is None:
+            return {"ok": False, "error": "no window to restart"}
+        if not self._mlock.acquire(blocking=False):  # never close in the middle of an install
+            return {"ok": False, "error": f"{self._busy or 'Busy'}; try again in a moment"}
+        try:
+            relaunch()
+        except OSError as e:
+            return {"ok": False, "error": f"couldn't start the hub again: {e}"}
+        finally:
+            self._mlock.release()
+        self._window.destroy()
+        return {"ok": True}
 
     def _cards_safe(self):
         try:
@@ -471,6 +489,30 @@ def check_sections(out, root=KIT, platform=sys.platform, calls=(), manager=None)
     return report
 
 
+def relaunch_command(argv=None, executable=None, frozen=None):
+    """The command that starts this hub again with the same arguments: the exe itself in the
+    Windows build (a core update swapped the new one in under the same name), else python with
+    this script, which a Linux core update copied over in place."""
+    argv = sys.argv if argv is None else argv
+    executable = executable or sys.executable
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if frozen:
+        return [executable, *argv[1:]]
+    return [executable, str(Path(argv[0]).resolve()), *argv[1:]]
+
+
+def relaunch():
+    """Start the hub again in its own process, detached from this one, which is about to close."""
+    import subprocess
+
+    if sys.platform == "win32":
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(relaunch_command(), creationflags=flags, close_fds=True)
+    else:
+        subprocess.Popen(relaunch_command(), start_new_session=True, close_fds=True,
+                         stdin=subprocess.DEVNULL)
+
+
 def make_manager(root=KIT, kit_root=None, data=None):
     """The module manager the window uses. With --root (fixtures), modules live in that root too."""
     # here, not at the top: only a window needs the manager
@@ -522,6 +564,7 @@ def run(root=KIT, app_class=None, debug=False, first=None, manager=None):
     window = webview.create_window(TITLE, f"http://127.0.0.1:{server.server_address[1]}{start}",
                                    js_api=bridge, width=1000, height=720,
                                    min_size=(640, 480), background_color="#15171c")
+    bridge._window = window
     if sys.platform.startswith("linux"):
         window.events.shown += lambda: _side_buttons(window)
     window.events.shown += lambda: threading.Thread(target=bridge._auto_update, daemon=True).start()

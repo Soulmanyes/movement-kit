@@ -2,7 +2,8 @@
 // this section's Python functions (SECTION["api"] in its hub_section.py) and returns its result.
 // Load it with <script src="/web/hub.js"></script> and put <nav id="hub-side"></nav> in the page.
 // The Modules page (home.html) also uses hub.modules(name, args), the module manager's calls, and
-// hub.drawSide() to redraw the sidebar after an install or uninstall changes the sections.
+// hub.drawSide() to redraw the sidebar after an install or uninstall changes the sections, and
+// hub.restart() to start the hub again after a core update.
 "use strict";
 
 const hub = (() => {
@@ -28,6 +29,12 @@ const hub = (() => {
 	async function modules(name, args = {}) {
 		const api = await ready;
 		return api.modules(name, args);
+	}
+
+	// {ok, error}: starts a new hub and closes this window, so a reply means it failed
+	async function restart() {
+		const api = await ready;
+		return api.restart();
 	}
 
 	async function drawSide() {
@@ -152,5 +159,5 @@ const hub = (() => {
 	});
 	info.then(() => whatsNew()).catch(() => {});
 
-	return { ready, call, key, info, modules, drawSide, whatsNew };
+	return { ready, call, key, info, modules, drawSide, whatsNew, restart };
 })();
