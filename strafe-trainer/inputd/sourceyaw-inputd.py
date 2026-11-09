@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Source Yaw input service: forwards a fixed set of key and mouse events.
 
 Runs as root under systemd, started by sourceyaw-inputd.socket when the strafe
@@ -168,9 +167,8 @@ def main():
                     devices.pop(r, None)
                     continue
                 for sec, usec, etype, code, value in INPUT_EVENT.iter_unpack(data):
-                    if etype == EV_KEY and code in keys and value != 2:  # 2 = autorepeat
-                        out += OUT_EVENT.pack(sec, usec, etype, code, value)
-                    elif etype == EV_REL and code in rels:
+                    if ((etype == EV_KEY and code in keys and value != 2)  # 2 = autorepeat
+                            or (etype == EV_REL and code in rels)):
                         out += OUT_EVENT.pack(sec, usec, etype, code, value)
         if out:
             for c in list(clients):
