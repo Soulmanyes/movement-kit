@@ -4,17 +4,20 @@
 Usage: install.py [--game DIR] [--uninstall]
 
 - Copies its script (panorama/scripts/hud/movekit-z-penalty.ts) into the game's custom/movekit-z-penalty folder,
-  with the hub's sound setting written into its SOUND line (settings.py), and hands the kit (movekit/panorama.py) two patches: the script's include in layout/hud/timer.xml,
+  and hands the kit (movekit/panorama.py) two patches: the script's include in layout/hud/timer.xml,
   and Z Penalty's entry in cfg/hud/hud_default.kv3, without which Momentum's HUD customizer won't take the
   panel. The kit writes both files into custom/0-movekit, made from the copies the game would use
   otherwise (another HUD mod's in custom/, else the game's own). Type panorama_reload in game after
   installing.
+- Writes a `// movekit:z-penalty` block into cfg/autoexec.cfg (movekit.cfgblock) that turns the console
+  log on (con_logfile yaw.log): the script's ZPEN_ON/ZPEN_OFF markers reach the tone runner
+  (tone_run.py) through it.
 - On Linux, registers launch-hook.sh with movekit-run (movekit/launch.py), which runs this install
   again when Momentum starts, so a game update to either file carries over. On Windows the kit's
   core does that through module_hooks.launch.
 
 The game folder comes from MOMENTUM_DIR or Steam's library folders, or --game.
---uninstall removes the patches, the script and the launch hook. With no game found it still
+--uninstall removes the patches, the script, the autoexec block and the launch hook. With no game found it still
 removes the launch hook. The player's saved HUD presets keep their Z Penalty settings; the
 customizer ignores them while it isn't installed.
 """
@@ -26,8 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and str(ROOT.parent) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
-from movekit import games, panorama, steam  # after the path above
-from movekit.hub import local_import
+from movekit import cfgblock, games, panorama, steam  # after the path above
 
 VERSION = "1.0.0"  # Z Penalty's (module.json reads it); bump in the same commit as the release tag
 TOOL = "z-penalty"
@@ -68,6 +70,8 @@ ENTRY = """    MovekitZPenalty =
         }
     }
 """
+BACKUP = ".bak-z-penalty"
+BLOCK = ["// Z Penalty's tone reads the panel's markers from yaw.log", "con_logfile yaw.log"]
 PATCHES = [  # for movekit/panorama.py
     {"file": "panorama/layout/hud/timer.xml", "before": "</scripts>",
      "line": '<include type="module" src="file://{scripts}/hud/movekit-z-penalty.ts" />'},
@@ -100,9 +104,8 @@ def install(game, quiet=False):
     dest = game / "custom" / FOLDER
     shutil.rmtree(dest, ignore_errors=True)
     (dest / TS).parent.mkdir(parents=True)
-    # the hub's sound setting goes into the copy (settings.py); the repo's script keeps the default
-    sound = local_import(__file__, "settings")
-    sound.bake_file(ROOT / TS, dest / TS, sound.load())
+    shutil.copyfile(ROOT / TS, dest / TS)
+    cfgblock.set_block(game / "cfg" / "autoexec.cfg", TOOL, BLOCK, True, BACKUP)
     # after the copy: the kit's timer.xml must never include a script that isn't there
     skipped = report(panorama.install(game, FOLDER, TOOL, PATCHES))
     if not quiet:
@@ -122,6 +125,7 @@ def uninstall(game):
             print(f"warning: couldn't update custom/{panorama.KIT_FOLDER} ({e}), so the script stays",
                   file=sys.stderr)
             synced = False
+        cfgblock.set_block(game / "cfg" / "autoexec.cfg", TOOL, [], False, BACKUP)
         dest = game / "custom" / FOLDER
         if synced and dest.exists():
             shutil.rmtree(dest, ignore_errors=True)

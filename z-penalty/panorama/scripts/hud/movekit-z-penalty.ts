@@ -21,8 +21,13 @@
 //
 // What it shows (each part switchable in Momentum's HUD customizer, listed as Z Penalty): a "Z PENALTY"
 // label while penalised, the z speed (in the penalty colour while penalised), the ticks spent in the band
-// on this stretch, and a vertical z speed bar with the 0-140 band shaded. A sound on entering a penalised
-// stretch is set in the hub (Z Penalty page), which writes the SOUND line below through install.py.
+// on this stretch, and a vertical z speed bar with the 0-140 band shaded.
+//
+// The tone: while penalised it writes ZPEN_ON into the console, and ZPEN_OFF when that ends (also on
+// load, while the customizer is open and outside own play, so a tone never keeps sounding). The game
+// logs the console to yaw.log (install.py's autoexec block), where Z Penalty's tone runner
+// (tone_run.py) reads the markers and plays a constant tone on the desktop. Its on/off, pitch and
+// volume are set in the hub (Z Penalty page).
 //
 // Settings live in Momentum's HUD customizer. It loads a component only when hud_default.kv3 has an
 // entry for its panel id; install.py hands the kit that entry (ENTRY there), whose dynamicStyles must
@@ -42,9 +47,6 @@ const CHECKBOX = 2;
 const COLOR_PICKER = 5;
 const FONT_PICKER = 7;
 
-// The hub's sound setting. install.py replaces this whole line with the saved one (z-penalty/settings.py).
-const SOUND = { on: false, name: 'buttons/blip1', volume: 60 }; // movekit:sound
-const SOUND_GAP_MS = 500; // at most one sound per this long, so a flickering contact doesn't stutter
 
 type Settings = Record<string, any>;
 
@@ -198,7 +200,7 @@ let editing = false;
 let spectating = false; // MomentumSpectateStart/Stop; GetMoveType() covers a panorama_reload mid-spectate
 let token = 0;
 let lastKey = '';
-let lastSound = -Infinity;
+let toneOn = true; // so the first tone(false), at load, writes ZPEN_OFF
 let lastTicks = 0; // the last penalised stretch's ticks in the band, what the tick count shows
 
 // The free fall change in z speed per tick
@@ -307,7 +309,15 @@ function fadeLater() {
 	});
 }
 
+// The tone runner's marker, written only when the state changes
+function tone(on: boolean) {
+	if (on === toneOn) return;
+	toneOn = on;
+	$.Msg(on ? 'ZPEN_ON' : 'ZPEN_OFF');
+}
+
 function hide() {
+	tone(false);
 	++token;
 	if (panel && panel.IsValid()) panel.visible = false;
 }
@@ -319,16 +329,7 @@ function ownPlay(): boolean {
 	return GAMEMODES.includes(GameModeAPI.GetCurrentGameMode());
 }
 
-function playSound() {
-	if (!SOUND.on) return;
-	const now = Date.now();
-	if (now - lastSound < SOUND_GAP_MS) return;
-	lastSound = now;
-	const volume = Math.min(1, Math.max(0, SOUND.volume / 100));
-	GameInterfaceAPI.ConsoleCommand(`playvol ${SOUND.name} ${volume}`);
-}
-
-// A new tick, if there is one: tracked, drawn, sounded
+// A new tick, if there is one: tracked, drawn, the tone's marker written
 function sample() {
 	const vel = MomentumPlayerAPI.GetVelocity();
 	const time = MomentumMovementAPI.GetCurrentTime();
@@ -339,12 +340,15 @@ function sample() {
 	lastKey = key;
 	const st = track(tracker, vel.z, fallStep(), !!settings.rampsOnly);
 	if (st.penalised) lastTicks = st.ticks;
-	if (editing) return;
+	if (editing) {
+		tone(false);
+		return;
+	}
 	if (!ownPlay() || !switchedOn()) {
 		hide();
 		return;
 	}
-	if (st.entered) playSound();
+	tone(st.penalised);
 	const view = { vz: st.vz, ticks: lastTicks, penalised: st.penalised };
 	if (settings.alwaysShow || st.penalised) {
 		draw(view);
@@ -468,7 +472,9 @@ $.RegisterForUnhandledEvent('HudCustomizer_Ready', () => {
 	register();
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {
-	if (!live() || !GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
+	if (!live()) return;
+	tone(false);
+	if (!GAMEMODES.includes(GameModeAPI.GetCurrentGameMode())) return;
 	editing = true;
 	if (switchedOn()) showSample();
 	fixBoxes();
@@ -487,4 +493,5 @@ $.RegisterForUnhandledEvent('MomentumSpectateStop', () => {
 // HudCustomizer_Ready comes only at a map load; after panorama_reload in a map, register now, so the
 // customizer hands this copy the saved settings
 if (GLOBAL['HudCustomizerHandler']?.customizerReady) register();
+tone(false); // an earlier copy's tone may still be on (panorama_reload mid-climb)
 $.Schedule(0, loop);

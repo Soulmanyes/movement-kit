@@ -1,9 +1,9 @@
-// The Z Penalty section (z-penalty/hub_section.py): the in-game sound. Python loads it (load), checks
-// and saves it and writes it into the game's copy of the panel (apply). Shared parts: movekit/web/section.js.
+// The Z Penalty section (z-penalty/hub_section.py): the desktop tone. Python loads it (load), checks and
+// saves it (apply); the tone runner beside the game picks the change up. Shared parts: movekit/web/section.js.
 "use strict";
 
 (() => {
-	const { $, toast, call, options, numberBox } = mk;
+	const { $, toast, call, numberBox } = mk;
 	let dirty = false;
 
 	function setDirty(on) {
@@ -13,33 +13,32 @@
 	}
 
 	function form() {
-		return { on: $("zp-on").checked, name: $("zp-name").value, volume: parseFloat($("zp-volume").dataset.last) };
+		return { on: $("zp-on").checked, pitch: parseFloat($("zp-pitch").dataset.last), volume: parseFloat($("zp-volume").dataset.last) };
 	}
 
 	function show(data) {
 		$("zp-sub").textContent = "Version " + data.version;
 		$("zp-problem").hidden = !data.problem;
 		$("zp-problem").textContent = data.problem || "";
-		$("zp-on").checked = data.sound.on;
-		options($("zp-name"), data.sounds.map((s) => [s, s]), data.sound.name);
-		numberBox($("zp-volume"), data.sound.volume, data.volume, () => setDirty(true));
+		$("zp-on").checked = data.tone.on;
+		numberBox($("zp-pitch"), data.tone.pitch, data.pitch, () => setDirty(true));
+		numberBox($("zp-volume"), data.tone.volume, data.volume, () => setDirty(true));
 		$("zp-loading").hidden = true;
 		$("zp-form").hidden = false;
 		setDirty(false);
 	}
 
 	$("zp-on").onchange = () => setDirty(true);
-	$("zp-name").onchange = () => setDirty(true);
 	$("zp-play").onclick = async () => {
-		const ok = await call("preview", { name: $("zp-name").value }, "Can't play");
-		if (!ok) toast("Couldn't play that sound here", true);
+		const f = form();
+		const ok = await call("preview", { pitch: f.pitch, volume: f.volume }, "Can't play");
+		if (!ok) toast("Couldn't play the tone here", true);
 	};
 	$("zp-apply").onclick = async () => {
 		$("zp-apply").disabled = true;
 		try {
-			const got = await call("apply", { sound: form() }, "Not saved");
-			show(got);
-			toast(got.written ? "Saved. In a running game, type panorama_reload in the console." : "Saved");
+			show(await call("apply", { tone: form() }, "Not saved"));
+			toast("Saved");
 		} catch {
 			$("zp-apply").disabled = false;
 		}

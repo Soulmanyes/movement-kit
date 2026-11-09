@@ -23,18 +23,19 @@
 
 	<div id="zp-form" hidden>
 		<section class="card">
-			<h2>Sound</h2>
-			<div class="muted mk-desc">Plays in game when a penalised stretch starts: a ramp climb by default, or the top of
-				every jump too when Ramps only is off in the HUD customizer. At most one sound per half second.
-				The panel itself (position, parts, colours) is set in Momentum Mod's HUD customizer, where it is listed as
-				Z Penalty. A change here reaches a running game after <code>panorama_reload</code> in its console.</div>
+			<h2>Tone</h2>
+			<div class="muted mk-desc">A constant tone on your desktop for as long as the penalty is on: on ramp climbs by default,
+				or at the top of every jump too when Ramps only is off in the HUD customizer. A change here applies
+				at once, also while the game runs. The panel itself (position, parts, colours) is set in Momentum Mod's
+				HUD customizer, where it is listed as Z Penalty.</div>
 			<div class="mk-row">
-				<label class="mk-label" for="zp-on">Play a sound</label>
+				<label class="mk-label" for="zp-on">Play the tone</label>
 				<input id="zp-on" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
-				<label class="mk-label" for="zp-name">Sound<div class="muted">▶ plays it here, at your desktop volume</div></label>
-				<select id="zp-name" class="mk-sound"></select>
+				<label class="mk-label">Sound<div class="muted">▶ plays it here for a moment</div></label>
+				<label class="mk-field">Pitch (Hz)
+					<input id="zp-pitch" type="number" step="10"></label>
 				<label class="mk-field">Volume %
 					<input id="zp-volume" type="number" step="5"></label>
 				<button id="zp-play" title="Play">▶</button>

@@ -10,9 +10,11 @@
 - uninstall: patches first, then the script (a failed sync keeps it); the launch hook goes; with no
   game found it still finishes. The module hooks do the same through the module manager's Context.
 
-- the sound setting (settings.py): bad names and volumes are refused; the installed copy carries the
-  saved setting in its SOUND line and nothing else differs; the hub section's apply saves it and
-  writes it into the game's copy.
+- install writes the autoexec block (con_logfile yaw.log) once; uninstall takes it out.
+- the tone settings (settings.py): bad values are refused, numbers clamped, an old sound file still
+  loads; the hub section's apply saves them.
+- the tone runner (tone_run.py): ZPEN_ON/ZPEN_OFF turn a fake tone on and off, map_left and MAX_ON
+  stop it, a settings change rebuilds or closes it, and run() reads the markers from a growing log.
 
 The display logic and the kv3 entry's values are checked by check_z_penalty.js.
 
@@ -21,7 +23,10 @@ Usage: python z-penalty/check_z_penalty.py   (exits 1 on a failure)
 import os
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
+from typing import ClassVar
 
 HERE = Path(__file__).resolve().parent
 KIT = HERE.parent
@@ -52,46 +57,118 @@ def fake_game(root):
     return game
 
 
-def check_sound(sett, inst, hub, game, own, src):
-    """settings.check, the baked SOUND line, and the hub section's apply."""
-    for bad in ({"name": "a; quit"}, {"name": "../x"}, {"name": ""}, {"name": 5}, {"volume": "9"},
-                {"volume": True}, {"volume": float("nan")}, {"on": 1}, []):
+def check_tone_settings(sett, hub):
+    """settings.check and load, and the hub section's apply."""
+    for bad in ({"pitch": "9"}, {"pitch": True}, {"volume": float("nan")}, {"volume": None}, {"on": 1}, []):
         try:
             sett.check(bad)
             fail(f"settings.check took {bad!r}")
         except ValueError:
             pass
-    expect(sett.check({"volume": 250})["volume"], 100, "volume clamped high")
-    expect(sett.check({"volume": -3.4})["volume"], 0, "volume clamped low")
+    expect(sett.check({"volume": 250, "pitch": 5})["volume"], 100, "volume clamped high")
+    expect(sett.check({"pitch": 5})["pitch"], sett.PITCH[0], "pitch clamped low")
+    expect(sett.check({"pitch": 99999})["pitch"], sett.PITCH[1], "pitch clamped high")
     expect(sett.load(), sett.DEFAULTS, "no saved file: defaults")
     sett.file().parent.mkdir(parents=True, exist_ok=True)
     sett.file().write_text("{broken")
     expect(sett.load(), sett.DEFAULTS, "unreadable file: defaults")
-    try:
-        sett.bake(src + "\n" + src, sett.DEFAULTS)
-        fail("bake took a script with two SOUND lines")
-    except ValueError:
-        pass
-
+    sett.file().write_text('{"on": true, "name": "buttons/blip1", "volume": 60}')
+    expect(sett.load(), {**sett.DEFAULTS, "on": True, "volume": 60}, "a file from the sound version still loads")
     section = hub.local_import(HERE / "hub_section.py", "hub_section")
-    want = {"on": True, "name": "buttons/button14", "volume": 35}
-    out = section.apply(want)
-    expect(out["sound"], want, "apply returns the saved sound")
-    expect(out["written"], True, "apply wrote the game's copy")
-    expect(sett.load(), want, "apply saved the sound")
-    text = own.read_text(encoding="utf-8")
-    expect(text, sett.bake(src, want), "game's copy carries the saved SOUND line")
-    expect(text.count('"name": "buttons/button14"'), 1, "the name in the SOUND line once")
-    expect(section.load()["sound"], want, "load shows the saved sound")
-    inst.install(game, quiet=True)
-    expect(own.read_text(encoding="utf-8"), sett.bake(src, want), "a later install keeps the saved sound")
+    want = {"on": True, "pitch": 440, "volume": 35}
+    expect(section.apply(want)["tone"], want, "apply returns the saved tone")
+    expect(sett.load(), want, "apply saved the tone")
     try:
-        section.apply({"name": "x\"; quit"})
-        fail("apply took a bad name")
+        section.apply({"pitch": "high"})
+        fail("apply took a bad pitch")
     except ValueError:
         pass
-    expect(sett.load(), want, "a refused apply keeps the saved sound")
-    inst.uninstall(game)
+    expect(sett.load(), want, "a refused apply keeps the saved tone")
+
+
+class FakeTone:
+    made: ClassVar[list] = []
+
+    def __init__(self, synth):
+        self.synth, self.mode, self.started, self.closed = synth, None, False, False
+        FakeTone.made.append(self)
+
+    def start(self):
+        self.started = True
+
+    def close(self):
+        self.closed = True
+
+
+def check_runner(sett, hub, tmp):
+    """tone_run.Runner and run(): markers to the tone, the cap, map_left, live settings."""
+    tr = hub.local_import(HERE / "tone_run.py", "tone_run")
+    clock = [100.0]
+    sett.save({"on": True, "pitch": 300, "volume": 50})
+    FakeTone.made = []
+    r = tr.Runner(sett, FakeTone, clock=lambda: clock[0])
+    r.reload()
+    tone = FakeTone.made[-1]
+    expect([tone.started, tone.mode, tone.synth.pitches, tone.synth.volume], [True, None, {"on": 300}, 0.5],
+           "tone made from the settings, silent")
+    token = lambda name: {"type": "token", "data": {"name": name}}
+    r.handle(token("ZPEN_ON"))
+    expect(tone.mode, "on", "ZPEN_ON: tone on")
+    r.handle(token("ZPEN_OFF"))
+    expect(tone.mode, None, "ZPEN_OFF: tone off")
+    r.handle(token("ZPEN_ON"))
+    r.handle({"type": "map_left", "data": {}})
+    expect(tone.mode, None, "map_left: tone off")
+    r.handle(token("ZPEN_ON"))
+    clock[0] += tr.MAX_ON - 0.1
+    r.tick()
+    expect(tone.mode, "on", "still on before MAX_ON")
+    clock[0] += 0.2
+    r.tick()
+    expect(tone.mode, None, "off after MAX_ON without ZPEN_OFF")
+    # a settings change while sounding: a new tone at the new pitch, still on
+    r.handle(token("ZPEN_ON"))
+    sett.save({"on": True, "pitch": 500, "volume": 50})
+    clock[0] += tr.SETTINGS_EVERY
+    r.reload()
+    expect([tone.closed, FakeTone.made[-1].synth.pitches, FakeTone.made[-1].mode], [True, {"on": 500}, "on"],
+           "a new pitch: old tone closed, new one sounding")
+    sett.save({"on": False, "pitch": 500, "volume": 50})
+    clock[0] += tr.SETTINGS_EVERY
+    r.reload()
+    expect([FakeTone.made[-1].closed, r.tone], [True, None], "switched off: the tone closed")
+    r.handle(token("ZPEN_ON"))  # nothing to sound, no error
+    r.close()
+
+    # run() on a log: markers as the game writes them, in a thread
+    sett.save({"on": True, "pitch": 300, "volume": 50})
+    log = tmp / "yaw.log"
+    log.write_text("old line ZPEN_ON\n")  # an earlier game run: skipped
+    FakeTone.made = []
+    stop = threading.Event()
+    th = threading.Thread(target=tr.run, args=(log, stop, FakeTone, 0.002))
+    th.start()
+
+    def wait_for(mode, what):
+        end = time.monotonic() + 2
+        while time.monotonic() < end:
+            if FakeTone.made and FakeTone.made[-1].mode == mode:
+                return
+            time.sleep(0.005)
+        fail(f"run: {what}")
+    try:
+        time.sleep(0.1)
+        expect(FakeTone.made[-1].mode, None, "run: the old log's marker is skipped")
+        with log.open("a") as f:
+            f.write("[panorama] ZPEN_ON\n")
+        wait_for("on", "ZPEN_ON in the log didn't turn the tone on")
+        with log.open("a") as f:
+            f.write("[panorama] ZPEN_OFF\n")
+        wait_for(None, "ZPEN_OFF in the log didn't turn the tone off")
+    finally:
+        stop.set()
+        th.join(2)
+    expect([th.is_alive(), FakeTone.made[-1].closed], [False, True], "run: stops and closes the tone")
 
 
 def main():
@@ -116,8 +193,9 @@ def main():
         panorama.install(game, "0-other", "other", OTHER)
         expect(inst.install(game), [], "install skips nothing")
         sett = hub.local_import(HERE / "settings.py", "settings")
-        src = (HERE / inst.TS).read_text(encoding="utf-8")
-        expect(own.read_text(encoding="utf-8"), sett.bake(src, sett.DEFAULTS), "script copied, default SOUND line")
+        expect(own.read_bytes(), (HERE / inst.TS).read_bytes(), "script copied")
+        autoexec = game / "cfg" / "autoexec.cfg"
+        expect(autoexec.read_text().count("con_logfile yaw.log"), 1, "autoexec block: the console log on")
         expect(timer.read_text().count(INCLUDE), 1, "timer.xml includes Z Penalty once")
         expect(timer.read_text().count("other.ts"), 1, "the other tool's timer.xml include kept")
         expect(layout.read_text(), want_layout, "hud_default.kv3: the entry once, before CustomizerSettings")
@@ -150,6 +228,7 @@ def main():
         inst.install(game, quiet=True)
         inst.uninstall(game)
         expect((game / "custom" / inst.FOLDER).exists(), False, "own folder removed")
+        expect("movekit:z-penalty" in autoexec.read_text(), False, "autoexec block removed")
         expect(INCLUDE in timer.read_text(), False, "timer.xml without its include")
         expect(timer.read_text().count("other.ts"), 1, "the other tool's include kept")
         expect(layout.exists(), False, "no kit copy of hud_default.kv3")
@@ -198,7 +277,8 @@ def main():
         hooks.uninstall(ctx)
         hooks.launch(ctx, ["game.exe"])  # no game: nothing, no error
         os.environ["MOMENTUM_DIR"] = str(game)
-        check_sound(sett, inst, hub, game, own, src)
+        check_tone_settings(sett, hub)
+        check_runner(sett, hub, tmp)
     print("check_z_penalty: all good")
 
 

@@ -3,9 +3,10 @@
 install / uninstall: install.py (--uninstall) in a fresh process, as Strafe Review does, so an update
 or roll back always runs the install.py now on disk. It fails when Momentum Mod isn't found.
 launch: install again before the game starts, when the kit's core exe is the launch option (Windows;
-movekit/dispatch.py), so the kit's patched files follow a game update. That process is new at every
+movekit/dispatch.py), so the kit's patched files follow a game update, then start the tone runner
+(tone_run.start) as a thread of that process, which exits with the game. That process is new at every
 start, so loading install.py into it is safe. On Linux install.py registers launch-hook.sh with
-movekit-run for that.
+movekit-run for both.
 """
 from movekit.hub import local_import
 
@@ -23,3 +24,5 @@ def launch(ctx, argv):
     game = inst.find_game()
     if game is not None:
         inst.install(game, quiet=True)
+        if ctx.platform == "win32":
+            local_import(__file__, "tone_run").start(list(argv))

@@ -1,0 +1,25 @@
+# Z Penalty's tone on a real Windows: the core's waveOut player (movekit/tone.py), the tone runner
+# following the panel's markers, and the launch hook starting it, with the hub exe's Python.
+# z-penalty/windows/check_windows.py runs them without a game or a person; the platform-neutral
+# checks run here too. Runs on pushes that touch Z Penalty or movekit, and by hand
+# (Actions > z-penalty-windows > Run workflow).
+name: z-penalty-windows
+on:
+  workflow_dispatch:
+  push:
+    paths: ["z-penalty/**", "movekit/**", ".github/workflows/z-penalty-windows.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"  # the hub exe's (windows-release.yml)
+      - name: Platform-neutral checks
+        run: python z-penalty/check_z_penalty.py
+      - name: Windows code on Windows
+        run: python z-penalty/windows/check_windows.py
