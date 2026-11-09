@@ -644,6 +644,16 @@ The strafe trainer leaves Source Yaw and becomes its own module, so either can b
   - 13.4 Linux result (2026-11-09): "Momentum Mod (dev kit)" Steam entry ran the checkout `movekit-run`, the game mapped the overlay from `~/.local/share/movekit-dev/data/strafe-trainer/overlay/`, the trainer logged the session (`bhop_glacial -> 100 tick`). Owner checked: cues and the offset number work, offset toggle bind works, Strafe Trainer section shows the old settings, Source Yaw page has no trainer cards. Open: Windows hand test; the update through the Modules page is tested after the 13.5 releases.
   - 13.5 released 2026-11-09 from main e9bdda1: `hub-v1.10.0`, `strafe-trainer-v1.0.0`, `sourceyaw-v1.11.0` in that order, CI green, notes from the tag messages. New `sourceyaw/docs/screenshot.png` taken with the dev XDG folders but without `MOVEKIT_DEV`/`MOVEKIT_BIN_DIR` (else the title says "(dev)" and the launch box shows the full checkout path). Open: the owner's live copy updated through the Modules page, and the Windows hand test.
 
+## Phase 14: Z Penalty, a surf HUD module (owner, 2026-11-09; branch `z-penalty`)
+
+The owner wants to see when the z velocity penalty hits on a ramp climb (the "z penalty" term in the owner's air acceleration graph): air acceleration x0.25 while airborne with z speed in (0, 140], so holding into the ramp can't keep speed.
+
+- **Owner's picks (2026-11-09).** A HUD customizer panel like Zone Exit. All parts, each switchable: "Z PENALTY" label, z speed, ticks in the band, a vertical z bar with 0-140 shaded. A "Ramps only" switch, default on. Sound optional, set on the module's hub page. Momentum surf only.
+- **Source.** `CategorizePosition` in Momentum's `mom_gamemovement.cpp`: any airborne tick with z in (0, 140] sets `m_surfaceFriction` 0.25. `Duck()` re-categorizes at tick start with the velocity `GetVelocity()` shows, so no gravity correction.
+- **14.1 Probe (2026-11-09).** Free fall -12 per tick exactly; a jump's top is 12 ticks in the band; a ramp climb rises about +8 per tick (18 ticks), others +20 to +44. `GameInterfaceAPI.ConsoleCommand('playvol <sound> <vol>')` plays in game.
+- **14.2 Built.** `z-penalty/` (key `z-penalty`, tag `z-penalty-v*`, group hud, `HOOK_ORDER` 80, needs core 1.10.0 for `movekit/sounds.py`). The hub page saves the sound to `~/.config/movekit/z-penalty.json`; `install.py` writes it into the installed script's SOUND line (`settings.py`), so Apply reinstalls. Checks: `node z-penalty/check_z_penalty.js`, `python z-penalty/check_z_penalty.py`; `movekit/check_modules.py` and `hud/check_hud.py` list it.
+- **14.3 In game (2026-11-09).** First try: the first jump showed and ramps didn't. A debug log showed why: the tick number came from `GetCurrentTime()`, which moves per frame while the velocity moves per tick, so each tick was counted twice with a z change of 0, and the learned free fall step became 0. Fixed: a new tick is a changed velocity, free fall is a fixed `sv_gravity * GetTickInterval()` (-12), and any whole number of steps per sample is free fall (slow frames). Rerun: every jump top 12 ticks unflagged, every ramp climb flagged; owner: "seems good now". A regression check (every velocity on two frames) catches the old code.
+
 ## Later / undecided
 
 - **Panorama module kit.** Planned as Phase 4 (2026-11-03).

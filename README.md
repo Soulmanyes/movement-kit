@@ -13,6 +13,7 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 | [Strafe Speed Histogram](strafe-histogram/) | Shows a bar per air tick for how fast you turn against the optimal, scrolling up, while you bhop or surf in Momentum, set up in its HUD editor | Windows, Linux |
 | [First Jump HUD](first-jump/) | Shows how jump 1 of a bhop or surf run went in Momentum: landing speed, gain %, gain per strafe, what lost each strafe the most and the biggest mistake, set up in its HUD editor | Windows, Linux |
 | [Zone Exit Speed](zone-exit/) | Shows your 3D speed leaving the start zone in Momentum's surf, coloured by how good the pre jump was, and the difference to your PB's, set up in its HUD editor | Windows, Linux |
+| [Z Penalty](z-penalty/) | Shows when Momentum's surf cuts your air acceleration to a quarter (z speed 0-140 u/s on a ramp climb): a label, your z speed, ticks in the band and a z speed bar, with an optional sound, set up in its HUD editor | Windows, Linux |
 
 The kit is one program, the hub, and the tools are modules it installs. A fresh hub has none; each tool is installed, updated, rolled back and uninstalled from its card on the hub's Modules page, so a tool you don't use is never downloaded. Each tool's folder has its own README with what it needs and how it works.
 
@@ -60,6 +61,7 @@ jhud/             JHUD
 strafe-histogram/ Strafe Speed Histogram
 first-jump/       First Jump HUD
 zone-exit/        Zone Exit Speed
+z-penalty/        Z Penalty
 hud/              in-game display settings, shared by the tools that draw in game (hub section)
 hub/              the hub's Windows exe: entry point, build script and release line
 .github/          the Windows builds and the module releases
