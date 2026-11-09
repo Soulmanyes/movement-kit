@@ -114,7 +114,7 @@ def check_run(tmp, base):
         with log.open("a") as f:
             f.write("[panorama] ZPEN_ON\n")
         wait_for("on", "ZPEN_ON didn't turn the tone on")
-        print("ok   run: ZPEN_ON turns the waveOut tone on", flush=True)
+        print(f"ok   run: ZPEN_ON turns the tone on ({base.__name__})", flush=True)
         with log.open("a") as f:
             f.write("[panorama] ZPEN_OFF\n")
         wait_for(None, "ZPEN_OFF didn't turn the tone off")
