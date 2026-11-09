@@ -84,7 +84,7 @@ from pathlib import Path
 
 from movekit import paths, updater
 
-CORE_VERSION = "1.10.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
+CORE_VERSION = "1.11.0"  # the hub-v* line; hub/hub_release.py's VERSION must match (check_modules)
 CORE = "core"
 CORE_PREFIX = "hub-v"
 CORE_ASSET = "hub-windows.zip"  # the core exe's release zip (Windows); Linux installs the source
