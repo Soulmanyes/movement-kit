@@ -1,0 +1,17 @@
+{
+  "key": "z-penalty",
+  "title": "Z Penalty",
+  "summary": "In Momentum Mod's surf: shows when the engine cuts your air acceleration to a quarter (z speed 0-140 u/s while airborne, as on a ramp climb), with an optional sound.",
+  "games": ["momentum"],
+  "os": ["linux", "win32"],
+  "tag_prefix": "z-penalty-v",
+  "version_from": "install.py",
+  "needs_core": "1.5.0",
+  "needs": [],
+  "data": [],
+  "group": "hud",
+  "hud_card": {
+    "title": "Z Penalty",
+    "text": "While you move up at 0-140 u/s in the air, the engine gives you only a quarter of your air acceleration, which is why a ramp climb can bleed speed. This panel shows when that happens: a Z PENALTY label, your z speed, the ticks spent in the band and a z speed bar, each switchable. By default it counts only ramp climbs, not the top of every jump. Its position, parts, colours and timing are set in Momentum Mod's own HUD customizer, where it is listed as Z Penalty. The sound is set on the Z Penalty page here."
+  }
+}

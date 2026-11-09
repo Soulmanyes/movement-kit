@@ -130,7 +130,7 @@ def main():
         manifests = {p.parent.name: json.loads(p.read_text()) for p in KIT.glob("*/module.json")}
         jhud = sorted(({"key": k, **m["hud_card"]} for k, m in manifests.items() if "hud_card" in m),
                       key=lambda c: (c["title"].lower(), c["key"]))
-        expect([c["key"] for c in jhud], ["first-jump", "jhud", "strafe-histogram", "zone-exit"], "the checkout's HUD cards")
+        expect([c["key"] for c in jhud], ["first-jump", "jhud", "strafe-histogram", "z-penalty", "zone-exit"], "the checkout's HUD cards")
         settings.save("inGameLine", False)
         hud_sec = sections[[s.key for s in sections].index("hud")]
         live = hud_sec.api["get"].__globals__  # the section as discovery loaded it
@@ -173,7 +173,7 @@ def main():
         state = tmp / "data" / "movekit" / "modules.json"
         state.write_text(json.dumps({"modules": {"strafe-review": {"removed": True}}}))
         expect(bridge.call("hud", "get")["result"]["legacyLine"], False, "get, the old Strafe Review uninstalled")
-        state.write_text(json.dumps({"modules": {k: {"removed": True} for k in ("jhud", "strafe-histogram", "first-jump", "zone-exit")}}))
+        state.write_text(json.dumps({"modules": {k: {"removed": True} for k in ("jhud", "strafe-histogram", "first-jump", "zone-exit", "z-penalty")}}))
         expect(bridge.call("hud", "get")["result"]["cards"], [], "get, the card modules uninstalled")
         state.unlink()
         expect(bridge.call("hud", "set_line", {"on": True})["result"]["applied"], True, "set_line, installed")
