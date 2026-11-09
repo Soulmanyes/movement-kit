@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Strafe trainer: runs beside the game (started by launch-hook.sh through movekit-run on Linux).
+"""Strafe Trainer: runs beside the game (launch-hook.sh through movekit-run on Linux; on Windows a
+thread in the core exe's launch process, module_hooks.launch).
 
 Reads the strafe, turn and jump keys plus mouse movement, and while a jump key is held:
   - plays a sound when you turn one way for a few ticks without holding that
@@ -8,30 +9,42 @@ Reads the strafe, turn and jump keys plus mouse movement, and while a jump key i
   - works out each strafe's offset: the ticks between turning the other way
     and switching strafe keys. Negative means the key came early, positive
     late, 0 on the same tick. The number is drawn over the game where the
-    platform can (Linux: the Source Yaw overlay layer).
+    platform can (Linux: the Vulkan layer in overlay/).
 
 This file is platform-neutral (it imports on Windows, with no Pillow): the cue logic, binds,
 settings and the main loop. Where keys come from, how sounds play, focus and the overlay are
-the platform's (trainer_linux.Linux; Windows is Phase 12 in PLAN.md), handed to run().
+the platform's (trainer_linux.Linux, trainer_win.Windows), handed to run(). Settings are store.py's.
+Part of Source Yaw until Phase 13 (PLAN.md).
+
+Siblings (store, gamecfg, trainer_linux, trainer_win) load through movekit.hub.local_import, also
+when this runs as a script, so the hub section and a script get one module object per file.
 
 Keys come from the game's own binds (config.cfg plus aliases from every cfg),
 so rebinding in the game just works. On Linux the input service must forward
-that key too (see /etc/sourceyaw-inputd.conf).
+that key too (see /etc/sourceyaw-inputd.conf; the service kept Source Yaw's name).
 
   trainer.py GAME            run until the game exits (launch-hook.sh does this)
   trainer.py GAME --binds    print which keys do what, then exit
+  trainer.py GAME --enabled  exit 0 when the trainer is on for GAME, else 1
 """
 
-import array  # noqa: I001, RUF100 - movekit must come after yawcore (see below)
+import array
 import math
 import sys
 import time
 from fractions import Fraction
 from pathlib import Path
 
-import yawcore
+_HERE = Path(__file__).resolve().parent
+if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))  # the kit root (repo or core copy); the core exe bundles movekit
+from movekit import binds, games, maps, session  # after the path above
+from movekit.hub import local_import
 
-from movekit import binds, session  # after yawcore, which puts movekit on the path
+VERSION = "1.0.0"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
+
+store = local_import(__file__, "store")
+gamecfg = local_import(__file__, "gamecfg")
 
 # the Linux input service's config: which keys it forwards (read here, not in trainer_linux,
 # because the hub's settings ask too)
@@ -76,58 +89,14 @@ def forwarded():
 ROLES = {"+jump": "jump", "+moveleft": "strafe_left", "+moveright": "strafe_right",
          "+left": "turn_left", "+right": "turn_right"}
 
-TRAINER_DEFAULTS = {
-    "enabled": False,
-    "tone_volume": 0.3,            # 0-1, for the constant tone
-    "repeat": 0.2,                 # game sound: seconds between plays while wrong; 0 = once
-    # the cues (CUES): on/off, sound ("tone" or a game sound), the tone's Hz, and the
-    # ticks the mistake must last before it sounds
-    "cue_wrong_key": True, "wrong_sound": "tone", "wrong_pitch": 220, "wrong_ticks": 3,
-    "cue_no_key": True, "none_sound": "tone", "none_pitch": 147, "none_ticks": 3,
-    "cue_overlap": True, "overlap_sound": "tone", "overlap_pitch": 110, "overlap_ticks": 1,
-    "target": -1,                  # the offset counted as best (shown green)
-    "show_offset": True,           # at launch; offset_key flips it in game
-    "offset_key": "",              # key bound in yaws.cfg to show or hide the offset
-    "x": 0.5, "y": 0.56,           # number's centre, as a fraction of the screen
-    "size": 36,                    # font size in pixels
-    "colors": {"early": "#ff5a5a", "perfect": "#5aff78", "late": "#ffc83c"},
-    "hide_after": 2.0,             # seconds the last offset stays up
-    "window": 0.25,                # seconds a key switch may be from a turn to count
-    "mouse_threshold": 4,          # mouse counts the other way that make a turn
-    # CS:S servers pick their own tickrate; Momentum's follows the map's game mode
-    "tickrate": {"css": 66, "momentum": 100},
-    "map_tickrates": {"surf_": 66, "bhop_": 100},
-}
-
-
-# cue -> its on/off setting: "wrong" turning with the other strafe key held, "none" turning with
-# no strafe key held, "overlap" both strafe keys held. Its other settings are <cue>_sound,
-# <cue>_pitch and <cue>_ticks.
-CUES = {"wrong": "cue_wrong_key", "none": "cue_no_key", "overlap": "cue_overlap"}
-
-
-def migrate(saved):
-    """Trainer settings saved before each cue had its own sound (1.9.0 and older: one `sound` and
-    `tone_pitch` for both wrong-key cues, the no-key tone at 2/3 of that pitch, one `wrong_ticks`)
-    in today's keys. The old keys stay, so a rolled-back version still reads them."""
-    saved = dict(saved or {})
-    if "wrong_sound" not in saved and "sound" in saved:
-        if not saved["sound"]:  # "" played nothing
-            saved["cue_wrong_key"] = saved["cue_no_key"] = False
-        saved["wrong_sound"] = saved["none_sound"] = saved["sound"] or "tone"
-    if "wrong_pitch" not in saved and "tone_pitch" in saved:
-        saved["wrong_pitch"] = int(saved["tone_pitch"])
-        saved["none_pitch"] = max(40, round(int(saved["tone_pitch"]) * 2 / 3))
-    if "none_ticks" not in saved and "wrong_ticks" in saved:
-        saved["none_ticks"] = saved["wrong_ticks"]
-    return saved
+# the settings' defaults and cues live in store.py; these names stay for the checks and the section
+TRAINER_DEFAULTS = store.DEFAULTS
+CUES = store.CUES
+migrate = store.migrate
 
 
 def settings(game):
-    data = migrate(yawcore.load_settings(game).get("trainer"))
-    merged = {**TRAINER_DEFAULTS, **data}
-    merged["colors"] = {**TRAINER_DEFAULTS["colors"], **data.get("colors", {})}
-    return merged
+    return store.config(game)
 
 
 # ---------------------------------------------------------------- binds
@@ -416,7 +385,7 @@ class Trainer:
 
 def map_tickrate(cfg, game, name):
     """The tickrate for map `name`, or None when the name isn't known (CS:S's "Connected to" line)."""
-    return yawcore.prefix_value(name, cfg["map_tickrates"], cfg["tickrate"].get(game, 66))
+    return maps.prefix_value(name, cfg["map_tickrates"], cfg["tickrate"].get(game, 66))
 
 
 class GameEvents:
@@ -430,7 +399,7 @@ class GameEvents:
 
     def handle(self, event):
         kind, data = event["type"], event["data"]
-        if kind == "token" and data.get("name") == yawcore.OFFSETS_TOKEN:
+        if kind == "token" and data.get("name") == gamecfg.OFFSETS_TOKEN:
             self.showing = not self.showing
             print(f"trainer: offset {'shown' if self.showing else 'hidden'}", flush=True)
         elif kind == "map_loaded":
@@ -460,7 +429,7 @@ def run(game, platform, stop=None):
       focus(game, game_dir)  an object whose `focused` says the game's window has focus
       play(game_dir, sound, game)  a game sound"""
     cfg = settings(game)
-    game_dir = yawcore.find_game(game)
+    game_dir = games.find(game)
     if not cfg["enabled"] or game_dir is None:
         return 0
     roles, unseen = read_binds(game_dir) if platform.FORWARDED_ONLY else read_binds(game_dir, None)
@@ -521,30 +490,8 @@ def run(game, platform, stop=None):
 
 
 def _sibling(name):
-    """trainer_linux or trainer_win, loaded from this file's folder under this module's naming:
-    the hub loads trainer by path under a prefixed name (settings_api), with sourceyaw/ not on
-    sys.path. Their `import yawcore` gets this file's yawcore."""
-    import importlib.util
-    prefix = __name__.rpartition(".")[0]
-    full = f"{prefix}.{name}" if prefix else name
-    if full in sys.modules:
-        return sys.modules[full]
-    spec = importlib.util.spec_from_file_location(full, Path(__file__).with_name(f"{name}.py"))
-    mod = importlib.util.module_from_spec(spec)
-    before = sys.modules.get("yawcore")
-    sys.modules["yawcore"] = yawcore
-    sys.modules[full] = mod
-    try:
-        spec.loader.exec_module(mod)
-    except BaseException:
-        del sys.modules[full]
-        raise
-    finally:
-        if before is None:
-            sys.modules.pop("yawcore", None)
-        else:
-            sys.modules["yawcore"] = before
-    return mod
+    """trainer_linux or trainer_win (movekit.hub.local_import)."""
+    return local_import(__file__, name)
 
 
 def platform():
@@ -556,12 +503,14 @@ def platform():
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in yawcore.GAMES:
+    if len(sys.argv) < 2 or sys.argv[1] not in store.GAMES:
         print(__doc__)
         return 2
     game = sys.argv[1]
+    if "--enabled" in sys.argv:  # launch-hook.sh asks before it sets the overlay up
+        return 0 if settings(game)["enabled"] else 1
     if "--binds" in sys.argv:
-        game_dir = yawcore.find_game(game)
+        game_dir = games.find(game)
         roles, unseen = read_binds(game_dir)
         for role, codes in roles.items():
             print(f"{role:13} {sorted(codes, key=str)}")

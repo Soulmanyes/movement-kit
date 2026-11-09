@@ -1,0 +1,32 @@
+# The Strafe Trainer's Windows code on a real Windows (moved out of sourceyaw-windows.yml in Phase 13):
+# Raw Input, the waveOut tone and the focus check through ctypes, the game launch (launch_win.py) and
+# the hub section, with the hub exe's Python. strafe-trainer/windows/check_windows.py runs them
+# without a game or a person; the platform-neutral checks run here too. Runs on pushes that touch
+# the Strafe Trainer or movekit, and by hand (Actions > strafe-trainer-windows > Run workflow).
+name: strafe-trainer-windows
+on:
+  workflow_dispatch:
+  push:
+    paths: ["strafe-trainer/**", "movekit/**", ".github/workflows/strafe-trainer-windows.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"  # the hub exe's (windows-release.yml)
+      - name: Platform-neutral checks
+        run: |
+          python strafe-trainer/check_trainer.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python strafe-trainer/check_settings_api.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python strafe-trainer/check_launch_win.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python strafe-trainer/check_game_events.py
+      - name: Windows code on Windows
+        run: python strafe-trainer/windows/check_windows.py

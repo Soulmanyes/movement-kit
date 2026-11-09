@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Checks launch_win.py (Source Yaw's game launch on Windows, Phase 12 in PLAN.md) on Linux, with
-Windows' "no crosshair colour" switched on, temp game folders, a fake movekit session and a fake
-trainer platform. HOME and the XDG folders point into a temp folder; no game or port needed.
+Windows' "no crosshair colour" switched on, temp game folders and a fake movekit session. HOME and the XDG folders point into a temp folder; no game or port needed.
 
 Usage: python sourceyaw/check_launch_win.py   (exits 1 on the first failure)
 
 Covers: which game Steam's command starts (exe folder, -game, neither), yaws.cfg written without
-colour lines, the list switcher and trainer started as threads that get the session's events,
-everything stopped and cleaned up at exit, all without Pillow (auto cfg cleared, sessions and input closed), a thread's
-error landing in run.log, another game left alone, and a real launcher process exiting
-right after the game, through atexit.
+colour lines, the list switcher started as a thread that gets the session's events (a saved
+"trainer" dict starting nothing: the trainer is its own module since Phase 13, checked by
+strafe-trainer/check_launch_win.py), everything stopped and cleaned up at exit, all without Pillow
+(auto cfg cleared, session closed), a thread's error landing in run.log, another game left alone,
+and a real launcher process exiting right after the game, through atexit.
 """
 import os
 import queue
@@ -49,7 +49,6 @@ def main():
         sys.modules["PIL"] = None  # the hub exe has no Pillow
         import launch_win  # noqa: I001, RUF100 - movekit after yawcore, which puts it on the path
         import mode_watch
-        import trainer
         import yawcore
 
         from movekit import session
@@ -71,7 +70,7 @@ def main():
                 launch_win.game_of([r"D:\Games\other.exe"]), launch_win.game_of([])],
                ["css", "momentum", "css", None, None, None], "game from Steam's command")
 
-        # Momentum with a surf list, auto mode and the trainer
+        # Momentum with a surf list, auto mode and a trainer dict saved by 1.10
         speeds = [{"speed": s, "color": "#ff0000", "sound": None} for s in (60, 90, 210)]
         data = {**yawcore.load_settings("momentum"), "key": "q", "entries": speeds, "start": 0,
                 "surf": {"entries": speeds[:2], "start": 0}, "separate": True, "mode_key": "g",
@@ -93,53 +92,15 @@ def main():
                 self.closed = True
 
         session.join = FakeJoined
-        closed = []
-
-        class Source:
-            def read(self, timeout):
-                time.sleep(timeout)
-                return []
-
-            def close(self):
-                closed.append("input")
-
-        class Platform:
-            FORWARDED_ONLY = False
-            UNSEEN, GONE = "keys with no code", "input gone"
-            clock = staticmethod(time.time)
-
-            class Tone:
-                def __init__(self, synth):
-                    self.mode = None
-
-                def start(self):
-                    pass
-
-                def close(self):
-                    closed.append("tone")
-
-            def overlay(self, cfg):
-                return None
-
-            def open_input(self):
-                return Source()
-
-            def focus(self, game, game_dir):
-                return type("Focus", (), {"focused": True})()
-
-            def play(self, game_dir, sound, game):
-                pass
-
-        trainer.platform = Platform
         # the exit step, captured: atexit._run_exitfuncs would also delete the temp folder
         at_exit = []
         launch_win.atexit = type("AtExit", (), {"register": staticmethod(at_exit.append)})
         threads = launch_win.start([str(dirs["momentum"].parent / "momentum.exe")])
-        expect(sorted(t.name for t in threads), ["sourceyaw-mode", "sourceyaw-trainer"], "helpers started")
+        expect(sorted(t.name for t in threads), ["sourceyaw-mode"], "only the list switcher started")
         cfg = (dirs["momentum"] / "cfg" / "yaws.cfg").read_text()
         expect(("yaws_colors" in cfg, "// play is a local-only sound cue.\n" in cfg, "con_logfile yaw.log" in cfg),
                (False, True, True), "yaws.cfg without colour, with the console log")
-        wait_for(lambda: len(joined) == 2, "both helpers joining the session")
+        wait_for(lambda: len(joined) == 1, "the list switcher joining the session")
         expect({str(j.log) for j in joined}, {str(dirs["momentum"] / "yaw.log")}, "session log path")
         auto = dirs["momentum"] / "cfg" / f"{yawcore.AUTO_CFG}.cfg"
         for j in joined:
@@ -148,9 +109,8 @@ def main():
 
         expect(len(at_exit), 1, "one exit step registered")
         at_exit[0]()  # what atexit runs when the exe exits after the game
-        expect([t.is_alive() for t in threads], [False, False], "helpers stopped at exit")
-        expect((auto.read_text().strip(), [j.closed for j in joined], sorted(closed)),
-               ("", [True, True], ["input", "tone"]), "cleaned up at exit")
+        expect([t.is_alive() for t in threads], [False], "helpers stopped at exit")
+        expect((auto.read_text().strip(), [j.closed for j in joined]), ("", [True]), "cleaned up at exit")
 
         # a helper's error lands in run.log
         broken = launch_win._thread("broken", lambda: 1 / 0)
@@ -163,8 +123,6 @@ def main():
 
         # the real exit order: Python waits for non-daemon threads before atexit, so a helper that
         # isn't a daemon would keep the launcher (and Steam's "running") alive after the game
-        data["trainer"] = {"enabled": False}  # the real trainer would need a real input service
-        yawcore.save_settings(data, "momentum")
         auto.write_text("sourceyaw_arm_surf\n")
         script = tmp / "launch.py"
         script.write_text(

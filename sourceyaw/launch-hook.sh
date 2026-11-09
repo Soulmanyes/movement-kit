@@ -4,7 +4,7 @@
 # settings. For CS:S it also swaps the crosshair colour while the game runs: it turns KROSSHAIR
 # on for the game and points it at our own image, so crosshair-maker's files are never
 # touched. Momentum Mod sets its crosshair colour itself, so it only needs the apply.
-local CFG OLD_CFG RUNLOG LOG COLORS TRAINER AUTO
+local CFG OLD_CFG RUNLOG LOG COLORS AUTO
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}/sourceyaw"
 OLD_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/css-yaw"
 # settings from before the rename (done here because mkdir below would block it)
@@ -18,7 +18,7 @@ mkdir -p "$CFG"
 
 if [ "$GAME" = css ] && [ "${COLORS:-0}" = 1 ] && [ -n "${LOG:-}" ] && [ -f "$CFG/current.png" ]; then
     export KROSSHAIR=1 KROSSHAIR_IMG="$CFG/current.png"
-    # con_logfile appends forever; start fresh each launch, before the watcher or trainer reads it
+    # con_logfile appends forever; start fresh each launch, before the watcher (or the Strafe Trainer) reads it
     : > "$LOG"
     # started directly (not via a function) so $! is the watcher itself
     python3 "$HOOK_DIR/crosshair_watch.py" "$LOG" >> "$RUNLOG" 2>&1 &
@@ -29,12 +29,5 @@ if [ "${AUTO:-0}" = 1 ] && [ -n "${LOG:-}" ]; then
     python3 "$HOOK_DIR/mode_watch.py" "$LOG" "$GAME" >> "$RUNLOG" 2>&1 &
     HELPERS="$HELPERS $!"
 fi
-# strafe trainer: reads keys from the input service and draws the offset through
-# the Source Yaw overlay layer, which only loads when SOURCEYAW_OVERLAY=1
-if [ "${TRAINER:-0}" = 1 ]; then
-    export SOURCEYAW_OVERLAY=1 SOURCEYAW_OVERLAY_ATLAS="$CFG/overlay/atlas.png" \
-        SOURCEYAW_OVERLAY_STATE="$CFG/overlay/state"
-    python3 "$HOOK_DIR/trainer.py" "$GAME" >> "$RUNLOG" 2>&1 &
-    HELPERS="$HELPERS $!"
-fi
+# the strafe trainer is its own module since Phase 13 (strafe-trainer/launch-hook.sh)
 return 0

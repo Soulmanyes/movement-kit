@@ -2,12 +2,12 @@
 
 The logic is settings_api.py and yawcore.py, loaded by path (hub.local_import), so sourceyaw/ never
 goes on sys.path. hub.discover() loads this file on every OS before it looks at "os", so the top of
-the file imports only the standard library and movekit.hub; settings_api loads on the first call.
+the file imports only the standard library and movekit; settings_api loads on the first call.
 
 On Windows (Phase 12) the page hides what Windows doesn't have (data-linux in hub/index.html: the
-crosshair colour, the offset overlay, the input service), load() says so with "windows", and the
-launch option is the core exe's (movekit/dispatch.py). Pillow is only needed for the crosshair
-previews, which Windows doesn't draw.
+crosshair colour), load() says so with "windows", and the launch option is the core exe's
+(movekit/launchopt.py). Pillow is only needed for the crosshair previews, which Windows doesn't draw.
+The strafe trainer has its own section since Phase 13 (strafe-trainer/hub_section.py).
 
 What the GTK window keeps in its widgets, the page keeps in its own state and sends back whole:
 `apply(game, form)` takes the form, clamps the numbers to the ranges the window's spin buttons
@@ -19,48 +19,17 @@ import base64
 import io
 import math
 import re
-import sys
 import threading
 
+from movekit import bindnames, launchopt
 from movekit.hub import local_import
 
 # the GTK window's spin buttons: (lowest, highest). Speeds keep 4 decimals, as the window saves them.
-LIMITS = {
-    "speed": (1, 2000), "x": (0, 100), "y": (0, 100), "target": (-5, 5), "size": (10, 120),
-    "wrong_ticks": (1, 20), "repeat": (0, 1), "tone_volume": (5, 100), "tickrate": (16, 128),
-    **{f"{cue}_{name}": limit for cue in ("wrong", "none", "overlap")
-       for name, limit in (("ticks", (1, 20)), ("pitch", (60, 1000)))},
-}
+LIMITS = {"speed": (1, 2000)}
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 PREVIEW_PX = 33  # the window's preview size; nearest-neighbour keeps the crosshair's pixels sharp
 
-# KeyboardEvent.code -> Source bind name, for keys whose name isn't the key itself (the page also
-# tries KeyboardEvent.key first, so letters follow the keyboard layout as the GTK window did).
-# Super never reaches the page on Hyprland; lwin and rwin stay in the pick-from-list fallback.
-KEY_CODES = {
-    **{f"Key{c.upper()}": c for c in "abcdefghijklmnopqrstuvwxyz"},
-    **{f"Digit{d}": str(d) for d in range(10)},
-    **{f"F{n}": f"f{n}" for n in range(1, 13)},
-    "Enter": "enter", "Escape": "escape", "Backspace": "backspace", "Tab": "tab", "Space": "space",
-    "CapsLock": "capslock", "ShiftLeft": "shift", "ShiftRight": "rshift", "ControlLeft": "ctrl",
-    "ControlRight": "rctrl", "AltLeft": "alt", "AltRight": "ralt", "MetaLeft": "lwin",
-    "MetaRight": "rwin", "ContextMenu": "app", "Insert": "ins", "Delete": "del", "Home": "home",
-    "End": "end", "PageUp": "pgup", "PageDown": "pgdn", "ArrowUp": "uparrow",
-    "ArrowDown": "downarrow", "ArrowLeft": "leftarrow", "ArrowRight": "rightarrow",
-    "Pause": "pause", "ScrollLock": "scrolllock", "NumLock": "numlock",
-    "Numpad0": "kp_ins", "Numpad1": "kp_end", "Numpad2": "kp_downarrow", "Numpad3": "kp_pgdn",
-    "Numpad4": "kp_leftarrow", "Numpad5": "kp_5", "Numpad6": "kp_rightarrow", "Numpad7": "kp_home",
-    "Numpad8": "kp_uparrow", "Numpad9": "kp_pgup", "NumpadEnter": "kp_enter",
-    "NumpadDecimal": "kp_del", "NumpadDivide": "kp_slash", "NumpadMultiply": "kp_multiply",
-    "NumpadSubtract": "kp_minus", "NumpadAdd": "kp_plus", "Semicolon": "semicolon",
-    "Quote": "'", "Backquote": "`", "Minus": "-", "Equal": "=", "BracketLeft": "[",
-    "BracketRight": "]", "Backslash": "\\", "Comma": ",", "Period": ".", "Slash": "/",
-}
-# MouseEvent.button -> Source name (0 left, 1 middle, 2 right, 3/4 side)
-MOUSE_BUTTONS = {0: "mouse1", 1: "mouse3", 2: "mouse2", 3: "mouse4", 4: "mouse5"}
-
 _krosshair_job = {"running": False, "error": None, "done": False}
-_overlay = None
 
 
 def _api():
@@ -69,10 +38,6 @@ def _api():
 
 def _core():
     return _api().core
-
-
-def _trainer():
-    return _api()._trainer_module()
 
 
 def _number(form, name, low=None, high=None):
@@ -121,26 +86,12 @@ def key_note(game, key):
     return {"text": text, "warn": True}
 
 
-def offset_key_note(game, key, offset_key):
-    """The note under the trainer's offset key (Window.show_offset_key)."""
-    if offset_key and offset_key.lower() == key.lower():
-        return {"text": f"⚠ {offset_key} is also the cycle key, so it stays the cycle key. Pick another key",
-                "warn": True}
-    commands = _bound_to(_cstrike(game), offset_key) if offset_key else []
-    if commands:
-        return {"text": f"⚠ {offset_key} is bound to {', '.join(commands)} now. Apply replaces that",
-                "warn": True}
-    return {"text": "In game, each press shows or hides the offset; Show offset sets how it "
-                    "starts. Takes effect from the next game start", "warn": False}
-
-
-def mode_key_note(game, key, offset_key, mode_key):
+def mode_key_note(game, key, mode_key):
     """The note under the bhop/surf mode key."""
     if not mode_key:
         return {"text": "No key: only the map's prefix picks the list", "warn": False}
-    for other, what in ((key, "the cycle key"), (offset_key, "the offset key")):
-        if other and mode_key.lower() == other.lower():
-            return {"text": f"⚠ {mode_key} is also {what}. Pick another key", "warn": True}
+    if key and mode_key.lower() == key.lower():
+        return {"text": f"⚠ {mode_key} is also the cycle key. Pick another key", "warn": True}
     commands = _bound_to(_cstrike(game), mode_key)
     if commands:
         return {"text": f"⚠ {mode_key} is bound to {', '.join(commands)} now. Apply replaces that",
@@ -148,57 +99,16 @@ def mode_key_note(game, key, offset_key, mode_key):
     return {"text": "Each press switches to the other list's start yawspeed", "warn": False}
 
 
-def key_notes(game, key, offset_key, mode_key=""):
-    return {"key": key_note(game, key), "offset": offset_key_note(game, key, offset_key),
-            "mode": mode_key_note(game, key, offset_key, mode_key)}
-
-
-# the core exe's names, now and before it was the hub (README: Steam launch option)
-WINDOWS_EXES = ("movement-kit.exe", "strafe-review.exe")
-
-
-def _windows_launch_option(game):
-    """Windows: the core exe before %command% (movekit/dispatch.py runs each module's launch step)."""
-    core = _core()
-    exe = sys.executable if getattr(sys, "frozen", False) else r"C:\path\to\movement-kit.exe"
-    run = f'"{exe}"'
-    current = core.current_launch_options(game)
-    if current and any(name in current.lower() for name in WINDOWS_EXES):
-        return {"text": current, "note": "Already set up", "already": True}
-    if current and "%command%" in current:
-        text = current.replace("%command%", f"{run} %command%", 1)
-    else:
-        text = " ".join(filter(None, [f"{run} %command%", current]))
-    if current is None:
-        note = "Couldn't read your Steam launch options. Put this before %command%"
-    elif current:
-        note = "Your current launch options with movement-kit.exe added. Replace them with this"
-    else:
-        note = "You have no launch options yet. Paste this in"
-    return {"text": text, "note": note + ". Every installed tool starts from this one launch option",
-            "already": False}
+def key_notes(game, key, mode_key=""):
+    return {"key": key_note(game, key), "mode": mode_key_note(game, key, mode_key)}
 
 
 def launch_option(game):
-    """The launch options to paste into Steam and the note under them (Window.show_launch_option)."""
-    core = _core()
-    if core.WINDOWS:
-        return _windows_launch_option(game)
-    _cstrike(game)
-    current = core.current_launch_options(game)
-    run = core.runner()
-    text, already = core.launch_option(current, run)
-    if current is None:
-        note = "Couldn't read your Steam launch options. Put movekit-run before %command%"
-    elif already:
-        note = "Already set up"
-    elif current:
-        note = "Your current launch options with movekit-run added. Replace them with this"
-    else:
-        note = "You have no launch options yet. Paste this in"
-    if run != core.RUNNER:
-        note += ". Steam can't find movekit-run by name here, so this uses the full path"
-    return {"text": text, "note": note, "already": already}
+    """The launch options to paste into Steam and the note under them (movekit.launchopt; Source
+    Yaw's old wrapper names still count on Linux)."""
+    if not _core().WINDOWS:
+        _cstrike(game)
+    return launchopt.offer(game, _core().OLD_RUNNERS)
 
 
 def krosshair():
@@ -240,27 +150,6 @@ def install_krosshair():
 
 # ---------------------------------------------------------------- loading
 
-def _trainer_form(cfg, game):
-    """The trainer settings in the window's units (percent for position and tone volume)."""
-    return {
-        "enabled": cfg["enabled"], "show_offset": cfg["show_offset"], "offset_key": cfg["offset_key"],
-        "x": round(cfg["x"] * 100, 4), "y": round(cfg["y"] * 100, 4), "size": cfg["size"], "colors": dict(cfg["colors"]),
-        "repeat": cfg["repeat"], "tone_volume": round(cfg["tone_volume"] * 100, 4), "target": cfg["target"],
-        **{key: cfg[key] for cue, switch in _trainer().CUES.items()
-           for key in (switch, f"{cue}_sound", f"{cue}_pitch", f"{cue}_ticks")},
-        "tickrate": None if game == "momentum" else cfg["tickrate"].get(game, 66),
-    }
-
-
-def _cue_sounds(sound_choices, cfg):
-    """The choices every cue's sound picker offers: the tone, the game's sounds, and any saved
-    sound this install doesn't have."""
-    choices = [("tone", "Constant tone"), *sound_choices]
-    for cue in _trainer().CUES:
-        choices = _with_kept(choices, cfg[f"{cue}_sound"])
-    return choices
-
-
 def _entries_form(entries):
     return [{"speed": float(e["speed"]), "color": e["color"], "sound": e.get("sound") or ""} for e in entries]
 
@@ -279,16 +168,11 @@ def load(game=None):
     data = core.load_settings(game)
     sounds = core.available_sounds(cstrike, game) if cstrike else core.SOUNDS
     sound_choices = [("", "None")] + [(s, s) for s in sounds]
-    cfg = api.trainer_config(data.get("trainer"))
-    rates = ", ".join(f"{p}* {r}" for p, r in cfg["map_tickrates"].items())
-    tickrate_note = (f"From the map: {rates}, others {cfg['tickrate']['momentum']}" if game == "momentum"
-                     else f"From the map: {rates}; on other maps the server's tickrate")
     entries = _entries_form(data["entries"])
     surf = ({"entries": _entries_form(data["surf"]["entries"]), "start": data["surf"]["start"]}
             if data.get("surf") else None)
     modes = ", ".join(f"{p}* {m}" for p, m in data["map_modes"].items())
     base_values = [v for v, _ in api.base_options(data["base"])]
-    trainer = _trainer_form(cfg, game)
     return {
         "game": game, "version": core.VERSION, "name": info["name"], "short": info["short"],
         "games": [{"id": g, "name": core.GAMES[g]["name"], "short": core.GAMES[g]["short"]}
@@ -299,11 +183,11 @@ def load(game=None):
                        else f"Sets {info['name']}'s own crosshair to the colour of the current yawspeed"),
         "windows": core.WINDOWS,
         "steam_note": (f"{info['short']} Properties → Launch Options. movement-kit.exe applies these settings "
-                       "and runs the strafe trainer while the game is open." if core.WINDOWS
+                       "and runs the list switcher while the game is open." if core.WINDOWS
                        else "CS:S Properties → Launch Options. movekit-run applies these settings and runs the "
-                            "colour changer and strafe trainer while the game is open." if uses_krosshair
-                       else f"{info['short']} Properties → Launch Options. Only needed for the strafe "
-                            "trainer: movekit-run starts it while the game is open."),
+                            "colour changer while the game is open." if uses_krosshair
+                       else f"{info['short']} Properties → Launch Options. movekit-run applies these settings "
+                            "when the game starts."),
         "autoexec": bool(cstrike) and core.autoexec_runs_yaws(cstrike),
         "key": data["key"], "crosshair": data["crosshair"], "start": data["start"],
         "base": data["base"], "base_options": [list(o) for o in api.base_options(data["base"])],
@@ -314,10 +198,7 @@ def load(game=None):
         "mode_key": data["mode_key"], "auto_mode": data["auto_mode"],
         "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
-        "cue_sounds": _cue_sounds(sound_choices, cfg),
-        "trainer": trainer, "tickrate_note": tickrate_note,
-        "trainer_status": api.trainer_status(cstrike),
-        "notes": key_notes(game, data["key"], trainer["offset_key"], data["mode_key"]),
+        "notes": key_notes(game, data["key"], data["mode_key"]),
         "krosshair": krosshair() if uses_krosshair else None,
         "launch": launch_option(game),
         "previews": [] if core.WINDOWS else previews(game, data["base"], [e["color"] for e in entries]),
@@ -326,10 +207,8 @@ def load(game=None):
 
 
 def keys():
-    """For key capture: the code and mouse-button maps, and every bind name for the list fallback."""
-    valid = _core().VALID_KEYS
-    return {"codes": KEY_CODES, "mouse": {str(k): v for k, v in MOUSE_BUTTONS.items()},
-            "valid": sorted(valid, key=lambda k: (len(k) > 1, k))}
+    """For key capture (movekit/web/section.js): the code and mouse-button maps, every bind name."""
+    return bindnames.capture_info()
 
 
 def set_game(game):
@@ -337,10 +216,6 @@ def set_game(game):
     _cstrike(game)
     _core().set_last_game(game)
     return load(game)
-
-
-def trainer_status(game):
-    return _api().trainer_status(_cstrike(game))
 
 
 def new_entry(entries):
@@ -413,65 +288,13 @@ def play_sound(game, sound):
     return bool(cstrike and _core().play_sound(cstrike, sound, game))
 
 
-def play_cue(game, sound, tone_volume, pitch):
-    """One trainer cue's sound: the tone at `pitch` Hz for 0.4 s, or the game sound."""
-    if sound != "tone":
-        return play_sound(game, sound)
-    volume = _number({"v": tone_volume}, "v", *LIMITS["tone_volume"]) / 100
-    hz = _number({"v": pitch}, "v", *LIMITS["wrong_pitch"])
-    trainer = _trainer()
-    tone = trainer.platform().Tone(trainer.ToneSynth(volume, {"cue": hz}))
-    tone.start()
-    tone.mode = "cue"
-    for delay, step in ((0.4, lambda: setattr(tone, "mode", None)), (0.6, tone.close)):
-        threading.Timer(delay, step).start()
-    return True
-
-
-def show_in_game(on, game, trainer):
-    """Shows (or hides) a sample offset in a game started through movekit-run (Window.preview_overlay)."""
-    global _overlay
-    if _core().WINDOWS:  # no offset overlay on Windows (the page hides the button)
-        return False
-    linux = _trainer()._sibling("trainer_linux")
-    if _overlay is None:
-        _overlay = linux.Overlay()
-    if not on:
-        _overlay.hide()
-        return False
-    cfg = _trainer_value(game, trainer)
-    linux.write_atlas(cfg)
-    target = cfg["target"]
-    _overlay.show(f"{target:+d}" if target else "0", 1, cfg["x"], cfg["y"])
-    return True
-
-
 # ---------------------------------------------------------------- saving
-
-def _trainer_value(game, form, saved=None):
-    """settings_api.trainer_value over the saved trainer settings, with the numbers kept in range."""
-    api = _api()
-    if saved is None:
-        saved = _core().load_settings(game).get("trainer")
-    clean = dict(form)
-    cues = _trainer().CUES
-    for name in ("x", "y", "size", "repeat", "tone_volume", "target",
-                 *[f"{cue}_{n}" for cue in cues for n in ("ticks", "pitch")]):
-        clean[name] = _number(form, name)
-    clean["tickrate"] = None if game == "momentum" or form.get("tickrate") is None else _number(form, "tickrate")
-    clean["colors"] = {k: _color(form["colors"][k], f"the {k} colour") for k in ("early", "perfect", "late")}
-    for name in ("enabled", "show_offset", *cues.values()):
-        clean[name] = bool(form[name])
-    for cue in cues:
-        clean[f"{cue}_sound"] = form.get(f"{cue}_sound") or "tone"
-    clean["offset_key"] = form.get("offset_key") or ""
-    return api.trainer_value(api.trainer_config(saved), clean, game)
-
 
 def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
-    form = {key, crosshair, start, base, entries: [{speed, color, sound}], trainer: {...},
-            surf: {entries, start} or null, separate, active, mode_key, auto_mode}."""
+    form = {key, crosshair, start, base, entries: [{speed, color, sound}],
+            surf: {entries, start} or null, separate, active, mode_key, auto_mode}.
+    The saved "trainer" dict (from before Phase 13) is kept as it was, for a roll back to 1.10."""
     data = _core().load_settings(game)
     entries, start = _list_value(form["entries"], form.get("start", 0))
     surf = None
@@ -479,7 +302,7 @@ def settings(game, form):
         surf_entries, surf_start = _list_value(form["surf"]["entries"], form["surf"].get("start", 0))
         surf = {"entries": surf_entries, "start": surf_start}
     return _api().collect(str(form["key"]), bool(form["crosshair"]), start, str(form["base"]),
-                          data.get("original_color"), _trainer_value(game, form["trainer"], data.get("trainer")),
+                          data.get("original_color"), data.get("trainer"),
                           entries, surf=surf, mode_key=str(form.get("mode_key") or ""),
                           auto_mode=bool(form.get("auto_mode", True)), map_modes=data.get("map_modes"),
                           separate=bool(form.get("separate")) and surf is not None,
@@ -522,11 +345,10 @@ SECTION = {
     "page": "hub/index.html",
     "api": {
         "load": load, "keys": keys, "set_game": set_game, "key_notes": key_notes,
-        "trainer_status": trainer_status, "new_entry": new_entry, "previews": previews,
+        "new_entry": new_entry, "previews": previews,
         "base_options": base_options, "pick_image": pick_image, "krosshair": krosshair,
         "install_krosshair": install_krosshair, "set_autoexec": set_autoexec, "play_sound": play_sound,
-        "play_cue": play_cue, "show_in_game": show_in_game, "launch_option": launch_option,
-        "settings": settings, "apply": apply,
+        "launch_option": launch_option, "settings": settings, "apply": apply,
     },
     "order": 30,
 }

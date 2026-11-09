@@ -627,6 +627,12 @@ The strafe trainer leaves Source Yaw and becomes its own module, so either can b
   - **13.3 must** move Source Yaw's page onto `form.css`/`section.js` and drop its `sy-` copies of those rules and helpers, and `hub_section.KEY_CODES`/`MOUSE_BUTTONS`/`_windows_launch_option`, so each exists once.
   - `check_helpers.py` covers `with_runner` (incl. `sourceyaw-run` not counting for another tool) and that every capture name is a bind name.
 - **13.2 and 13.3 go together** (one commit when the checks are green): once the trainer files move, Source Yaw's section, `install.sh` and launch hook break until 13.3 is done.
+- **13.2 + 13.3 built (2026-11-09, one commit).**
+  - `strafe-trainer/`: the moved files plus `store.py` (settings per game, `import_from_sourceyaw`), `gamecfg.py` (the autoexec block), `settings_api.py`, `install.py` (import, blocks, overlay build into `~/.local/share/strafe-trainer/overlay`, manifest, launch hook order 55; `--apply GAME` at launch), `launch-hook.sh`, `launch_win.py` (rollback guard), `module_hooks.py`, `hub_section.py` + `hub/` on `form.css`/`section.js`. Siblings load through `local_import`. `movekit/games.from_command(argv)` picks the game from Steam's command for both modules.
+  - Source Yaw 1.11.0: no trainer in `yawcore` (no offset alias/bind, `con_logfile` only for auto lists; a saved `"trainer"` dict kept untouched for a roll back), `kit_keys.record` in `apply`, page on `form.css`/`section.js`, `module_hooks.split_out`, `install.sh` deletes `trainer*.py`, `inputd/`, `overlay/` from its folder and the layer manifest only while it points there. `sourceyaw/inputd/install-inputd.sh` is the remove-only forwarder.
+  - Checks moved with the code: `strafe-trainer/check_settings_api.py`, `check_hub_section.py`, `check_launch_win.py`, `check_game_events.py` (from `check_session_use.py`), `check_install.py` (import, block, section, guard), `windows/check_windows.py` (Raw Input, tone, trainer.run, launch, hub; CI `strafe-trainer-windows.yml`). Source Yaw's checks lost their trainer parts and assert it is gone; `check_modes.py` compares against 1.8.0 with the trainer off and catches all 11 mutations. `check_modules.py` lists `strafe-trainer`; `module-release.yml` takes `strafe-trainer-v*`.
+  - READMEs: `strafe-trainer/README.md` (new, overlay GPL-3 credit), Source Yaw's without the trainer, the root list, layout and licence line. Both pages screenshot-checked.
+  - Not run here: the Windows checks (CI on push).
 
 ## Later / undecided
 

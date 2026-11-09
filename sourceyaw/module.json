@@ -1,7 +1,7 @@
 {
   "key": "sourceyaw",
   "title": "Source Yaw",
-  "summary": "Yaw speed binds, the crosshair colour changer (Linux) and the strafe trainer for Source games.",
+  "summary": "Yaw speed binds and the crosshair colour changer (Linux) for Source games.",
   "games": ["css", "momentum"],
   "os": ["linux", "win32"],
   "tag_prefix": "sourceyaw-v",

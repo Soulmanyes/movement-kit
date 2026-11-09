@@ -4,9 +4,8 @@
 options that still say `css-yaw-run` keep working.*
 
 A surf and bhop helper for Counter-Strike: Source and Momentum Mod on Linux and Windows. It
-cycles `cl_yawspeed` with one key and tells you which yawspeed is active, and it can train your
-strafes. On Windows it does the yawspeed cycle and the strafe trainer's sounds; see
-[On Windows](#on-windows).
+cycles `cl_yawspeed` with one key and tells you which yawspeed is active. On Windows it does the
+yawspeed cycle without the crosshair colour; see [On Windows](#on-windows).
 
 - **Yawspeed cycle:** one key steps through your yawspeeds. A short game sound plays when
   you switch, and only you hear it.
@@ -15,9 +14,8 @@ strafes. On Windows it does the yawspeed cycle and the strafe trainer's sounds; 
 - **Crosshair colour** (Linux): your crosshair changes colour for each yawspeed. In Momentum Mod
   that's the game's own crosshair. CS:S has no crosshair without a weapon, so there it's a
   [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair.
-- **Strafe trainer** (optional): a sound while you turn without the matching strafe key or
-  hold both strafe keys, and (on Linux) each strafe's offset in ticks on screen, with a key to
-  show or hide it. See [Strafe trainer](#strafe-trainer).
+- **Strafe trainer:** moved to its own module, [Strafe Trainer](../strafe-trainer/), in 1.11.0.
+  Updating Source Yaw installs it, with your trainer settings copied over.
 - **Settings in the hub:** its settings are a section of
   [Soulmanyes's Movement Kit](../README.md), whose Modules page also installs its updates.
 
@@ -37,9 +35,6 @@ On Windows, only the hub: see [On Windows](#on-windows). On Linux:
   its window needs.
 - For the crosshair colours in CS:S: KROSSHAIR. If it isn't installed, the app can install
   it for you (see below). crosshair-maker is optional. Momentum Mod needs neither.
-- For the strafe trainer: a C compiler and `make` (to build its overlay), PipeWire's
-  `pw-cat` (for the tone, part of PipeWire) and a one-time `sudo` to install its input
-  service.
 
 Tested on CachyOS (Arch), Debian 12 and Ubuntu 22.04, so newer releases of these and
 distros based on them (Mint 21 and newer, Pop!_OS, Manjaro, EndeavourOS) should work too.
@@ -97,26 +92,22 @@ curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/source
 ```
 
 The command asks whether to remove `yaws.cfg` and its `autoexec.cfg` line too; the card always
-removes them, and keeps your settings unless you tick **Also delete saved data**. If you installed the strafe
-trainer's input service, the uninstall prints the command that removes it.
+removes them, and keeps your settings unless you tick **Also delete saved data**.
 
 ## On Windows
 
 1. Install [Soulmanyes's Movement Kit](../README.md#install) and click **Install** on the Source
    Yaw card of its Modules page. Nothing else is needed: no Python, no service, no admin.
-2. Open **Source Yaw** in the hub, pick your key, yawspeeds and sounds, turn on the strafe
-   trainer if you want it, and press **Apply**. Turn on **Load from autoexec.cfg**.
+2. Open **Source Yaw** in the hub, pick your key, yawspeeds and sounds, and press **Apply**.
+   Turn on **Load from autoexec.cfg**.
 3. Put the hub before `%command%` in the game's launch options, as the Setup card shows:
    `"C:\full\path\to\movement-kit.exe" %command%`. That one launch option starts every
    installed tool. It rewrites `yaws.cfg` from your settings, and starts the list switcher
-   and the strafe trainer while the game runs.
+   while the game runs.
 
 What's different from Linux:
 
-- No crosshair colour, in either game. The Crosshair and Offset display cards are hidden.
-- The strafe trainer plays its sounds but shows no offset number: drawing over CS:S would mean
-  hooking DirectX, which risks a VAC ban. It reads your keys through Windows' Raw Input, the
-  same way games do, and only counts while the game's window is in front with the cursor in it.
+- No crosshair colour, in either game. The Crosshair card is hidden.
 - Settings are in `%APPDATA%\sourceyaw`, and what the launch did goes to `run.log` there. If
   something doesn't work, `run.log` says why.
 
@@ -153,56 +144,6 @@ before writing its own, and uninstalling puts it back.
 
 If the game is already running when you press Apply, run `exec yaws` in the console.
 
-## Strafe trainer
-
-While a jump key is held, the trainer listens to your strafe keys, turn keys and mouse:
-
-- **Sounds:** three cues, each with its own switch, sound, pitch and wait:
-  - turning one way while holding the other strafe key,
-  - turning with no strafe key held,
-  - holding both strafe keys at once (it outranks the other two, as it causes them).
-
-  Each cue plays a constant tone at its own pitch until you fix the keys, or a game sound
-  that repeats while they stay wrong. The wait is how many ticks the mistake must last before
-  it sounds, and ▶ previews it.
-- **Offset** (Linux): for each strafe, the ticks between turning the other way and switching
-  strafe keys: minus is early, plus is late. Your best offset (-1 by default) shows in the
-  on-time colour. Position, size and colours are settings, and **Show in game** previews
-  them in the running game. An optional **Offset key** shows or hides the number in game
-  with one press.
-
-It only counts while the game's window has focus and the cursor is inside it (on Hyprland and
-Windows; other Linux desktops can't be asked, so there it always counts) and while a map is loaded, so
-scrolling in the main menu or another window stays quiet.
-
-It reads your binds from the game's `config.cfg`, following aliases, so null binds and turn
-binds (`+left`/`+right`) work as they are. The tickrate is picked from the map (`surf_` maps
-66, `bhop_` maps 100); on other CS:S maps it uses the tickrate you set in the app.
-
-Setup on Linux (Windows needs nothing extra, see [On Windows](#on-windows)):
-
-1. Install the input service once, in a terminal (the app shows the command):
-
-   ```
-   sudo sh ~/.local/share/sourceyaw/inputd/install-inputd.sh
-   ```
-
-2. Turn on **Strafe trainer** in the app and press **Apply**.
-3. Add `movekit-run` before `%command%` in the game's launch options (Momentum Mod needs
-   it too for the trainer).
-
-**About the input service.** Under Wayland a game holds the pointer, so the trainer reads
-keys and mouse from `/dev/input`, which needs root. A small root service does that and
-passes on only the keys listed in `/etc/sourceyaw-inputd.conf` (by default A, D, Space, left
-Alt, L, O, P, the two main mouse buttons, mouse X and the wheel), and only to your user.
-Nothing else you type reaches the trainer or any other program. The list is root-owned so
-programs running as you can't widen it; add keys there if your binds use others (the app
-tells you which). The service starts when the trainer connects and stops 30 seconds after
-it leaves.
-
-Offsets are measured from your keyboard and mouse at the OS, not from the game's own input
-ticks, so they can differ from a server's offset display by about one tick.
-
 ## How it works
 
 - The app writes `cfg/yaws.cfg`. In it, each press sets the next `cl_yawspeed` and plays its
@@ -216,13 +157,6 @@ ticks, so they can differ from a server's offset display by about one tick.
   `yaw.log` and copies the matching colour over that file on each `YAW_<speed>` line.
   KROSSHAIR reloads the file whenever it changes.
 
-- **Strafe trainer:** `movekit-run` starts `trainer.py` beside the game and turns on the
-  Source Yaw overlay, a small Vulkan layer (in `overlay/`, a fork of KROSSHAIR) that draws
-  the offset. The trainer passes the number through a tiny shared file the layer reads each
-  frame, so nothing is reloaded while you play, and the layer does no work while the number
-  is hidden. In Momentum Mod, `yaws.cfg` also turns on `con_logfile yaw.log` so the trainer
-  can see which map loads.
-
 - **Bhop and surf lists:** the surf list echoes `YAWSURF_<speed>` and the mode key's alias
   `sourceyaw_mode` echoes `SY_MODE_BHOP` or `SY_MODE_SURF`. With auto on, the cycle key runs
   `exec sourceyaw_auto` before it cycles. That file is normally empty. When a map of the other
@@ -230,9 +164,7 @@ ticks, so they can differ from a server's offset display by about one tick.
   press switches the list. It empties the file again once the game reports the switch.
 
 - **Windows:** the hub exe's launch step (`launch_win.py`) does what `movekit-run` does on
-  Linux, with the list switcher and the trainer as threads of that process, which ends with the
-  game. The trainer reads keys and mouse through Raw Input on a hidden window and plays its
-  tone through `waveOut`.
+  Linux, with the list switcher as a thread of that process, which ends with the game.
 
 Settings and generated images are stored in `~/.config/sourceyaw` (`%APPDATA%\sourceyaw` on
 Windows).
@@ -243,16 +175,9 @@ Windows).
   outlines lose their own colour.
 - If another config changes `cl_yawspeed` directly, the colour isn't updated until the
   next press of the cycle key.
-- The strafe trainer can't see in-game menus: with a map loaded, scrolling in the pause
-  menu or console still counts as jumping.
 
 ## License
 
 [CC0 1.0](LICENSE). Public domain, do what you like. Source Yaw plays sounds straight from
 your own game install, and KROSSHAIR is only downloaded from its own releases if you ask for
 it. The only other connection is the hub's update check to GitHub.
-
-The one exception is the strafe trainer's overlay in [`overlay/`](overlay/): it is a fork
-of KROSSHAIR and stays under the [GPL-3.0](overlay/LICENSE), with the Vulkan headers it
-builds against (Apache-2.0 or MIT) and stb_image (public domain or MIT). See
-[overlay/README.md](overlay/README.md).

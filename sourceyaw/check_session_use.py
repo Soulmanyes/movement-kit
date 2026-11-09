@@ -3,10 +3,9 @@
 
 Usage: python sourceyaw/check_session_use.py   (exits 1 on the first failure)
 
-Covers the trainer's GameEvents (offsets toggle, map tickrate by prefix, CS:S's
-nameless map line, menu and map) and crosshair_watch.py against a live log: a token without its
-line break swaps the crosshair, chat and unknown speeds don't, and it still works while the
-session port serves another log.
+Covers crosshair_watch.py against a live log: a token without its line break swaps the crosshair,
+chat and unknown speeds don't, and it still works while the session port serves another log.
+(The strafe trainer's GameEvents moved with it, to strafe-trainer/check_game_events.py.)
 """
 import socket
 import sys
@@ -16,39 +15,15 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import crosshair_watch  # noqa: I001, RUF100 - before movekit: yawcore (imported by both) puts it on the path
-import trainer
+import crosshair_watch  # noqa: I001, RUF100 - before movekit: yawcore (imported by it) puts it on the path
 
-from movekit import session  # trainer put movekit on the path
+from movekit import session  # crosshair_watch put movekit on the path
 
 
 def check(what, got, want):
     if got != want:
         sys.exit(f"FAIL {what}: got {got!r}, want {want!r}")
     print(f"ok   {what}")
-
-
-def ev(kind, **data):
-    return {"type": kind, "data": data}
-
-
-def check_game_events():
-    cfg = {"map_tickrates": {"surf_": 66, "bhop_": 100}, "tickrate": {"css": 66}}
-    g = trainer.GameEvents(cfg, "css", 66, in_map=False, showing=True)
-    g.handle(ev("token", name="SY_OFFSETS"))
-    check("offsets toggle hides", g.showing, False)
-    g.handle(ev("token", name="SY_OFFSETS"))
-    check("and shows again", g.showing, True)
-    g.handle(ev("token", name="YAW_210"))
-    check("other tokens leave it", g.showing, True)
-    g.handle(ev("map_loaded", name="bhop_eazy"))
-    check("bhop_ map: in a map at 100 tick", (g.in_map, g.tickrate), (True, 100))
-    g.handle(ev("map_loaded", name=None))
-    check("CS:S nameless map line keeps the tickrate", (g.in_map, g.tickrate), (True, 100))
-    g.handle(ev("map_loaded", name="de_dust2"))
-    check("other map: the game's tickrate", g.tickrate, 66)
-    g.handle(ev("map_left"))
-    check("menu", g.in_map, False)
 
 
 def free_port():
@@ -92,7 +67,6 @@ def check_crosshair(tmp, port, what):
 
 
 def main():
-    check_game_events()
     with tempfile.TemporaryDirectory() as tmp:
         check_crosshair(tmp, free_port(), "hosting")
     with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as other:

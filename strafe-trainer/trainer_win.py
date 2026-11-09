@@ -1,10 +1,10 @@
-"""The strafe trainer's Windows side (Phase 12 in PLAN.md): everything trainer.run needs from the
+"""The Strafe Trainer's Windows side (Phase 12 in PLAN.md): everything trainer.run needs from the
 desktop, with the standard library only (the hub exe bundles no Pillow or pywin32).
 
   - keys and mouse from Raw Input: a hidden window registered with RIDEV_INPUTSINK, so input
     arrives while the game is in front, with no admin and nothing installed,
   - focus: the foreground window's program lives in the game's folder, cursor inside it,
-  - the constant tone through winmm's waveOut, game sounds through yawcore.play_sound (winsound),
+  - the constant tone through winmm's waveOut, game sounds through movekit.sounds (winsound),
   - no offset number on screen: drawing over CS:S means hooking DirectX, which risks VAC.
 
 `Windows` bundles them as trainer.run's `platform`. The Win32 calls are made inside functions
@@ -19,7 +19,7 @@ import time
 from ctypes import wintypes
 from pathlib import Path
 
-import yawcore
+from movekit import files, sounds
 
 # ---------------------------------------------------------------- Raw Input -> evdev
 
@@ -224,7 +224,7 @@ class RawInput:
             if not user32.RegisterClassW(ctypes.byref(wc)):
                 raise OSError(f"RegisterClassW failed ({ctypes.get_last_error()})")
             # a top-level window that is never shown
-            hwnd = user32.CreateWindowExW(0, self.class_name, "Source Yaw trainer", 0, 0, 0, 0, 0,
+            hwnd = user32.CreateWindowExW(0, self.class_name, "Strafe Trainer", 0, 0, 0, 0, 0,
                                           None, None, hinst, None)
             if not hwnd:
                 raise OSError(f"CreateWindowExW failed ({ctypes.get_last_error()})")
@@ -324,7 +324,7 @@ class Focus:
                 return False
         finally:
             kernel32.CloseHandle(handle)
-        if not yawcore.in_folder(buf.value, self.root):
+        if not files.in_folder(buf.value, self.root):
             return False
         rect, point = wintypes.RECT(), wintypes.POINT()
         if not (user32.GetWindowRect(hwnd, ctypes.byref(rect)) and user32.GetCursorPos(ctypes.byref(point))):
@@ -427,7 +427,7 @@ class Tone:
 class Windows:
     """trainer.run's `platform` on Windows."""
     FORWARDED_ONLY = False      # Raw Input sees every key; only keys with no evdev twin are missed
-    UNSEEN = "keys Source Yaw can't read on Windows"
+    UNSEEN = "keys the Strafe Trainer can't read on Windows"
     GONE = "Raw Input stopped"
     Tone = Tone
     clock = staticmethod(time.perf_counter)  # RawInput stamps events with perf_counter
@@ -446,4 +446,4 @@ class Windows:
         return Focus(game_dir)
 
     def play(self, game_dir, sound, game):
-        return yawcore.play_sound(game_dir, sound, game)  # winsound on Windows
+        return sounds.play(game_dir, sound, game)  # winsound on Windows

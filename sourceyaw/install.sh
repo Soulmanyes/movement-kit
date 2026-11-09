@@ -54,15 +54,16 @@ if [ "${1:-}" = "--uninstall" ]; then
     [ -f "$DEST/movekit/launch.py" ] && python3 "$DEST/movekit/launch.py" unregister "$NAME"
     # $DEST also holds KROSSHAIR if the app installed it; drop its layer manifest too,
     # or the Vulkan loader is left pointing at a missing library
+    # the strafe trainer's layer manifest only while it points into $DEST (Source Yaw 1.10 and older
+    # built the overlay here); Strafe Trainer's own copy (Phase 13) keeps the same file name
+    layers=${XDG_DATA_HOME:-$HOME/.local/share}/vulkan/implicit_layer.d
+    if [ -f "$layers/$NAME-overlay.json" ] && grep -q "$DEST/" "$layers/$NAME-overlay.json"; then
+        rm -f "$layers/$NAME-overlay.json"
+    fi
     rm -rf "$DEST" "$APPS/$NAME.desktop" "$APPS/$APP_ID.desktop" "$ICONS/$APP_ID.svg" \
         "$BIN/$NAME" "$BIN/$NAME-run" "$BIN/$OLD_NAME-run" \
-        "${XDG_DATA_HOME:-$HOME/.local/share}/vulkan/implicit_layer.d/$NAME-krosshair.json" \
-        "${XDG_DATA_HOME:-$HOME/.local/share}/vulkan/implicit_layer.d/$NAME-overlay.json"
+        "$layers/$NAME-krosshair.json"
     say "Done. Your settings stay in ~/.config/$NAME."
-    if [ -e /etc/systemd/system/sourceyaw-inputd.socket ]; then
-        echo "The strafe trainer's input service is still installed. Remove it with:"
-        echo "    curl -fsSL https://raw.githubusercontent.com/Soulmanyes/movement-kit/main/sourceyaw/inputd/install-inputd.sh | sudo sh -s remove"
-    fi
     echo "Remove $NAME-run (or $OLD_NAME-run) from the launch options, or the game will not start."
     echo "movekit-run can stay if another movement tool still uses it."
     exit 0
@@ -128,8 +129,14 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
-install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/trainer.py" "$SRC/trainer_linux.py" "$SRC/crosshair_watch.py" "$SRC/mode_watch.py" \
+install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/crosshair_watch.py" "$SRC/mode_watch.py" \
     "$SRC/launch-hook.sh" "$DEST/"
+# the strafe trainer moved to its own module, Strafe Trainer, in Phase 13 (1.11.0): drop its files.
+# trainer.py must go: Strafe Trainer stays off while it is here (the rollback guard).
+rm -rf "$DEST/trainer.py" "$DEST/trainer_linux.py" "$DEST/trainer_win.py" "$DEST/inputd" "$DEST/overlay"
+if [ -f "$LAYERS/$NAME-overlay.json" ] && grep -q "$DEST/overlay/" "$LAYERS/$NAME-overlay.json"; then
+    rm -f "$LAYERS/$NAME-overlay.json"  # pointed at the copy just removed; Strafe Trainer writes its own
+fi
 # the GTK window's updater, gone with the window in 3.8 (the hub's Modules page updates Source Yaw);
 # app.py stays, as the launcher that opens the hub
 rm -f "$DEST/updater.py"
@@ -140,9 +147,6 @@ mkdir -p "$DEST/movekit"
 install -m 644 "$SRC"/../movekit/*.py "$DEST/movekit/"
 rm -f "$DEST/movekit/check_"*.py
 install -m 755 "$SRC/../movekit/movekit-run" "$DEST/movekit/"
-# the input service's files; its installer (run with sudo) copies them to root-owned places
-mkdir -p "$DEST/inputd"
-install -m 644 "$SRC"/inputd/sourceyaw-inputd.* "$SRC/inputd/install-inputd.sh" "$DEST/inputd/"
 install -m 755 "$SRC/app.py" "$DEST/"
 # yaw-run: the full-path launch option for a Steam that can't find ~/.local/bin; before Phase 2.5
 # a script of its own, now movekit-run under its old name (which runs only Source Yaw)
@@ -172,18 +176,6 @@ Icon=$APP_ID
 Categories=Game;Utility;
 Keywords=counter-strike;css;momentum;yawspeed;crosshair;surf;
 DESKTOP
-
-# the strafe trainer's on-screen number: a small Vulkan layer, built here
-say "Building the strafe trainer overlay"
-if command -v cc >/dev/null && make -C "$SRC/overlay" >/dev/null; then
-    mkdir -p "$DEST/overlay" "$LAYERS"
-    install -m 755 "$SRC/overlay/lib/$NAME-overlay.so" "$DEST/overlay/"
-    sed "s|@LIBRARY@|$DEST/overlay/$NAME-overlay.so|" "$SRC/overlay/$NAME-overlay.json.in" \
-        > "$LAYERS/$NAME-overlay.json"
-else
-    echo "Skipped: needs a C compiler and make. The trainer still plays its sound," >&2
-    echo "but can't show the offset in game." >&2
-fi
 
 say "Writing yaws.cfg and crosshair colours from your settings"
 python3 "$DEST/yawcore.py" --apply || echo "Skipped. Open Source Yaw's settings and press Apply."

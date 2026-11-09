@@ -1,9 +1,10 @@
-"""The strafe trainer's Linux side: everything trainer.run needs from the desktop (Phase 12 split).
+"""The Strafe Trainer's Linux side: everything trainer.run needs from the desktop (Phase 12 split).
 
-  - keys and mouse from the Source Yaw input service (/run/sourceyaw-inputd.sock),
-  - the offset number drawn by the Source Yaw overlay layer (overlay/), through a small
+  - keys and mouse from the input service (inputd/, /run/sourceyaw-inputd.sock: it kept Source
+    Yaw's name),
+  - the offset number drawn by the overlay layer (overlay/, VK_LAYER_SOURCEYAW_overlay), through a small
     shared state file and a digit atlas,
-  - the constant tone through PipeWire (pw-cat), game sounds through yawcore.play_sound,
+  - the constant tone through PipeWire (pw-cat), game sounds through movekit.sounds,
   - focus from Hyprland.
 
 `Linux` bundles them as trainer.run's `platform`. trainer.py (platform-neutral) imports this
@@ -23,10 +24,11 @@ import subprocess
 import threading
 import time
 
-import yawcore
+from movekit import games, paths, sounds
 
 SOCKET = "/run/sourceyaw-inputd.sock"
-OVERLAY_DIR = yawcore.CONFIG_DIR / "overlay"
+# the layer's library, its atlas and its state file (launch-hook.sh exports the last two's paths)
+OVERLAY_DIR = paths.data_dir("strafe-trainer") / "overlay"
 ATLAS = OVERLAY_DIR / "atlas.png"
 STATE = OVERLAY_DIR / "state"
 EVENT = struct.Struct("<qIHHi")
@@ -240,11 +242,11 @@ class Linux:
         try:
             return InputSocket()
         except OSError as e:
-            print(f"trainer: no input service ({e}); install it from Source Yaw", flush=True)
+            print(f"trainer: no input service ({e}); install it from the Strafe Trainer section", flush=True)
             return None
 
     def focus(self, game, game_dir):
-        return FocusWatch(yawcore.GAMES[game]["process"])
+        return FocusWatch(games.GAMES[game].process)
 
     def play(self, game_dir, sound, game):
-        return yawcore.play_sound(game_dir, sound, game)
+        return sounds.play(game_dir, sound, game)

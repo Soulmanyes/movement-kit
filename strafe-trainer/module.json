@@ -1,0 +1,13 @@
+{
+  "key": "strafe-trainer",
+  "title": "Strafe Trainer",
+  "summary": "Sounds when you turn without the matching strafe key or hold both, and shows each strafe's key timing in game (Linux).",
+  "games": ["css", "momentum"],
+  "os": ["linux", "win32"],
+  "tag_prefix": "strafe-trainer-v",
+  "version_from": "trainer.py",
+  "needs_core": "1.10.0",
+  "needs": [],
+  "data": ["config:strafe-trainer", "data:strafe-trainer"],
+  "group": "tool"
+}

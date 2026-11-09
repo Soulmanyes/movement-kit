@@ -49,8 +49,9 @@ from movekit import (
     steam,
 )
 from movekit import games as kit_games
+from movekit import keys as kit_keys
 
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -109,9 +110,6 @@ BACKUPS = (BACKUP, ".bak-css-yaw")
 # Momentum: one small cfg per yawspeed that sets the crosshair colour (an alias
 # can't hold the quotes cl_crosshair_color "R G B A" needs, but a cfg can)
 COLOR_DIR = "yaws_colors"
-# the strafe trainer's in-game key: its alias echoes OFFSETS_TOKEN into yaw.log
-OFFSETS_ALIAS = "sourceyaw_offsets"
-OFFSETS_TOKEN = "SY_OFFSETS"
 # bhop and surf lists (1.9.0). A profile with a "surf" list has two cycles. The mode key runs
 # MODE_ALIAS, which switches to the other list at once. With auto_mode the cycle key runs
 # PRESS_ALIAS: it first execs AUTO_CFG (normally empty), then cycles. When a map of the other mode
@@ -125,7 +123,8 @@ PRESS_ALIAS = "sourceyaw_press"
 AUTO_CFG = "sourceyaw_auto"
 DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
 # commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
-OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS, OFFSETS_ALIAS)
+# (the strafe trainer's sourceyaw_offsets left with it in Phase 13: its own module binds and unbinds it)
+OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS)
 
 # short UI sounds to offer (movekit.sounds); the app only lists the ones this game install has
 SOUNDS = sounds.SOUNDS
@@ -458,9 +457,6 @@ def validate(data):
                 problems.append(f"'{key}' is not a key name the game knows")
             elif key.lower() == data["key"].lower():
                 problems.append("The mode key must differ from the yaw key")
-            elif key.lower() == ((data.get("trainer") or {}).get("offset_key") or "").lower() \
-                    and trainer_on(data):
-                problems.append("The mode key must differ from the offset key")
     return problems
 
 
@@ -536,18 +532,6 @@ def key_conflicts(cstrike, key):
     return found
 
 
-def trainer_on(data):
-    return bool((data.get("trainer") or {}).get("enabled"))
-
-
-def offsets_key_of(data):
-    """The trainer's in-game offset toggle key, or "" when there is none."""
-    key = (data.get("trainer") or {}).get("offset_key") or ""
-    if not trainer_on(data) or key.lower() == data["key"].lower():
-        return ""
-    return key
-
-
 def _set_alias(name, entry, nxt, surf, color_cfg):
     """`alias <name> "cl_yawspeed ..; echo ..; [exec colour cfg]; [play ..]; alias yaw_cycle <nxt>"`."""
     speed = fmt_speed(entry["speed"])
@@ -566,14 +550,6 @@ def _key_lines(data, unbind, cycle_command):
     mode_key = mode_key_of(data)
     if mode_key:
         lines.append(f'bind "{mode_key}" "{MODE_ALIAS}"')
-    offsets_key = offsets_key_of(data)
-    if offsets_key:
-        lines += [
-            "",
-            "// strafe trainer: each press shows or hides the offset (the trainer reads the echo)",
-            f'alias {OFFSETS_ALIAS} "echo {OFFSETS_TOKEN}"',
-            f'bind "{offsets_key}" "{OFFSETS_ALIAS}"',
-        ]
     return lines
 
 
@@ -588,8 +564,8 @@ def _yaws_cfg_modes(data, unbind, game):
     else:
         lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
                      if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
-        if trainer_on(data) or auto_on(data):
-            lines += ["// the strafe trainer and the list switcher read map loads from yaw.log",
+        if auto_on(data):
+            lines += ["// the list switcher reads map loads from yaw.log",
                       "con_logfile yaw.log"]
     starts = {}
     for mode, letter, lst, _ in mode_lists(data):
@@ -650,9 +626,6 @@ def yaws_cfg(data, unbind=(), game="css"):
     else:
         lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
                      if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
-        if trainer_on(data):
-            lines += ["// the strafe trainer reads map loads from yaw.log to pick the tickrate",
-                      "con_logfile yaw.log"]
     lines.append("")
     for i, entry in enumerate(entries):
         lines.append(_set_alias(f"yaw_set{i + 1}", entry, f"yaw_set{(i + 1) % len(entries) + 1}", False,
@@ -787,7 +760,10 @@ def apply(data, cstrike, reset_current=False, game="css"):
     """Write yaws.cfg plus the game's colour files (CS:S: crosshair images and watcher
     env; Momentum: colour cfgs). `cstrike` is the game's mod folder. Returns notes."""
     notes = []
-    ours = {data["key"], offsets_key_of(data), mode_key_of(data)}
+    ours = {data["key"], mode_key_of(data)}
+    # for the other tools' clash warnings (the Strafe Trainer's offset key); at launch too, so
+    # settings saved before Phase 13 count
+    kit_keys.record("sourceyaw", game, [data["key"], mode_key_of(data)])
     unbind = [k for k in dict.fromkeys(key for command in OWN_COMMANDS
                                        for key in keys_bound_to_cycle(cstrike, command))
               if k not in ours]
@@ -814,7 +790,6 @@ def apply(data, cstrike, reset_current=False, game="css"):
     # read by launch-hook.sh (shell), so quote the path: it has spaces
     write_text_atomic(WATCH_ENV, f"LOG={shlex.quote(str(cstrike / 'yaw.log'))}\n"
                                  f"COLORS={1 if krosshair and data['crosshair'] else 0}\n"
-                                 f"TRAINER={1 if trainer_on(data) else 0}\n"
                                  f"AUTO={1 if auto_on(data) else 0}\n")
     if krosshair:
         write_crosshairs(data, reset_current)

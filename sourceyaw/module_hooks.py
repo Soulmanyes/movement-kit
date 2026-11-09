@@ -11,7 +11,11 @@ launch: nothing here; movekit-run sources launch-hook.sh, which install.sh regis
 
 Windows (Phase 12): the module folder itself is the install, so install does nothing.
 uninstall: the game side only. launch: launch_win.start, in the core's launch process.
+
+split_out (Phase 13): the strafe trainer left Source Yaw for its own module. After an update the
+manager installs it when the trainer was on for any game in Source Yaw's saved settings.
 """
+import json
 import sys
 
 
@@ -37,3 +41,17 @@ def launch(ctx, argv):
     import launch_win
 
     launch_win.start(list(argv))
+
+
+def split_out(ctx):
+    from movekit import paths
+
+    try:
+        raw = json.loads((paths.config_dir("sourceyaw") / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    profiles = raw.get("profiles") if isinstance(raw, dict) and "profiles" in raw else {"css": raw}
+    on = isinstance(profiles, dict) and any(
+        isinstance(p, dict) and isinstance(p.get("trainer"), dict) and p["trainer"].get("enabled")
+        for p in profiles.values())
+    return ["strafe-trainer"] if on else []

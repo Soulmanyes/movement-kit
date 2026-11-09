@@ -4,6 +4,7 @@ Only what is the same for every tool lives here. Tool-specific details (Source Y
 method...) stay in the tool and are looked up by the game's key.
 """
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -36,3 +37,25 @@ def find(key):
     from . import steam
 
     return steam.game_dir(GAMES[key], steam.steam_roots(flatpak=False))
+
+
+# the mod folder name Steam's command gives with -game, per game
+_GAME_ARGS = {g.mod: g.key for g in GAMES.values()}
+
+
+def from_command(argv, finder=None):
+    """The game Steam is starting with the command argv: the one whose install folder holds the exe
+    (argv[0]), else the one named by -game, else None (another game). `finder` is find() by default."""
+    from .files import in_folder
+
+    finder = finder or find
+    exe = argv[0] if argv else ""
+    for key in GAMES:
+        game_dir = finder(key)
+        if game_dir and in_folder(exe, Path(game_dir).parent):
+            return key
+    args = [a.lower() for a in argv]
+    if "-game" in args[:-1]:
+        folder = args[args.index("-game") + 1].replace("\\", "/").rstrip("/")
+        return _GAME_ARGS.get(folder.rsplit("/", 1)[-1])
+    return None

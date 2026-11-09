@@ -5,7 +5,8 @@ Usage: python sourceyaw/check_modes.py [--mutations]   (exits 1 on the first fai
 
 Covers:
   - yaws.cfg without a surf list is byte-identical to 1.8.0's (that tag's yawcore.py, from git),
-    for both games, with and without colours, the trainer and an offset key;
+    for both games, with and without colours; a saved "trainer" dict (the strafe trainer left
+    for its own module in Phase 13) changes nothing;
   - with a surf list, yaws.cfg run through a small console model (aliases, exec, echo, binds):
     the start yawspeed, cycling, the mode key, the auto file's arm landing on the list's start,
     an arm working once, Momentum's colour cfgs;
@@ -151,24 +152,29 @@ def check_unchanged(core):
         print(f"skip: {OLD_TAG} not in git, 1.8.0 comparison not run")
         return
     cases = 0
+
+    def old_cfg(data, unbind, game):
+        # 1.8.0 with the trainer off: the trainer's lines left Source Yaw in Phase 13
+        return old.yaws_cfg(dict(data, trainer={"enabled": False}), unbind, game)
     for game in core.GAMES:
         for crosshair in (True, False):
             for trainer in ({"enabled": False}, {"enabled": True, "offset_key": "k"}, {"enabled": True}):
                 data = base_data(crosshair=crosshair, trainer=trainer)
                 for unbind in ((), ("x", "c")):
-                    expect(core.yaws_cfg(data, unbind, game), old.yaws_cfg(data, unbind, game),
+                    want = old_cfg(data, unbind, game)
+                    expect(core.yaws_cfg(data, unbind, game), want,
                            f"yaws.cfg without a surf list, {game} crosshair={crosshair} trainer={trainer}")
                     cases += 1
                 # keys the new version knows but a profile without a surf list ignores
                 data.update(mode_key="g", auto_mode=True, map_modes={"bhop_": "bhop"})
-                expect(core.yaws_cfg(data, (), game), old.yaws_cfg(data, (), game), "mode keys ignored without surf")
+                expect(core.yaws_cfg(data, (), game), old_cfg(data, (), game), "mode keys ignored without surf")
                 # a saved surf list that isn't separate: only the active list, written as 1.8.0 did
                 surf = {"entries": entries(30, 120), "start": 1}
                 data.update(surf=surf, separate=False, active="bhop")
-                expect(core.yaws_cfg(data, (), game), old.yaws_cfg(data, (), game), "surf saved, bhop active")
+                expect(core.yaws_cfg(data, (), game), old_cfg(data, (), game), "surf saved, bhop active")
                 data["active"] = "surf"
                 as_old = dict(data, entries=surf["entries"], start=surf["start"])
-                expect(core.yaws_cfg(data, (), game), old.yaws_cfg(as_old, (), game), "surf saved, surf active")
+                expect(core.yaws_cfg(data, (), game), old_cfg(as_old, (), game), "surf saved, surf active")
                 cases += 2
     print(f"ok   yaws.cfg without a surf list same as {OLD_TAG} ({cases} cases)")
 
@@ -176,7 +182,7 @@ def check_unchanged(core):
 def check_console(core, tmp):
     surf = {"entries": entries(30, 90, 120), "start": 0}
     for game in core.GAMES:
-        data = base_data(surf=surf, mode_key="g", auto_mode=True, trainer={"enabled": True, "offset_key": "k"})
+        data = base_data(surf=surf, mode_key="g", auto_mode=True)
         expect(core.validate(data), [], f"{game}: surf settings validate")
         cfg = tmp / game / "cfg"
         cfg.mkdir(parents=True)
@@ -190,8 +196,8 @@ def check_console(core, tmp):
         con.run("exec yaws")
         expect(con.cvars["cl_yawspeed"], "90", f"{game}: starts on the bhop list's start")
         expect("x" in con.binds, False, f"{game}: stale key unbound")
-        expect((con.binds["q"], con.binds["g"], con.binds["k"]),
-               (core.PRESS_ALIAS, core.MODE_ALIAS, core.OFFSETS_ALIAS), f"{game}: binds")
+        expect((con.binds["q"], con.binds["g"]), (core.PRESS_ALIAS, core.MODE_ALIAS), f"{game}: binds")
+        expect("k" in con.binds, False, f"{game}: no offset key bind (Strafe Trainer's since Phase 13)")
         expect(con.echoes[-1], "SY_MODE_BHOP", f"{game}: start echoes the bhop mode")
         presses = [con.press("q") for _ in range(4)]
         expect(presses, ["210", "60", "90", "210"], f"{game}: bhop cycle")
@@ -227,8 +233,8 @@ def check_console(core, tmp):
         expect(con.binds["q"], "yaw_cycle", f"{game}: no auto, plain cycle bind")
         expect([con.press("q"), con.press("g")], ["210", "30"], f"{game}: no auto, mode key still works")
         if core.GAMES[game]["colors"] == "cvar":
-            data["trainer"] = {"enabled": False}
-            expect("con_logfile" in core.yaws_cfg(data, (), game), False, f"{game}: no log without auto or trainer")
+            data["trainer"] = {"enabled": True, "offset_key": "k"}
+            expect("con_logfile" in core.yaws_cfg(data, (), game), False, f"{game}: no log without auto")
             data["auto_mode"] = True
             expect("con_logfile yaw.log" in core.yaws_cfg(data, (), game), True, f"{game}: log on for auto")
     print("ok   console model: start, cycles, mode key, arms once, colours")
@@ -247,7 +253,7 @@ def check_validate(core):
            ["'nope' is not a key name the game knows"], "bad mode key")
     expect(problems(surf={"entries": entries(30), "start": 0}, mode_key="k",
                     trainer={"enabled": True, "offset_key": "k"}),
-           ["The mode key must differ from the offset key"], "mode key = offset key")
+           [], "the offset key is Strafe Trainer's since Phase 13")
     expect(problems(mode_key="nope"), [], "mode key ignored without a surf list")
     expect(problems(surf={"entries": [], "start": 0}, separate=False), [], "unused empty surf list is fine")
     expect(problems(surf={"entries": [], "start": 0}, separate=False, active="surf"),
@@ -346,7 +352,7 @@ def check_hub(tmp):
     st = section.load("momentum")
     expect((st["surf"], st["mode_key"], st["auto_mode"]), (None, "", True), "load without a surf list")
     form = {"key": st["key"], "crosshair": st["crosshair"], "start": st["start"], "base": st["base"],
-            "entries": st["entries"], "trainer": st["trainer"],
+            "entries": st["entries"],
             "surf": {"entries": [{"speed": 30, "color": "#123456", "sound": ""}], "start": 0},
             "separate": True, "active": "bhop", "mode_key": "g", "auto_mode": False}
     got = section.apply("momentum", form)
@@ -356,7 +362,7 @@ def check_hub(tmp):
            ({"entries": [{"speed": 30.0, "color": "#123456", "sound": ""}], "start": 0}, "g", False),
            "surf list, mode key and auto kept through apply and load")
     expect(st["notes"]["mode"]["warn"], False, "mode key note")
-    expect(section.key_notes("momentum", "q", "", "q")["mode"]["warn"], True, "mode key = cycle key warns")
+    expect(section.key_notes("momentum", "q", "q")["mode"]["warn"], True, "mode key = cycle key warns")
     st = section.load("momentum")
     expect((st["separate"], st["active"]), (True, "bhop"), "separate kept")
     form.update(separate=False, active="surf")
@@ -407,7 +413,7 @@ MUTATIONS = [
     ("hub drops the surf list", "hub_section.py",
      "entries, surf=surf, mode_key", "entries, surf=None, mode_key"),
     ("mode key unbound by apply", "yawcore.py",
-     "ours = {data[\"key\"], offsets_key_of(data), mode_key_of(data)}", "ours = {data[\"key\"], offsets_key_of(data)}"),
+     "ours = {data[\"key\"], mode_key_of(data)}", "ours = {data[\"key\"]}"),
     ("stale b/s colour cfgs kept", "yawcore.py", 'folder.glob("[bcs]*.cfg")', 'folder.glob("c*.cfg")'),
     ("separate ignored", "yawcore.py",
      'return bool(data.get("surf")) and bool(data.get("separate", True))', 'return bool(data.get("surf"))'),

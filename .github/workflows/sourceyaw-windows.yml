@@ -1,6 +1,6 @@
-# Source Yaw's Windows code on a real Windows (Phase 12 in PLAN.md): the trainer's Raw Input, waveOut
-# tone and focus check through ctypes, the game launch (launch_win.py) and the hub section, with the
-# hub exe's Python. sourceyaw/windows/check_windows.py runs them without a game or a person; the
+# Source Yaw's Windows code on a real Windows (Phase 12 in PLAN.md): the game launch (launch_win.py)
+# and the hub section, with the hub exe's Python (the strafe trainer's Raw Input, tone and focus
+# check moved to strafe-trainer-windows.yml in Phase 13). sourceyaw/windows/check_windows.py runs them without a game or a person; the
 # platform-neutral checks run here too. Runs on pushes that touch Source Yaw or movekit, and by
 # hand (Actions > sourceyaw-windows > Run workflow).
 name: sourceyaw-windows
@@ -21,8 +21,6 @@ jobs:
           python-version: "3.13"  # the hub exe's (windows-release.yml)
       - name: Platform-neutral checks
         run: |
-          python sourceyaw/check_trainer.py
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python sourceyaw/check_launch_win.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Windows code on Windows

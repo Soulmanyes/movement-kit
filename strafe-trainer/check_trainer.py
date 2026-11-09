@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Checks the strafe trainer's cue logic (trainer.Trainer) with synthetic key events, no game,
+"""Checks the Strafe Trainer's cue logic (trainer.Trainer) with synthetic key events, no game,
 input service or sound. HOME and the XDG folders point into a temp folder.
 
-Usage: python sourceyaw/check_trainer.py   (exits 1 on the first failure)
+Usage: python strafe-trainer/check_trainer.py   (exits 1 on the first failure)
 
 Covers the overlap cue (Phase 11 in PLAN.md): it waits overlap_ticks, needs a jump key held,
 obeys cue_overlap, outranks a wrong-key turn, and hands back without the overlap tone lingering
 while the wrong-key turn is still under wrong_ticks. Also the wrong-key and no-key cues, each
 cue's own wait (<cue>_ticks), and CueSounds: tone cues share one Tone at their own pitches, game-sound
 cues play their own sound on every cue. Phase 12's split: trainer.run with a fake platform, and
-trainer.py, yawcore and settings_api importing without Pillow or fcntl (as in the Windows exe).
+trainer.py, store and settings_api importing without Pillow or fcntl (as in the Windows exe).
 """
 import os
 import subprocess
@@ -244,9 +244,9 @@ def check_windows_parts():
            [[(1, TURN_L, 1)], [(1, TURN_R, 0)], [(1, 276, 0)], [(2, 8, -1)], [(2, 8, 1), (2, 0, -5)], []],
            "mouse")
     game = r"C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Source"
-    expect([w.yawcore.in_folder(game + r"\cstrike_win64.exe", game.replace("\\", "/")),
-            w.yawcore.in_folder(game.upper() + r"\BIN\WIN64\X.EXE", game),
-            w.yawcore.in_folder(game + r" Beta\hl2.exe", game)], [True, True, False], "focus folder test")
+    expect([w.files.in_folder(game + r"\cstrike_win64.exe", game.replace("\\", "/")),
+            w.files.in_folder(game.upper() + r"\BIN\WIN64\X.EXE", game),
+            w.files.in_folder(game + r" Beta\hl2.exe", game)], [True, True, False], "focus folder test")
 
 
 def check_neutral_import():
@@ -270,7 +270,7 @@ def check_run(trainer, tmp):
         'bind "SPACE" "+jump"\nbind "a" "+moveleft"\nbind "d" "+moveright"\n'
         'bind "MOUSE1" "+left"\nbind "MOUSE2" "+right"\nbind "F13" "+jump"\n')
     trainer.settings = lambda game: {**trainer.TRAINER_DEFAULTS, "enabled": True}
-    trainer.yawcore.find_game = lambda game: game_dir
+    trainer.games.find = lambda game: game_dir
     log = []
 
     class FakeJoined:

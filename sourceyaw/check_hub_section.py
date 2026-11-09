@@ -4,15 +4,15 @@
 Usage: python sourceyaw/check_hub_section.py   (exits 1 on the first failure)
 
 Covers: discovery finding the section on Linux and on Windows without a problem
-(hub_section.py loads on every OS); no bare yawcore, trainer or settings_api left behind, also after
-a call that loads the trainer; load() for both games; the key maps giving only bind names CS:S
-knows; the key, offset-key and launch-option notes in the retired GTK window's words; previews as 33x33 PNG data
-URLs; the form's numbers kept in the window's ranges and a blank box or a bad colour refused;
-new_entry; set_autoexec; sounds, the tone, Show in game, KROSSHAIR's install and the file dialog
-with their side effects stubbed; and Apply writing byte-identical files to the GTK window's way
-(settings_api.collect + yawcore.apply with its rounding; the window retired in 3.8, the files must
-not change), for both games. Then Windows (Phase 12), faked on Linux: load() saying so with no
-previews, the core exe's launch option, the trainer needing no input service, Show in game off.
+(hub_section.py loads on every OS); no bare yawcore or settings_api left behind; load() for both
+games; the key maps giving only bind names CS:S knows; the key and launch-option notes in the
+retired GTK window's words; previews as 33x33 PNG data URLs; the form's numbers kept in the window's
+ranges and a blank box or a bad colour refused; new_entry; set_autoexec; sounds, KROSSHAIR's install
+and the file dialog with their side effects stubbed; and Apply writing byte-identical files to the
+GTK window's way (settings_api.collect + yawcore.apply with its rounding; the window retired in 3.8,
+the files must not change), for both games, a saved "trainer" dict kept as it was. Then Windows
+(Phase 12), faked on Linux: load() saying so with no previews, the core exe's launch option.
+The strafe trainer's parts moved to strafe-trainer/check_hub_section.py in Phase 13.
 Everything runs in a temp folder: HOME and the XDG folders point there, the games are fake folders.
 """
 import base64
@@ -29,7 +29,7 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
-BARE = ("yawcore", "trainer", "settings_api", "app")
+BARE = ("yawcore", "settings_api", "app")
 
 
 def fail(msg):
@@ -108,13 +108,10 @@ def main():
         expect(len(st["previews"]), len(st["entries"]), "a preview per yawspeed")
         expect(st["autoexec"], False, "autoexec off at first")
         expect(st["sounds"][0], ["", "None"], "first sound choice")
-        expect(st["cue_sounds"][0], ["tone", "Constant tone"], "first cue choice")
+        expect("trainer" in st or "cue_sounds" in st, False, "no trainer parts left")
         expect(st["launch"]["note"].startswith("Couldn't read your Steam launch options"), True, "launch note")
-        call("trainer_status", game="css")  # loads trainer.py, which imports yawcore by name
-        expect([m for m in BARE if m in sys.modules], [], "bare modules after loading the trainer")
         mom = call("load", game="momentum")
-        expect((mom["uses_krosshair"], mom["krosshair"], mom["trainer"]["tickrate"]), (False, None, None),
-               "load momentum")
+        expect((mom["uses_krosshair"], mom["krosshair"]), (False, None), "load momentum")
         expect(mom["entries"][0]["color"], "#0a141e", "Momentum starts from the game's crosshair colour")
 
         # ------------------------------------------------------------ keys and notes
@@ -126,18 +123,14 @@ def main():
         expect(keys["codes"]["Digit1"], "1", "Digit1")
         expect(keys["codes"]["NumpadEnter"], "kp_enter", "NumpadEnter")
         expect(keys["mouse"]["3"], "mouse4", "mouse button 3")
-        notes = call("key_notes", game="css", key="1", offset_key="q")
+        notes = call("key_notes", game="css", key="1")
         expect(notes["key"], {"text": "⚠ 1 is bound to say hi now. Apply replaces that", "warn": True},
                "cycle key bound to something else")
-        expect(notes["offset"]["text"].startswith("In game, each press"), True, "offset key bound to yaw_cycle")
-        notes = call("key_notes", game="css", key="e", offset_key="E")
+        expect("offset" in notes, False, "no offset-key note (Strafe Trainer's since Phase 13)")
+        notes = call("key_notes", game="css", key="e")
         expect(notes["key"]["text"], "⚠ e is bound to +use now. Apply replaces that, but the bind in "
                "autoexec.cfg may still win if it comes after exec yaws.cfg", "autoexec conflict")
-        expect(notes["offset"]["text"], "⚠ E is also the cycle key, so it stays the cycle key. Pick another key",
-               "offset key equals cycle key")
-        expect(call("key_notes", game="css", key="q", offset_key="1")["offset"]["text"],
-               "⚠ 1 is bound to say hi now. Apply replaces that", "offset key bound")
-        expect(call("key_notes", game="css", key="q", offset_key="")["key"]["warn"], False, "q is ours")
+        expect(call("key_notes", game="css", key="q")["key"]["warn"], False, "q is ours")
 
         # ------------------------------------------------------------ previews and entries
         urls = call("previews", game="css", base="builtin", colors=["#ff0000", "#00ff00"])
@@ -155,28 +148,19 @@ def main():
         # ------------------------------------------------------------ ranges
         def form_of(st):
             return json.loads(json.dumps({"key": st["key"], "crosshair": st["crosshair"], "start": st["start"],
-                                          "base": st["base"], "entries": st["entries"], "trainer": st["trainer"]}))
+                                          "base": st["base"], "entries": st["entries"]}))
 
         f = form_of(st)
         f["entries"][0]["speed"] = 5000
-        f["trainer"].update(x=-5, y=250, size=1, wrong_ticks=99, repeat=3, tone_volume=0, wrong_pitch=5000,
-                            none_ticks=50, none_pitch=1, overlap_ticks=0, overlap_pitch=9, target=-9,
-                            tickrate=500, none_sound="")
         got = call("settings", game="css", form=f)
-        t = got["trainer"]
         expect(got["entries"][0]["speed"], 2000, "speed clamped")
-        expect((t["x"], t["y"], t["size"], t["wrong_ticks"], t["repeat"], t["tone_volume"], t["wrong_pitch"],
-                t["none_ticks"], t["none_pitch"], t["overlap_ticks"], t["overlap_pitch"], t["target"],
-                t["tickrate"]["css"]),
-               (0, 1, 10, 20, 1, 0.05, 1000, 20, 60, 1, 60, -5, 128), "trainer clamped")
-        expect(t["none_sound"], "tone", "an empty cue sound becomes the tone")
         f = form_of(st)
         f["entries"][1]["speed"] = None
         expect(call("apply", game="css", form=f), {"saved": False, "messages": ["speed needs a number"]},
                "blank speed")
         f = form_of(st)
-        f["trainer"]["colors"]["late"] = "yellow"
-        expect(call("apply", game="css", form=f)["saved"], False, "bad trainer colour")
+        f["entries"][0]["color"] = "yellow"
+        expect(call("apply", game="css", form=f)["saved"], False, "bad colour")
         f = form_of(st)
         f["start"] = 7
         expect(call("settings", game="css", form=f)["start"], 0, "start out of range")
@@ -198,55 +182,6 @@ def main():
         expect(call("play_sound", game="css", sound="gone"), False, "a missing sound")
         expect(call("play_sound", game="css", sound=""), True, "None plays nothing")
         expect(played, [("buttons/blip1", "css"), ("gone", "css")], "sounds played")
-        trainer = api._trainer_module()
-        tones = []
-
-        class FakeTone:
-            def __init__(self, synth):
-                self.modes, self.closed = [], False
-                tones.append(((synth.volume, synth.pitches), self))
-
-            def start(self):
-                pass
-
-            def __setattr__(self, name, value):
-                if name == "mode":
-                    self.modes.append(value)
-                object.__setattr__(self, name, value)
-
-            def close(self):
-                self.closed = True
-
-        # the real platform (trainer_linux, loaded by path as in the hub) with only its tone faked
-        platform = trainer.platform()
-        expect(type(platform).__name__, "Linux", "the hub's trainer finds its platform")
-        type(platform).Tone = FakeTone
-        expect(call("play_cue", game="css", sound="tone", tone_volume=45, pitch=330), True, "play the tone")
-        time.sleep(0.8)
-        (args, tone), = tones
-        expect((args, tone.modes, tone.closed), ((0.45, {"cue": 330}), ["cue", None], True), "tone played")
-        tones.clear()
-        expect(call("play_cue", game="css", sound="tone", tone_volume=45, pitch=5), True, "pitch clamped")
-        time.sleep(0.8)
-        expect(tones[0][0], (0.45, {"cue": 60}), "pitch clamped to 60")
-        shown = []
-
-        class FakeOverlay:
-            def show(self, text, row, x, y):
-                shown.append((text, row, x, y))
-
-            def hide(self):
-                shown.append("hidden")
-
-        # trainer_linux's, as the hub loads it (by path, through trainer)
-        linux = trainer._sibling("trainer_linux")
-        linux.Overlay = FakeOverlay
-        linux.write_atlas = lambda cfg: shown.append(("atlas", cfg["size"]))
-        tr = dict(st["trainer"], target=2, x=25, y=75, size=40)
-        expect(call("show_in_game", on=True, game="css", trainer=tr), True, "show in game")
-        expect(call("show_in_game", on=False, game="css", trainer=tr), False, "hide in game")
-        expect(shown, [("atlas", 40), ("+2", 1, 0.25, 0.75), "hidden"], "overlay")
-
         core.krosshair_installed = lambda: None
         core.can_install_krosshair = lambda: True
 
@@ -286,10 +221,9 @@ def main():
             f.update(key="1", start=1, base="builtin" if game == "css" else st["base"])
             f["entries"].append({"speed": 293.95354, "color": "#123abc", "sound": ""})
             f["entries"][0]["sound"] = "buttons/blip2"
-            f["trainer"].update(enabled=True, offset_key="k", x=33.0, y=57.12345, sound="buttons/blip2",
-                                repeat=0.354, colors={"early": "#112233", "perfect": "#445566", "late": "#778899"})
-            if game == "css":
-                f["trainer"]["tickrate"] = 85.0
+            # a trainer dict saved by 1.10: Apply keeps it as it was, for a roll back
+            saved = core.load_settings(game)
+            core.save_settings({**saved, "trainer": {"enabled": True, "offset_key": "k", "x": 0.33}}, game)
             config, cfg_dir = core.CONFIG_DIR, game_dir / "cfg"
             snaps = {config: tmp / "snap-config", cfg_dir: tmp / "snap-cfg"}
             for src, snap in snaps.items():
@@ -304,18 +238,18 @@ def main():
 
             # the GTK window's way: Window.collect with EntryRow.value's rounding, then yawcore.apply
             data = core.load_settings(game)
-            tform = dict(f["trainer"], tickrate=None if game == "momentum" else f["trainer"]["tickrate"])
-            trainer_saved = api.trainer_value(api.trainer_config(data.get("trainer")), tform, game)
             entries = [{"speed": round(float(e["speed"]), 4), "color": e["color"], "sound": e["sound"] or None}
                        for e in f["entries"]]
             gtk = api.collect(f["key"], f["crosshair"], f["start"], f["base"], data.get("original_color"),
-                              trainer_saved, entries)
+                              data.get("trainer"), entries)
             core.apply(gtk, game_dir, game=game)
             theirs = tree_hashes(config, cfg_dir)
             if ours != theirs:
                 diff = sorted(k for k in ours.keys() | theirs.keys() if ours.get(k) != theirs.get(k))
                 fail(f"{game}: Apply wrote different files than the GTK way: {diff}")
             expect(call("load", game=game)["entries"][2]["speed"], 293.9535, f"{game}: saved speed")
+            expect(core.load_settings(game)["trainer"], {"enabled": True, "offset_key": "k", "x": 0.33},
+                   f"{game}: saved trainer dict kept")
 
         expect([m for m in BARE if m in sys.modules], [], "bare modules at the end")
         check_windows(call, core, games)
@@ -334,23 +268,19 @@ def check_windows(call, core, games):
     expect(st["steam_note"].startswith("CS:S Properties → Launch Options. movement-kit.exe"), True,
            "Windows: Steam note")
     expect(call("previews", game="css", base="builtin", colors=["#ff0000"]), [], "Windows: no previews")
+    # the launch option is movekit.launchopt's since Phase 13: it asks sys.platform
+    from movekit import launchopt
+    launchopt.sys = types.SimpleNamespace(platform="win32", executable=sys.executable)
     for current, text, already in ((None, '"C:\\path\\to\\movement-kit.exe" %command%', False),
                                    ("-novid %command% -tickrate 100",
                                     '-novid "C:\\path\\to\\movement-kit.exe" %command% -tickrate 100', False),
                                    ("-novid", '"C:\\path\\to\\movement-kit.exe" %command% -novid', False),
                                    ('"D:\\Kit\\Movement-Kit.exe" %command%', '"D:\\Kit\\Movement-Kit.exe" %command%', True),
                                    ('"D:\\strafe-review.exe" %command%', '"D:\\strafe-review.exe" %command%', True)):
-        core.current_launch_options = lambda game="css", current=current: current
+        launchopt.current = lambda game, current=current: current
         got = call("launch_option", game="css")
         expect((got["text"], got["already"]), (text, already), f"Windows: launch option from {current!r}")
     expect(got["note"], "Already set up", "Windows: already set up")
-    status = call("trainer_status", game="css")
-    expect((status["installed"], status["service"], status["command"]), (True, "", ""),
-           "Windows: no input service")
-    (games["css"] / "cfg/config.cfg").write_text('bind "SPACE" "+jump"\nbind "F13" "+moveleft"\n')
-    expect(call("trainer_status", game="css")["binds"], "⚠ Source Yaw can't read these keys on Windows: f13 (strafe left)",
-           "Windows: keys with no code")
-    expect(call("show_in_game", on=True, game="css", trainer=st["trainer"]), False, "Windows: no Show in game")
 
 
 if __name__ == "__main__":
