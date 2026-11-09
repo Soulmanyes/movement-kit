@@ -45,6 +45,8 @@ Then open the hub. It starts on the Modules page:
 
 A copy of this repository (`git clone`) runs as it is: `./movekit/install-hub.sh` adds the launcher running from the clone, the cards use the tools in it and say they are updated by `git pull`, and uninstalling a tool takes it out of the game and the hub but leaves its folder.
 
+To test changes next to an installed kit, a clone has a dev kit (Linux): `./movekit/movekit-dev` opens the hub from the clone as **Movement Kit (dev)**, a separate app with its own files in `~/.local/share/movekit-dev`. Its first start copies the installed kit's state and installs the same tools there, from the clone. It never changes the installed kit's files, hooks or `movekit-run`. Settings in `~/.config` and the game folders are shared, and a copy of the settings from before the first dev start is kept in `~/.local/share/movekit-dev/config-before-dev`. Installing a tool in the dev kit writes the clone's version of its game files, so reinstall that tool in the installed kit afterwards. The game runs with the dev kit through `movekit-dev run %command%` instead of `movekit-run %command%`. `movekit/devkit.py` describes the setup.
+
 ## Layout
 
 ```

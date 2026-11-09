@@ -20,3 +20,15 @@ def config_dir(app):
     else:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     return Path(base) / app
+
+
+def bin_dir():
+    """Where the launch wrapper's links go: $MOVEKIT_BIN_DIR (the dev kit's own, see movekit-dev),
+    else ~/.local/bin, which Steam has in its PATH."""
+    return Path(os.environ.get("MOVEKIT_BIN_DIR") or Path.home() / ".local" / "bin")
+
+
+def dev():
+    """True in the dev kit (movekit-dev): a second kit from the git checkout whose files live in a
+    tree of their own, so it never changes the installed kit."""
+    return os.environ.get("MOVEKIT_DEV") == "1"

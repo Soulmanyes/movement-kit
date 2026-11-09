@@ -115,6 +115,17 @@ def main():
         check("game: Momentum by app id", launch.game_from_args(MOMENTUM), "momentum")
         check("game: CS:S by app id", launch.game_from_args(CSS), "css")
         check("game: no AppId means CS:S", launch.game_from_args(["/game/hl2.sh"]), "css")
+        # a non-Steam library entry (movekit-dev): a made-up app id, the game found by its folder
+        dirs = {"css": "/lib/Counter-Strike Source/cstrike", "momentum": "/lib/Momentum Mod Playtest/momentum"}
+        mom_sh = ["AppId=3141592653", "/rt/run.sh", "/lib/Momentum Mod Playtest/momentum.sh", "-novid"]
+        check("game: unknown AppId, Momentum by folder",
+              launch.game_from_args(mom_sh, dirs.get), "momentum")
+        check("game: no AppId, Momentum by folder",
+              launch.game_from_args(mom_sh[2:], dirs.get), "momentum")
+        check("game: unknown AppId, CS:S by folder",
+              launch.game_from_args(["AppId=1", "/lib/Counter-Strike Source/cstrike.sh"], dirs.get), "css")
+        check("game: a known AppId wins over the folder",
+              launch.game_from_args(["AppId=240", *mom_sh[1:]], dirs.get), "css")
         check("nothing registered", launch.plan("movekit-run", MOMENTUM), ("momentum", []))
 
         tools = home / "tools"

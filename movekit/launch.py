@@ -61,7 +61,7 @@ def settings_file():
 
 
 def bin_link():
-    return Path.home() / ".local" / "bin" / WRAPPER
+    return paths.bin_dir() / WRAPPER
 
 
 def core_wrapper():
@@ -70,14 +70,21 @@ def core_wrapper():
     return wrapper if wrapper.is_file() else None
 
 
-def game_from_args(args):
-    """The game Steam is starting: its command line carries AppId=<id> (the reaper wrapper)."""
+def game_from_args(args, finder=None):
+    """The game Steam is starting: its command line carries AppId=<id> (the reaper wrapper). A
+    non-Steam library entry (movekit-dev's test entries) carries an id Steam made up instead, so
+    an unknown or missing id falls back to the game folder the command runs from (games.from_command)."""
     for arg in args:
         if arg.startswith("AppId="):
             appid = arg[len("AppId="):]
             for game in games.GAMES.values():
                 if appid in game.appids:
                     return game.key
+    for i, arg in enumerate(args):
+        if "/" in arg:  # each path in turn: reaper, a runtime, then the game itself
+            key = games.from_command(args[i:], finder)
+            if key:
+                return key
     return "css"  # what sourceyaw-run assumed before: CS:S has no reaper line on older Steam
 
 

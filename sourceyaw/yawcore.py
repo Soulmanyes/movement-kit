@@ -73,7 +73,7 @@ RUNNER = "movekit-run"
 # names from before movekit-run that run Source Yaw too (install.sh keeps them as links, so old
 # launch options work): sourceyaw-run, css-yaw-run (before 1.2.0), yaw-run (the full-path form)
 OLD_RUNNERS = ("sourceyaw-run", "css-yaw-run", "yaw-run")
-BIN_DIR = HOME / ".local/bin"
+BIN_DIR = paths.bin_dir()
 
 CM_DIR = XDG_CONFIG / "crosshair-maker"
 

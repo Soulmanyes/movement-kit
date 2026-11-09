@@ -10,10 +10,9 @@ import shlex
 import sys
 from pathlib import Path
 
-from . import games, keyvalues, steam
+from . import games, keyvalues, paths, steam
 
 RUNNER = "movekit-run"
-BIN_DIR = Path.home() / ".local/bin"
 # the core exe's names, now and before it was the hub (README: Steam launch option)
 WINDOWS_EXES = ("movement-kit.exe", "strafe-review.exe")
 
@@ -58,7 +57,7 @@ def steam_path():
 def runner():
     """How the launch option should call the wrapper: the short name when Steam finds it in
     ~/.local/bin, otherwise the full path of the movekit-run next to this file."""
-    if str(BIN_DIR) in steam_path().split(":"):
+    if str(paths.bin_dir()) in steam_path().split(":"):
         return RUNNER
     return shlex.quote(str(Path(__file__).resolve().with_name(RUNNER)))
 

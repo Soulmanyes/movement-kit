@@ -19,7 +19,7 @@ OLD_APP_ID=io.github.soulmanyes.CssYaw
 SRC=$(cd "$(dirname "$0")" && pwd)
 DEST=${XDG_DATA_HOME:-$HOME/.local/share}/$NAME
 APPS=${XDG_DATA_HOME:-$HOME/.local/share}/applications
-BIN=$HOME/.local/bin
+BIN=${MOVEKIT_BIN_DIR:-$HOME/.local/bin}  # movekit-dev points it at the dev kit
 ICONS=${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps
 UNITS=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user   # only to remove the old service
 

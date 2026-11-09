@@ -20,7 +20,7 @@ DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 APPS=$DATA/applications
 ICONS=$DATA/icons/hicolor/scalable/apps
 KIT=$DATA/movekit/kit   # movekit.modules.core_kit()
-BIN=$HOME/.local/bin
+BIN=${MOVEKIT_BIN_DIR:-$HOME/.local/bin}  # movekit-dev points it at the dev kit
 CORE="movekit hud"      # the core's folders; every other folder in $KIT is a module
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }

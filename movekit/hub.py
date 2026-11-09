@@ -61,6 +61,9 @@ if str(KIT) not in sys.path:
 WEB = Path(__file__).resolve().parent / "web"
 TITLE = "Soulmanyes's Movement Kit"
 APP_ID = "io.github.soulmanyes.MovementKit"  # Linux app id; install-hub.sh names the launcher after it
+if os.environ.get("MOVEKIT_DEV") == "1":  # the dev kit (movekit/movekit-dev; movekit.paths.dev())
+    TITLE += " (dev)"
+    APP_ID += ".Dev"  # its own launcher and dock entry, so the two windows never mix
 REQUIRED = ("key", "title", "os", "page", "api")
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 

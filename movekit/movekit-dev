@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# The dev kit: the hub and the launch wrapper from this git checkout, with their own files under
+# ~/.local/share/movekit-dev (data, state, cache, bin), so testing never changes the installed
+# kit. Settings in ~/.config and the game folders are shared: they are what a test checks.
+# Linux only. See movekit/devkit.py for what setup makes.
+#   movekit-dev [hub options]     the hub, titled "(dev)", with its own app id
+#   movekit-dev run <command...>  the launch wrapper, as movekit-run %command% in a launch option
+#   movekit-dev setup [options]   make the dev tree (python3 movekit/devkit.py --help)
+#   movekit-dev game <css|momentum> [args]   start a game under the dev kit (movekit/devsteam.py)
+#   movekit-dev steam-entries     add "<game> (dev kit)" to the Steam library (Steam closed)
+#   movekit-dev env               print the environment the dev kit runs with
+set -euo pipefail
+KIT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+ROOT="${MOVEKIT_DEV_ROOT:-$HOME/.local/share/movekit-dev}"
+# where the installed kit lives, for setup to seed from (kept when movekit-dev calls itself)
+export MOVEKIT_LIVE_DATA="${MOVEKIT_LIVE_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}}"
+export MOVEKIT_DEV=1 MOVEKIT_DEV_ROOT="$ROOT" MOVEKIT_BIN_DIR="$ROOT/bin"
+export XDG_DATA_HOME="$ROOT/data" XDG_STATE_HOME="$ROOT/state" XDG_CACHE_HOME="$ROOT/cache"
+
+case "${1:-}" in
+    run)
+        shift
+        exec "$KIT/movekit/movekit-run" "$@"
+        ;;
+    setup | game | steam-entries)
+        exec python3 "$KIT/movekit/devkit.py" "$@"
+        ;;
+    env)
+        env | grep -E '^(MOVEKIT_|XDG_(DATA|STATE|CACHE)_HOME=)' | sort
+        ;;
+    *)
+        [ -f "$ROOT/data/movekit/modules.json" ] || python3 "$KIT/movekit/devkit.py" setup
+        exec python3 "$KIT/movekit/hub.py" "$@"
+        ;;
+esac
