@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 import steam  # sets the path to movekit
+from scope import skip_reason
 from srrec import Assembler, body
 
 from movekit import attempts
@@ -36,14 +37,14 @@ def _bundled():
 
 # Strafe Review's folder, or the old exe's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
 ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent.parent
-VERSION = "1.9.0"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.9.1"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
 GAME = steam.find_game()  # None if Momentum isn't found; then the game folder must be given
 STORE = attempts.store()
 LOG = os.path.join(GAME, "yaw.log") if GAME else None  # con_logfile, shared with Source Yaw's yaws.cfg
 NOT_FOUND = "Momentum Mod not found in any Steam library; set MOMENTUM_DIR to its momentum folder"
 STALE = 600  # seconds after which an attempt without its end line is dropped
 # What run() has seen since it started, for the viewer's status box (/api/status)
-STATS = {"lines": 0, "recorder": 0, "saved": 0, "dropped": 0, "lastLine": None, "lastRecorder": None, "lastSaved": None, "lastLoad": None}
+STATS = {"lines": 0, "recorder": 0, "saved": 0, "dropped": 0, "skipped": 0, "lastLine": None, "lastRecorder": None, "lastSaved": None, "lastLoad": None}
 
 
 def map_dir(name):
@@ -81,7 +82,7 @@ def run(log, store, once, on_saved=None):
     known = known_ids(store)
     asm = Assembler()
     print(f"collector: reading {log}, saving to {store} ({len(known)} attempts already there)", flush=True)
-    STATS.update(lines=0, recorder=0, saved=0, dropped=0, lastLine=None, lastRecorder=None, lastSaved=None, lastLoad=None)
+    STATS.update(lines=0, recorder=0, saved=0, dropped=0, skipped=0, lastLine=None, lastRecorder=None, lastSaved=None, lastLoad=None)
     for line in follow(log, once):
         if line is None:
             for b in asm.drop_stale(STALE):
@@ -105,8 +106,13 @@ def run(log, store, once, on_saved=None):
             STATS["dropped"] += 1
             print(f"collector: dropped {value}", flush=True)
         elif kind == "attempt" and value.get("id") not in known:
-            path = save(store, value)
             known.add(value["id"])
+            why = skip_reason(value)
+            if why:  # surf replays and spectates (scope.py); the next start reads the log and skips them again
+                STATS["skipped"] += 1
+                print(f"collector: skipped {value.get('map')} {value.get('label')} {value['id']}: {why}", flush=True)
+                continue
+            path = save(store, value)
             if path:
                 STATS["saved"] += 1
                 STATS["lastSaved"] = time.time()

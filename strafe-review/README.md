@@ -12,7 +12,7 @@ The review page has three parts:
 
 In game, the recorder can show a line after jump 1 lands: landing speed, gain % per strafe, what lost each strafe the most gain (wrong or no key, turning too slow, or too fast, with a tick count) and the biggest mistake (off by default, see below).
 
-Replays played to the end count as finishes (see [Replays](#replays)). Bonus tracks are recorded and listed per bonus ("surf_artois: b1"), and 66-tick bhop works next to 66-tick surf.
+Replays played to the end count as finishes (see [Replays](#replays)). Bonus tracks are recorded and listed per bonus ("surf_artois: b1"), and 66-tick bhop works next to 66-tick surf. Surfing itself is out of scope: on `surf_*` maps, replays and spectated runs of the main track or a stage are not saved, and those of a bonus only when they bhop (three or more quick jumps in a row). Your own runs are always saved.
 
 Run stats, graphs and paths on `/` and `/compare` each have Copy and Save buttons: Copy puts a picture of that section on the clipboard, Save downloads it as a PNG.
 
