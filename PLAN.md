@@ -641,6 +641,7 @@ The strafe trainer leaves Source Yaw and becomes its own module, so either can b
   - `launch.game_from_args` falls back to the game folder (`games.from_command`) when the app id is missing or unknown, since a non-Steam entry gets a made-up one.
   - Checks: new `movekit/check_devkit.py` (sandbox HOME: installed kit untouched, writes only in the dev root, layers, seeded state, hook and link in the dev tree, launch prefixes, shortcuts.vdf entries, backup, rerun), `check_launch.py` game-by-folder cases. Mutations caught: no folder fallback, `bin_dir()` ignoring the override.
   - Limits: Strafe Review's `systemd-run` unit name and port 8765 are fixed, so run one kit's game session at a time. Installing in the dev kit writes the checkout's game files, so reinstall in the live kit afterwards. The dev kit runs the checkout as it is; it doesn't test the update path from the 1.9.0 release (that would be a copy-mode kit in the dev tree pointed at a fake GitHub, not built).
+  - 13.4 Linux result (2026-11-09): "Momentum Mod (dev kit)" Steam entry ran the checkout `movekit-run`, the game mapped the overlay from `~/.local/share/movekit-dev/data/strafe-trainer/overlay/`, the trainer logged the session (`bhop_glacial -> 100 tick`). Owner checked: cues and the offset number work, offset toggle bind works, Strafe Trainer section shows the old settings, Source Yaw page has no trainer cards. Open: Windows hand test; the update through the Modules page is tested after the 13.5 releases.
 
 ## Later / undecided
 
