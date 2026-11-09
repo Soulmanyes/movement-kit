@@ -480,6 +480,13 @@ The owner asked for a separate page that updates by itself the moment an attempt
 - **Greying (owner's pick 2026-11-02, "only impossible"):** filter choices grey out only when they would list nothing; sorts never grey out because their order matches another sort. Fastest finish still needs one map.
 - **Check:** `node viewer/check_listsort.js` (Who cases added). Headless Firefox over WebDriver BiDi on the real store: Own gave 358 of 1280 plus 885 drills; Own + Tag PB gave 10, with Replays and Spectated greyed out; all sorts other than Fastest finish (pick a map) stayed pickable. /compare with Replays listed only replays.
 
+#### Deleting attempts v1 (2026-11-09)
+
+- Owner asked for an easy way to delete recorded runs. Picked both a "Delete attempt" button in the open attempt's note/tag row and a Select mode above the list (tick boxes, "Tick all shown", "Delete N", Cancel; Escape leaves it). Ticks the filters hide drop out, so "Delete N" never deletes rows you can't see.
+- No confirm prompt: a delete shows "Deleted N attempts · Undo" for 10 s. Files move to `<store>/.trash/<map>/<id>.json.gz` (three folders deep, so every `*/*.json.gz` glob and the checks' two-level walks miss it). The note and tags move with it, so Undo restores them.
+- `<store>/deleted.json` lists every deleted key with its time. The collector re-reads yaw.log on start, so `known_ids()` includes these ids, or a deleted run would come back. The viewer empties trash older than 30 days on start, by the list's time (a move keeps the file's old mtime); the id stays listed after that.
+- Code: `collector/trash.py` (move, restore, purge, ids), `POST /api/delete` and `/api/restore` in viewer/server.py, `viewer/static/deleting.js` (Select mode, server calls, toast). Check: `python3 collector/check_trash.py`.
+
 #### Replay finishes (2026-10-28)
 
 - **Problem (owner):** player A's bhop_glacial replay played to the end but never counted as finished. No replay ever did: all ended `replaced`.

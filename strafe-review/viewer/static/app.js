@@ -247,6 +247,8 @@ function renderList() {
 	$('f-count').textContent = `${hits} of ${total} shown${drills ? `, ${drills} more in drills` : ''}`;
 	$('f-clear').hidden = !FILTERS.some(([, id]) => $(id).value) && !$('f-search').value.trim() && !who.get();
 	const maps = [...new Set(visible.map(course))]; // newest attempt's course first, whatever the sort
+	picker.shown(visible.map((a) => `${a.dir}/${a.id}`));
+	box.classList.toggle('picking', picker.active);
 	const sorted = sortHeads(visible, syncSort());
 	for (const m of maps) {
 		const title = document.createElement('div');
@@ -259,7 +261,16 @@ function renderList() {
 			b.dataset.key = `${a.dir}/${a.id}`;
 			const r1 = document.createElement('div');
 			r1.className = 'row1';
-			r1.append(labelChip(a), reasonChip(a));
+			const lead = document.createElement('span');
+			lead.className = 'pick-wrap';
+			const tick = document.createElement('input');
+			tick.type = 'checkbox';
+			tick.className = 'pick';
+			tick.tabIndex = -1;
+			tick.checked = picker.has(b.dataset.key);
+			b.classList.toggle('picked', tick.checked);
+			lead.append(tick, labelChip(a));
+			r1.append(lead, reasonChip(a));
 			const r2 = document.createElement('div');
 			r2.className = 'row2';
 			const t = a.runTime ? `${a.runTime.toFixed(2)} s` : '';
@@ -284,7 +295,12 @@ function renderList() {
 				}
 				b.append(r3);
 			}
-			b.onclick = () => open(a.dir, a.id);
+			b.onclick = () => {
+				if (!picker.active) return open(a.dir, a.id);
+				picker.toggle(b.dataset.key);
+				tick.checked = picker.has(b.dataset.key);
+				b.classList.toggle('picked', tick.checked);
+			};
 			box.append(b);
 		}
 	}
@@ -419,6 +435,60 @@ function markSelected() {
 	const key = cur ? `${cur.head.dir}/${cur.head.id}` : '';
 	for (const b of document.querySelectorAll('.att')) b.classList.toggle('sel', b.dataset.key === key);
 }
+
+// ---------- deleting (deleting.js) ----------
+
+const picker = initPicker(
+	{ mode: $('pick-mode'), all: $('pick-all'), del: $('pick-delete'), cancel: $('pick-cancel') },
+	() => renderList(),
+	removeAttempts
+);
+
+// Deletes the keys, takes them out of the page at once, and offers Undo. True when it worked.
+async function removeAttempts(keys) {
+	let done;
+	try {
+		done = await deleteAttempts(keys);
+	} catch (e) {
+		showToast($('toast'), `Not deleted: ${e.message}`);
+		return false;
+	}
+	const gone = new Set(done);
+	const openKey = cur && `${cur.head.dir}/${cur.head.id}`;
+	for (const k of gone) metaWant.delete(k); // a queued note save for it would only fail
+	list = list.filter((a) => !gone.has(`${a.dir}/${a.id}`));
+	fillFilters();
+	fillTagList();
+	if (gone.has(openKey)) {
+		const next = list.find(shown);
+		if (next) open(next.dir, next.id);
+		else closeAttempt();
+	} else renderList();
+	findMistakes();
+	const n = done.length;
+	showToast($('toast'), `Deleted ${n} attempt${n === 1 ? '' : 's'}`, async () => {
+		try {
+			await restoreAttempts(done); // the server's "attempt" events reload the list
+		} catch (e) {
+			showToast($('toast'), `Not restored: ${e.message}`);
+		}
+	});
+	return true;
+}
+
+// Nothing open: the empty page, as before the first pick
+function closeAttempt() {
+	cur = null;
+	history.replaceState(null, '', location.pathname);
+	$('head').replaceChildren(Object.assign(document.createElement('span'), { className: 'muted', textContent: 'Pick an attempt on the left.' }));
+	showMeta();
+	$('run-stats').hidden = true;
+	showMistakes();
+	renderList();
+	draw();
+}
+
+$('del-open').onclick = () => cur && removeAttempts([`${cur.head.dir}/${cur.head.id}`]);
 
 async function open(dir, id) {
 	const res = await fetch(`/api/attempt/${encodeURIComponent(dir)}/${encodeURIComponent(id)}`);
@@ -1577,7 +1647,10 @@ $('checks-btn').onclick = () => {
 };
 $('close-checks').onclick = () => ($('settings').hidden = true);
 window.addEventListener('keydown', (e) => {
-	if (e.key === 'Escape') $('settings').hidden = true;
+	if (e.key === 'Escape') {
+		$('settings').hidden = true;
+		if (!e.target.closest?.('input')) picker.off();
+	}
 });
 $('reset-checks').onclick = () => {
 	localStorage.removeItem(SETTINGS_KEY);

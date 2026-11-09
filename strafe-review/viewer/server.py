@@ -32,6 +32,9 @@ Routes:
                              or by hand
   POST /api/meta/<map>/<id>  {"note": str, "tags": [str]}: sets the attempt's note and tags, answers
                              with what was stored. Kept in <store>/meta.json, not in the attempt file.
+  POST /api/delete           {"keys": ["<map>/<id>", ...]}: moves the attempts to the trash with their note
+                             and tags (collector/trash.py), answers {"keys": [the ones moved]}
+  POST /api/restore          {"keys": [...]}: brings trashed attempts back (the page's Undo), answers the same
 """
 import argparse
 import json
@@ -48,6 +51,7 @@ from pathlib import Path
 
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
 import collector
+import trash
 
 # collector set the path to the repo root, and so to movekit
 from movekit import attempts as attempt_files
@@ -77,6 +81,7 @@ MAX_BODY = 16384
 MAX_NOTE = 2000
 MAX_TAG = 40
 MAX_TAGS = 20
+MAX_KEYS_BODY = 262144  # /api/delete and /api/restore: a few thousand keys in one go
 SPECTATE_MIN_AIR = 20  # same as static/data.js
 POLL = 0.5  # seconds between store scans for /api/events
 COLLECT_RETRY = 5  # seconds before the collector thread starts over after an error
@@ -252,10 +257,52 @@ def write_meta(store, key, entry):
             meta[key] = entry
         else:
             meta.pop(key, None)
-        tmp = store / f".{META_FILE}.tmp"
-        with open(tmp, "w") as f:
-            json.dump({"version": 1, "attempts": meta}, f, indent=1, sort_keys=True)
-        os.replace(tmp, store / META_FILE)
+        _dump_meta(store, meta)
+
+
+def take_meta(store, keys):
+    """Remove the keys' notes and tags from meta.json in one write; returns {key: entry} for the ones that had any."""
+    with _meta_lock:
+        meta = read_meta(store)
+        out = {k: meta.pop(k) for k in keys if k in meta}
+        if out:
+            _dump_meta(store, meta)
+    return out
+
+
+def _dump_meta(store, meta):
+    tmp = store / f".{META_FILE}.tmp"
+    with open(tmp, "w") as f:
+        json.dump({"version": 1, "attempts": meta}, f, indent=1, sort_keys=True)
+    os.replace(tmp, store / META_FILE)
+
+
+def clean_keys(body):
+    """The "<map>/<id>" list from a delete or restore body, deduped. Raises TypeError."""
+    keys = body.get("keys") if isinstance(body, dict) else None
+    if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+        raise TypeError("keys must be a list of strings")
+    out = []
+    for k in keys:
+        folder, _, attempt = k.partition("/")
+        if not (MAP.fullmatch(folder) and ID.fullmatch(attempt)):
+            raise TypeError(f"bad key: {k[:100]}")
+        if k not in out:
+            out.append(k)
+    return out
+
+
+def delete_attempts(store, keys):
+    keys = [k for k in keys if (store / f"{k}.json.gz").is_file()]
+    meta = take_meta(store, keys)
+    done = trash.delete(store, keys, meta.get)
+    for k in done:
+        _heads.pop(store / f"{k}.json.gz", None)
+    return done
+
+
+def restore_attempts(store, keys):
+    return trash.restore(store, keys, lambda k, m: write_meta(store, k, m))
 
 
 def attempts(store):
@@ -353,6 +400,8 @@ class Handler(BaseHTTPRequestHandler):
             # shutdown() waits for serve_forever() to return, so it can't run on this request's thread
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return None
+        if parts in (["api", "delete"], ["api", "restore"]):
+            return self.post_keys(parts[1])
         if not (len(parts) == 4 and parts[:2] == ["api", "meta"] and MAP.fullmatch(parts[2]) and ID.fullmatch(parts[3])):
             return self.fail(404, "not found")
         if not self.local_request():
@@ -374,6 +423,39 @@ class Handler(BaseHTTPRequestHandler):
         except OSError as e:
             return self.fail(500, f"could not save: {e}")
         self.send(200, json.dumps(entry).encode(), "application/json")
+
+    def read_body(self, cap):
+        """The POST's JSON body, or None after answering with an error."""
+        if not self.local_request():
+            self.fail(403, "forbidden")
+            return None
+        try:
+            size = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            size = -1
+        if not 0 < size <= cap:
+            self.fail(413 if size > cap else 400, "bad body size")
+            return None
+        try:
+            return json.loads(self.rfile.read(size))
+        except ValueError as e:
+            self.fail(400, str(e))
+            return None
+
+    def post_keys(self, what):
+        body = self.read_body(MAX_KEYS_BODY)
+        if body is None:
+            return None
+        try:
+            keys = clean_keys(body)
+        except TypeError as e:
+            return self.fail(400, str(e))
+        try:
+            done = (delete_attempts if what == "delete" else restore_attempts)(self.store, keys)
+        except OSError as e:
+            return self.fail(500, f"could not {what}: {e}")
+        print(f"Strafe Review: {what}d {len(done)} attempt(s) from the page", flush=True)
+        return self.send(200, json.dumps({"keys": done}).encode(), "application/json")
 
     def do_GET(self):
         parts = self.path.split("?", 1)[0].strip("/").split("/")
@@ -517,6 +599,10 @@ def main(argv=None):
     if not args.game and not (args.game_cfg and (args.log or args.no_collect)):
         sys.exit(f"Strafe Review: {collector.NOT_FOUND}, or pass --game")
     Handler.store = Path(args.store)
+    try:
+        trash.purge(Handler.store)  # deleted more than trash.KEEP_DAYS ago
+    except OSError as e:
+        print(f"Strafe Review: could not empty old trash: {e}", file=sys.stderr)
     Handler.game_cfg = Path(args.game_cfg or os.path.join(args.game, "cfg", "config.cfg"))
     if args.log is None and args.game:
         args.log = os.path.join(args.game, "yaw.log")

@@ -28,8 +28,15 @@
 		<label>Sort <select id="f-sort" title="Order inside each map. Recordings without the value go last."></select></label>
 		<div class="f-foot"><span id="f-count" class="muted"></span><button id="f-clear" title="Show every attempt again">Clear filters</button></div>
 	</div>
+	<div id="pick-bar" title="Tick attempts in the list, then delete them. Deleted attempts can be brought back with Undo.">
+		<button id="pick-mode">Select</button>
+		<button id="pick-all" hidden>Tick all shown</button>
+		<button id="pick-delete" class="danger" hidden>Delete 0</button>
+		<button id="pick-cancel" hidden>Cancel</button>
+	</div>
 	<div id="list"></div>
 </aside>
+<div id="toast" role="status" hidden></div>
 <main id="main">
 	<header id="head"><span class="muted">Pick an attempt on the left.</span></header>
 	<div id="meta" hidden>
@@ -38,6 +45,7 @@
 		<datalist id="tag-list"></datalist>
 		<input id="note" maxlength="2000" placeholder="Note (e.g. new sens), saved when you press Enter or click away">
 		<span id="meta-status" class="hint"></span>
+		<button id="del-open" class="danger" title="Delete this attempt. Undo brings it back; deleted attempts stay in the trash 30 days.">Delete attempt</button>
 	</div>
 	<section id="run-stats" hidden>
 		<div class="sec-head">
@@ -106,6 +114,7 @@
 <script src="/static/listsort.js"></script>
 <script src="/static/snap.js"></script>
 <script src="/static/status.js"></script>
+<script src="/static/deleting.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/stop.js"></script>
 </body>

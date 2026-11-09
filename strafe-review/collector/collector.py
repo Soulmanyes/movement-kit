@@ -6,7 +6,8 @@ Usage: collector.py [yaw.log] [--once] [--store DIR]
 Reads the log from the start, then follows it. Each complete attempt is saved as
 <store>/<map>/<id>.json.gz, where <store> defaults to
 ~/.local/share/strafe-review/attempts (%LOCALAPPDATA%\\strafe-review\\attempts on
-Windows). An attempt already on disk is skipped, so reading the same log again is safe.
+Windows). An attempt already on disk, or deleted from the viewer (trash.py), is skipped, so
+reading the same log again is safe.
 --once reads to the end of the log and exits.
 """
 import gzip
@@ -19,6 +20,7 @@ import time
 from pathlib import Path
 
 import steam  # sets the path to movekit
+import trash
 from scope import skip_reason
 from srrec import Assembler, body
 
@@ -37,7 +39,7 @@ def _bundled():
 
 # Strafe Review's folder, or the old exe's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
 ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent.parent
-VERSION = "1.9.1"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.10.0"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
 GAME = steam.find_game()  # None if Momentum isn't found; then the game folder must be given
 STORE = attempts.store()
 LOG = os.path.join(GAME, "yaw.log") if GAME else None  # con_logfile, shared with Source Yaw's yaws.cfg
@@ -52,7 +54,8 @@ def map_dir(name):
 
 
 def known_ids(store):
-    return {p.name.removesuffix(".json.gz") for p in store.glob("*/*.json.gz")}
+    """Ids on disk plus deleted ones (trash.py), so a deleted attempt still in yaw.log isn't saved again."""
+    return {p.name.removesuffix(".json.gz") for p in store.glob("*/*.json.gz")} | trash.ids(store)
 
 
 def save(store, attempt):
