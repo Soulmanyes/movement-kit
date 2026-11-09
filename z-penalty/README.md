@@ -46,7 +46,7 @@ On Linux, starting the game through `movekit-run %command%` (the kit's launch op
 
 - `node z-penalty/check_z_penalty.js`: the customizer settings against the kv3 entry, the tracker on jump and ramp shapes from in-game logs (also with every tick seen on two frames), the bar and text, and the Panorama side.
 - `python z-penalty/check_z_penalty.py`: install and uninstall on a fake game folder (with the autoexec block), the tone settings and the hub page's Apply, and the tone runner on a fake log with a fake player.
-- `python z-penalty/windows/check_windows.py` (Windows; the `z-penalty-windows` CI job): the real waveOut tone, the runner following markers in a log, and the launch hook starting it.
+- `python z-penalty/windows/check_windows.py` (Windows; the `z-penalty-windows` CI job): the waveOut tone (GitHub's runners have no sound device, so there it is skipped with a warning), the runner following markers in a log, and the launch hook starting it.
 - `z-penalty/probe/`: the throwaway probe that logged the jump and ramp numbers (`python z-penalty/probe/probe.py`, `--uninstall`). Not part of the module.
 
 ### Licence

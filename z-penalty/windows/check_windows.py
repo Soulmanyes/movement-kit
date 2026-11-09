@@ -5,8 +5,10 @@ it on windows-latest, with the same Python as the hub exe.
 Usage: python z-penalty/windows/check_windows.py   (Windows only; exits 1 on the first failure)
 
 Checks what Linux can't: the core's waveOut tone (movekit/tone.py, the Strafe Trainer's player)
-opening, playing and closing in time; tone.play for the hub's preview; tone_run.run with the real
-player following ZPEN_ON/ZPEN_OFF in a log and stopping when told; and module_hooks.launch starting
+opening, playing and closing in time; tone.play for the hub's preview; tone_run.run following
+ZPEN_ON/ZPEN_OFF in a log and stopping when told (with the real player, or a silent stand-in when the
+runner has no sound device: GitHub's Windows runners have none, so there the waveOut part is left to
+the owner's test); and module_hooks.launch starting
 the tone runner thread for Momentum (a fake game folder) and not for another game.
 """
 import os
@@ -68,13 +70,28 @@ def check_tone():
     return True
 
 
-def check_run(tmp):
+class Silent:
+    """A stand-in player for a runner with no sound device: same interface, no audio."""
+
+    def __init__(self, synth):
+        self.synth, self.mode = synth, None
+
+    def start(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def check_run(tmp, base):
+    """tone_run.run on Windows (file reads, the session, threads), with the waveOut player when the
+    runner has a sound device, else the stand-in."""
     tr = local_import(str(MODULE / "x.py"), "tone_run")
     sett = local_import(str(MODULE / "x.py"), "settings")
     sett.save({"on": True, "pitch": 330, "volume": 0})
     made = []
 
-    class Recorded(tone.WindowsTone):
+    class Recorded(base):
         def __init__(self, synth):
             super().__init__(synth)
             made.append(self)
@@ -135,8 +152,7 @@ def main():
         tmp = Path(tmp)
         os.environ["APPDATA"] = str(tmp / "appdata")
         os.environ["LOCALAPPDATA"] = str(tmp / "local")
-        if check_tone():
-            check_run(tmp)
+        check_run(tmp, tone.WindowsTone if check_tone() else Silent)
         check_launch(tmp)
     print("check_windows: all passed")
 
