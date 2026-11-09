@@ -12,8 +12,12 @@
 // z speed falling 12 per tick in free fall). Ramps only, the default, counts a stretch in the band only
 // once a tick in it changes z speed by something other than the free fall step: on a ramp climb the
 // probe saw z speed rise by about 8 per tick through the whole band (18 ticks). The free fall step is
-// learned from the airborne ticks seen (the most common change per tick), with sv_gravity times the tick
-// interval as the guess until there are enough.
+// sv_gravity times the tick interval (-12 at 800 and 66.67 tick, which the logs show exactly).
+//
+// A new tick is told by the velocity changing, not by the game time: GetCurrentTime() moves per frame
+// while the velocity moves per tick, so a tick number from the time counts one tick twice (in game
+// 2026-11-09: that gave a z change of 0 on every other sample and broke the ramp test). A frame slower
+// than a tick shows several free fall steps at once, so free fall is any whole number of steps.
 //
 // What it shows (each part switchable in Momentum's HUD customizer, listed as Z Penalty): a "Z PENALTY"
 // label while penalised, the z speed (in the penalty colour while penalised), the ticks spent in the band
@@ -103,59 +107,40 @@ const STYLES: [string, string, number, string[]?, Extra?][] = [
 ];
 
 const BAND = 140; // NON_JUMP_VELOCITY outside the TF2 modes
-const RAMP_EPS = 0.5; // u/s per tick off the free fall step that counts as touching something
-const STEP_MIN_SAMPLES = 20; // airborne ticks before the learned free fall step replaces the guess
-const STEP_MAX_SAMPLES = 2000; // then all counts halve, so a new map's gravity takes over
-const MAX_GAP = 5; // ticks between two samples; a longer gap (pause, teleport) gives no z change
+const FALL_EPS = 0.05; // u/s off a whole number of free fall steps that still counts as free fall
+const MAX_DZ = 300; // a bigger z change between two samples is a teleport or a reset: it tells nothing
 
 // What the customizer shows while it is open, so there is something to drag
 const SAMPLE = { vz: 96, ticks: 12, penalised: true };
 
 type Tracker = {
-	lastTick: number;
+	has: boolean; // lastVz is a sample
 	lastVz: number;
 	inBand: boolean;
 	ramp: boolean;
 	ticks: number;
 	penalised: boolean;
-	steps: Record<string, number>;
-	samples: number;
-	guess: number;
 };
 type Step = { vz: number; ticks: number; penalised: boolean; entered: boolean; left: boolean };
 
-function newTracker(guess: number): Tracker {
-	return { lastTick: -1, lastVz: 0, inBand: false, ramp: false, ticks: 0, penalised: false, steps: {}, samples: 0, guess };
+function newTracker(): Tracker {
+	return { has: false, lastVz: 0, inBand: false, ramp: false, ticks: 0, penalised: false };
 }
 
-// The free fall change in z speed per tick: the most common one seen, or the guess
-function freeStep(t: Tracker): number {
-	if (t.samples < STEP_MIN_SAMPLES) return t.guess;
-	let best = t.guess;
-	let most = 0;
-	for (const [k, n] of Object.entries(t.steps)) {
-		if (n > most) {
-			most = n;
-			best = +k;
-		}
-	}
-	return best;
+// How many free fall steps a z change is: a whole number of at least 1, or 0 when it isn't free fall
+function fallSteps(dz: number, step: number): number {
+	if (!(step < 0)) return 0;
+	const k = Math.round(dz / step);
+	return k >= 1 && Math.abs(dz - k * step) <= FALL_EPS * k ? k : 0;
 }
 
-// One new tick's z speed into the tracker. rampsOnly: a stretch in the band counts once a tick in it
-// wasn't free fall. Returns the state after the tick.
-function track(t: Tracker, tick: number, vz: number, rampsOnly: boolean): Step {
-	const gap = t.lastTick >= 0 ? tick - t.lastTick : 0;
-	const known = gap > 0 && gap <= MAX_GAP;
-	const dz = known ? (vz - t.lastVz) / gap : NaN;
-	if (known && vz !== 0 && t.lastVz !== 0) {
-		const k = dz.toFixed(2);
-		t.steps[k] = (t.steps[k] || 0) + 1;
-		if (++t.samples > STEP_MAX_SAMPLES) {
-			for (const key of Object.keys(t.steps)) t.steps[key] = Math.floor(t.steps[key] / 2);
-			t.samples = Object.values(t.steps).reduce((a, b) => a + b, 0);
-		}
-	}
+// One new sample's z speed (the velocity changed: one tick, or a few when a frame was slow) into the
+// tracker. step: the free fall change per tick (negative). rampsOnly: a stretch in the band counts once
+// a tick in it wasn't free fall. Returns the state after the sample.
+function track(t: Tracker, vz: number, step: number, rampsOnly: boolean): Step {
+	const dz = vz - t.lastVz;
+	const known = t.has && Math.abs(dz) <= MAX_DZ;
+	const fall = known ? fallSteps(dz, step) : 0;
 	const was = t.penalised;
 	const inBand = vz > 0 && vz <= BAND;
 	if (inBand) {
@@ -163,16 +148,16 @@ function track(t: Tracker, tick: number, vz: number, rampsOnly: boolean): Step {
 			t.ticks = 0;
 			t.ramp = false;
 		}
-		t.ticks++;
-		// off the ground into the band without a jump (a jump starts near 300), or not free fall
-		if (known && (t.lastVz === 0 || Math.abs(dz - freeStep(t)) > RAMP_EPS)) t.ramp = true;
+		t.ticks += Math.max(1, fall);
+		// not free fall: on a ramp, or off the ground into the band without a jump (a jump starts near 300)
+		if (known && fall === 0) t.ramp = true;
 		t.penalised = !rampsOnly || t.ramp;
 	} else {
 		t.penalised = false;
 		t.ramp = false;
 	}
 	t.inBand = inBand;
-	t.lastTick = tick;
+	t.has = true;
 	t.lastVz = vz;
 	return { vz, ticks: t.ticks, penalised: t.penalised, entered: t.penalised && !was, left: was && !t.penalised };
 }
@@ -216,7 +201,8 @@ let lastKey = '';
 let lastSound = -Infinity;
 let lastTicks = 0; // the last penalised stretch's ticks in the band, what the tick count shows
 
-function gravityGuess(): number {
+// The free fall change in z speed per tick
+function fallStep(): number {
 	let g = NaN;
 	try {
 		g = GameInterfaceAPI.GetSettingFloat('sv_gravity');
@@ -225,7 +211,8 @@ function gravityGuess(): number {
 	}
 	return -(g > 0 ? g : 800) * MomentumMovementAPI.GetTickInterval();
 }
-let tracker = newTracker(gravityGuess());
+let tracker = newTracker();
+let lastTime = -Infinity;
 
 function getPanel(): GenericPanel {
 	if (panel && panel.IsValid()) return panel;
@@ -344,13 +331,13 @@ function playSound() {
 // A new tick, if there is one: tracked, drawn, sounded
 function sample() {
 	const vel = MomentumPlayerAPI.GetVelocity();
-	const interval = MomentumMovementAPI.GetTickInterval();
-	const tick = Math.round(MomentumMovementAPI.GetCurrentTime() / interval);
-	const key = `${tick},${vel.x},${vel.y},${vel.z}`;
+	const time = MomentumMovementAPI.GetCurrentTime();
+	if (time < lastTime) tracker = newTracker(); // game time went back (map change, reload)
+	lastTime = time;
+	const key = `${vel.x},${vel.y},${vel.z}`; // a new tick changes the velocity (see the top)
 	if (key === lastKey) return;
 	lastKey = key;
-	if (tick < tracker.lastTick) tracker.lastTick = -1; // game time went back (map change, reload)
-	const st = track(tracker, tick, vel.z, !!settings.rampsOnly);
+	const st = track(tracker, vel.z, fallStep(), !!settings.rampsOnly);
 	if (st.penalised) lastTicks = st.ticks;
 	if (editing) return;
 	if (!ownPlay() || !switchedOn()) {
@@ -477,7 +464,7 @@ $.RegisterForUnhandledEvent('HudCustomizer_Ready', () => {
 	if (!live()) return;
 	editing = false;
 	hide();
-	tracker = newTracker(gravityGuess()); // a new map: its gravity and tick interval
+	tracker = newTracker(); // a new map
 	register();
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {

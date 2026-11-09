@@ -94,7 +94,7 @@ function loadScript(text = raw) {
 	const ctx = { ...stubs };
 	vm.createContext(ctx);
 	vm.runInContext(`${stripTypeScriptTypes(text, { mode: 'strip' })}
-globalThis.__api = { DEFAULTS, STYLES, SAMPLE, SOUND, fitLayout, newTracker, freeStep, track, barGeometry, lines, settings, NONE };`, ctx);
+globalThis.__api = { DEFAULTS, STYLES, SAMPLE, SOUND, fitLayout, newTracker, fallSteps, track, barGeometry, lines, settings, NONE };`, ctx);
 	return ctx.__api;
 }
 const api = loadScript();
@@ -121,45 +121,51 @@ expect(api.SOUND, { on: false, name: 'buttons/blip1', volume: 60 }, 'the repo sc
 if ((raw.match(/^const SOUND = .*\/\/ movekit:sound$/gm) || []).length !== 1) fail('one SOUND line for install.py to replace');
 
 // ---- the tracker ----
-// a jump from the ground: +290, then -12 per tick to the ground; the probe's 12 ticks in the band
-function jump(t, tick, rampsOnly) {
-	const out = [];
-	out.push(api.track(t, tick++, 0, rampsOnly));
-	for (let vz = 290; vz > -290; vz -= 12) out.push(api.track(t, tick++, vz, rampsOnly));
-	out.push(api.track(t, tick++, 0, rampsOnly));
-	return { out, tick };
+// The sample loop calls track once per new velocity. Free fall in game: exactly -12 per tick
+// (sv_gravity 800, 66.67 tick), the guess the script makes.
+const STEP = -800 * 0.015;
+// a jump from the ground: +290, then -12 per tick to the ground; the probe's 12 ticks in the band.
+// every: 1 for a sample per tick, 2 for a frame rate under the tick rate (two steps per sample)
+function jump(t, rampsOnly, every = 1) {
+	const out = [api.track(t, 0, STEP, rampsOnly)];
+	for (let vz = 290; vz > -290; vz -= 12 * every) out.push(api.track(t, vz, STEP, rampsOnly));
+	out.push(api.track(t, 0, STEP, rampsOnly));
+	return out;
 }
 // a ramp climb like the probe's: z speed from -21.5 rising about 8 per tick to 162
-function climb(t, tick, rampsOnly) {
-	const out = [];
-	out.push(api.track(t, tick++, -40, rampsOnly));
-	for (let vz = -21.53; vz < 165; vz += 7.9) out.push(api.track(t, tick++, vz, rampsOnly));
-	return { out, tick };
+function climb(t, rampsOnly, from = -21.53, by = 7.9) {
+	const out = [api.track(t, -40, STEP, rampsOnly)];
+	for (let vz = from; vz < 165; vz += by) out.push(api.track(t, vz, STEP, rampsOnly));
+	return out;
 }
 const penalisedTicks = (out) => out.filter((s) => s.penalised).length;
 const entries = (out) => out.filter((s) => s.entered).length;
 
-let t = api.newTracker(-12);
-let r = jump(t, 100, false);
-expect([penalisedTicks(r.out), entries(r.out), r.out.filter((s) => s.left).length], [12, 1, 1], 'any air: a jump\'s top is 12 penalised ticks, one stretch');
-expect(Math.max(...r.out.map((s) => s.ticks)), 12, 'ticks counts the stretch');
-t = api.newTracker(-12);
-r = jump(t, 100, true);
-expect(penalisedTicks(r.out), 0, 'ramps only: a jump\'s top doesn\'t count');
-r = climb(t, r.tick + 10, true);
-expect([penalisedTicks(r.out), entries(r.out)], [18, 1], 'ramps only: the climb\'s 18 ticks in the band count');
-t = api.newTracker(-8); // a wrong guess (sv_gravity 800 at 100 tick) ...
-for (let i = 0, tick = 0; i < 3; i++) tick = jump(t, tick, true).tick + 5;
-expect(api.freeStep(t), -12, '... is replaced by the learned step after a few jumps');
-r = jump(t, 1000, true);
-expect(penalisedTicks(r.out), 0, 'and then a jump\'s top doesn\'t count');
-t = api.newTracker(-12);
-api.track(t, 10, 0, true);
-expect(api.track(t, 11, 60, true).penalised, true, 'off the ground straight into the band (no jump): a ramp');
-t = api.newTracker(-12);
-api.track(t, 10, 200, true);
-expect(api.track(t, 30, 100, true).penalised, false, 'a long gap tells nothing: no ramp');
-expect(api.track(t, 31, 0, true), { vz: 0, ticks: 1, penalised: false, entered: false, left: false }, 'landing ends the stretch');
+let t = api.newTracker();
+let out = jump(t, false);
+expect([penalisedTicks(out), entries(out), out.filter((s) => s.left).length], [12, 1, 1], 'any air: a jump\'s top is 12 penalised ticks, one stretch');
+expect(Math.max(...out.map((s) => s.ticks)), 12, 'ticks counts the stretch');
+t = api.newTracker();
+expect(penalisedTicks(jump(t, true)), 0, 'ramps only: a jump\'s top doesn\'t count');
+out = climb(t, true);
+expect([penalisedTicks(out), entries(out)], [18, 1], 'ramps only: the climb\'s 18 ticks in the band count');
+t = api.newTracker();
+expect(penalisedTicks(jump(t, true)), 0, 'ramps only: the first jump of all doesn\'t count either');
+out = jump(t, true, 2);
+expect([penalisedTicks(out), Math.max(...out.map((s) => s.ticks))], [0, 12], 'a slow frame rate: two steps per sample, still free fall, still 12 ticks');
+// 2026-11-09 in game: a ramp climb rising about 22 per tick (the old tick numbers doubled each sample)
+expect(entries(climb(api.newTracker(), true, -20, 22)), 1, 'a steep climb counts');
+expect([api.fallSteps(-12, STEP), api.fallSteps(-24.01, STEP), api.fallSteps(-11.5, STEP), api.fallSteps(8, STEP), api.fallSteps(0, STEP)],
+	[1, 2, 0, 0, 0], 'fallSteps: whole steps only');
+t = api.newTracker();
+api.track(t, 0, STEP, true);
+expect(api.track(t, 60, STEP, true).penalised, true, 'off the ground straight into the band (no jump): a ramp');
+t = api.newTracker();
+expect(api.track(t, 100, STEP, true).penalised, false, 'the first sample tells nothing');
+t = api.newTracker();
+api.track(t, -900, STEP, true);
+expect(api.track(t, 100, STEP, true).penalised, false, 'a teleport-sized change tells nothing');
+expect(api.track(t, 0, STEP, true), { vz: 0, ticks: 1, penalised: false, entered: false, left: false }, 'landing ends the stretch');
 
 // ---- bar and lines ----
 const S = { ...api.DEFAULTS, fontColor: 'rgba(255, 255, 255, 1)' };
@@ -203,7 +209,7 @@ const loopFn = () => {
 };
 let tick = 5000;
 function frame(vz) {
-	G.time = ++tick * 0.01;
+	G.time = ++tick * 0.01; // per frame; the script goes by the velocity
 	G.velocity = { x: 900, y: 0, z: vz };
 	loopFn();
 	now += 10;
@@ -212,13 +218,31 @@ const labelTexts = () => {
 	const col = panel.children.find((c) => c.id === '');
 	return col ? col.children.filter((l) => l.style.opacity === '1').map((l) => l.text) : [];
 };
-// learn the step (ramps only is on), then a jump: nothing
+// jumps (ramps only is on): nothing
 for (let i = 0; i < 2; i++) {
 	frame(0);
 	for (let vz = 290; vz > -290; vz -= 12) frame(vz);
 	frame(0);
 }
 expect([panel.visible, commands], [false, []], 'jumps: nothing shown, no sound (sound off)');
+// in game 2026-11-09: the frame rate beat the tick rate, so each velocity showed on two frames
+frame(0);
+for (let vz = 290; vz > -290; vz -= 12) {
+	frame(vz);
+	frame(vz);
+}
+frame(0);
+expect(panel.visible, false, 'a jump with every tick seen twice: nothing');
+frame(-40);
+for (let vz = -20; vz < 100; vz += 22) {
+	frame(vz);
+	frame(vz);
+}
+expect([panel.visible, labelTexts()[0]], [true, 'Z PENALTY'], 'a climb with every tick seen twice shows');
+for (let vz = 120; vz < 170; vz += 22) frame(vz);
+frame(0);
+schedules = schedules.filter((x) => x.fn.name === 'loop');
+hud.FindChildTraverse('MovekitZPenalty').visible = false;
 // a ramp climb with the sound on
 const zp = loadScript(raw.replace(/^const SOUND = .*$/m, 'const SOUND = {"on": true, "name": "buttons/blip2", "volume": 45}; // movekit:sound'));
 for (const [id, value] of Object.entries(S)) loaded.props.dynamicStyles[id].callbackFunc?.(loaded.p, value);
@@ -275,8 +299,9 @@ quiet('switched off shows nothing', () => (GLOBAL.HudCustomizerHandler.component
 	() => delete GLOBAL.HudCustomizerHandler.components);
 // always shown
 loaded.props.dynamicStyles.alwaysShow.callbackFunc(loaded.p, true);
-frame(0);
-expect([panel.visible, labelTexts()], [true, ['z 0', '1 tick']], 'always shown: there with nothing penalised, the last stretch\'s count');
+frame(0); // the same velocity as the last sample: no new tick, nothing drawn
+frame(-5);
+expect([panel.visible, labelTexts()], [true, ['z -5', '1 tick']], 'always shown: there with nothing penalised, the last stretch\'s count');
 loaded.props.dynamicStyles.alwaysShow.callbackFunc(loaded.p, false);
 // the customizer's sample
 const settingsList = new FakePanel('Panel', null, 'ActiveComponentSettingsList');
