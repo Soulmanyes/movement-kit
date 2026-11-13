@@ -9,6 +9,9 @@ events on its Bus:
                      (strafe-trainer/panorama); MK_MENU_OFF gives menu_hidden. Nothing installed
                      to write them: neither event comes.
   menu_hidden        the pause menu closed
+  timer_started      Momentum's timer started on the player's own run (MK_TIMER_ON from the same HUD
+                     script); timer_stopped (MK_TIMER_OFF) when it stops for any reason: finish,
+                     reset, practice mode, a replay or spectating. Nothing installed: neither.
   token {name}       a marker a tool's bind echoes (YAW_<speed>, SY_OFFSETS). It counts as soon as
                      something follows it, without waiting for the line break, which the console
                      sometimes leaves out for a while. Chat ("Name :  text") is ignored.
@@ -55,11 +58,14 @@ HISTORY = 500  # events kept for clients that reconnect
 PING = 15  # seconds between keep-alive comments on /events
 LISTEN_TIMEOUT = 2 * PING + 5  # a client gives up on a stream this quiet and reconnects
 # markers the tools' binds echo into the console: Source Yaw's yaw_cycle (YAWSURF_ for its surf
-# list), its bhop/surf list switch and the trainer's toggle; MK_MENU_ON/OFF from a HUD script
+# list), its bhop/surf list switch and the trainer's toggle; MK_MENU_ON/OFF and MK_TIMER_ON/OFF
+# from a HUD script
 TOKENS = (r"YAW_\d+(?:\.\d+)?", r"YAWSURF_\d+(?:\.\d+)?", r"SY_MODE_(?:BHOP|SURF)", r"SY_OFFSETS",
-          r"MK_MENU_(?:ON|OFF)")
+          r"MK_MENU_(?:ON|OFF)", r"MK_TIMER_(?:ON|OFF)")
 
-MENU_EVENTS = {"MK_MENU_ON": "menu_shown", "MK_MENU_OFF": "menu_hidden"}  # markers published as events
+# markers published as events of their own, not as tokens
+MARKER_EVENTS = {"MK_MENU_ON": "menu_shown", "MK_MENU_OFF": "menu_hidden",
+                 "MK_TIMER_ON": "timer_started", "MK_TIMER_OFF": "timer_stopped"}
 
 
 class Bus:
@@ -161,8 +167,8 @@ class Session:
         return out
 
     def _token(self, name):
-        if name in MENU_EVENTS:
-            return self.bus.publish(MENU_EVENTS[name])
+        if name in MARKER_EVENTS:
+            return self.bus.publish(MARKER_EVENTS[name])
         return self.bus.publish("token", name=name)
 
     def _line(self, line):
