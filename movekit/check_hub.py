@@ -163,8 +163,8 @@ def main():
               "relaunch: python with this script's full path and the same arguments")
         check(hub.relaunch_command(["C:/kit/movement-kit.exe", "--x"], "C:/kit/movement-kit.exe", frozen=True)
               == ["C:/kit/movement-kit.exe", "--x"], "relaunch: the exe itself in the Windows build")
-        check(sorted(public) == ["call", "modules", "notes_seen", "restart", "sections", "whats_new"],
-              f"only call(), sections(), modules(), whats_new() and notes_seen() are public: {public}")
+        check(sorted(public) == ["call", "modules", "notes_seen", "release_notes", "restart", "sections", "whats_new"],
+              f"only call(), sections(), modules(), whats_new(), notes_seen(), release_notes() and restart() are public: {public}")
         r = bridge.modules("cards")
         check(r == {"ok": False, "error": "no module manager"}, f"modules() with no manager: {r}")
 

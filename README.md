@@ -40,6 +40,7 @@ Then open the hub. It starts on the Modules page:
 - **Install** on a tool's card downloads it and runs its installer (Strafe Review needs Momentum Mod installed; Source Yaw on Linux needs its system packages, see its README). Each card says which games the tool works with.
 - **Update** shows when a new version is out, with **What's new** for its release notes. **Update all** at the top updates every card that has one.
 - After the hub or a tool updates, a **What's new** window shows the release notes once, including those of any versions skipped.
+- **Release notes** on every card (the core too) opens the notes of every release of it, newest first, with the installed version marked.
 - **Roll back** returns to the version before the last update.
 - **Uninstall** removes the tool, its game files, its `autoexec.cfg` block and its launch hook. Saved data (attempts, settings) stays unless you tick **Also delete saved data**.
 - Auto-update is off for every tool and for the hub itself. A card with it off shows an amber **Auto-update off** strip; **Turn on** turns it on.

@@ -3,7 +3,8 @@
 // Load it with <script src="/web/hub.js"></script> and put <nav id="hub-side"></nav> in the page.
 // The Modules page (home.html) also uses hub.modules(name, args), the module manager's calls, and
 // hub.drawSide() to redraw the sidebar after an install or uninstall changes the sections, and
-// hub.restart() to start the hub again after a core update.
+// hub.restart() to start the hub again after a core update, and hub.releaseNotes(key, title) for a
+// card's Release notes popup.
 "use strict";
 
 const hub = (() => {
@@ -112,31 +113,19 @@ const hub = (() => {
 		return box;
 	}
 
-	// The notes of what updated since they were last shown, once (Bridge.whats_new). Runs on every
-	// page load and after an update on the Modules page; the bridge waits for the start's auto update.
+	// A notes dialog in the "What's new" look, open at once: {setTitle(text), show(sections), message(text)}.
+	// sections: [{heading, notes}], notes as GitHub Markdown or "" for none written. Only one is open
+	// at a time: null when another is.
 	let notesOpen = false;
-	async function whatsNew() {
-		if (notesOpen) return;
-		const api = await ready;
-		if (!api.whats_new) return;
-		const items = await api.whats_new();
-		if (!items || !items.length || notesOpen) return;
+	function notesDialog(title) {
+		if (notesOpen) return null;
 		notesOpen = true;
 		const dlg = document.createElement("dialog");
 		dlg.className = "hub-notes";
 		const h = document.createElement("h2");
-		h.textContent = "What's new";
-		dlg.append(h);
+		h.textContent = title;
 		const body = document.createElement("div");
 		body.className = "hub-notes-body";
-		for (const it of items) {
-			for (const r of it.releases) {
-				const head = document.createElement("h3");
-				head.textContent = `${it.title} ${r.tag.replace(/^.*-v/, "v")}`;
-				body.append(head, notesElement(r.notes));
-			}
-		}
-		dlg.append(body);
 		const close = document.createElement("button");
 		close.className = "primary";
 		close.textContent = "Close";
@@ -144,12 +133,73 @@ const hub = (() => {
 		const row = document.createElement("div");
 		row.className = "hub-notes-buttons";
 		row.append(close);
-		dlg.append(row);
+		dlg.append(h, body, row);
 		dlg.addEventListener("close", () => { dlg.remove(); notesOpen = false; });
 		document.body.append(dlg);
 		dlg.showModal();
 		close.focus();
+		const message = (text) => {
+			const p = document.createElement("p");
+			p.className = "hub-notes-empty";
+			p.textContent = text;
+			body.replaceChildren(p);
+		};
+		return {
+			setTitle(text) { h.textContent = text; },
+			message,
+			show(sections) {
+				body.replaceChildren();
+				for (const s of sections) {
+					const head = document.createElement("h3");
+					head.textContent = s.heading;
+					const notes = s.notes ? notesElement(s.notes) : document.createElement("p");
+					if (!s.notes) {
+						notes.className = "hub-notes-empty";
+						notes.textContent = "No notes were written for this release.";
+					}
+					body.append(head, notes);
+				}
+				if (!sections.length) message("No releases on GitHub yet.");
+			},
+		};
+	}
+
+	const version = (tag) => tag.replace(/^.*-v/, "v");
+
+	// The notes of what updated since they were last shown, once (Bridge.whats_new). Runs on every
+	// page load and after an update on the Modules page; the bridge waits for the start's auto update.
+	async function whatsNew() {
+		if (notesOpen) return;
+		const api = await ready;
+		if (!api.whats_new) return;
+		const items = await api.whats_new();
+		if (!items || !items.length) return;
+		const view = notesDialog("What's new");
+		if (!view) return;
+		view.show(items.flatMap((it) => it.releases.map((r) => ({
+			heading: `${it.title} ${version(r.tag)}`, notes: r.notes }))));
 		api.notes_seen(items.map((it) => it.key));
+	}
+
+	// Every release's notes for one Modules card, newest first (Bridge.release_notes); the
+	// installed version is marked.
+	async function releaseNotes(key, title) {
+		const view = notesDialog(`${title}: release notes`);
+		if (!view) return;
+		view.message("Reading the releases from GitHub…");
+		let reply;
+		try {
+			reply = await (await ready).release_notes(key);
+		} catch (e) {
+			reply = { ok: false, error: String(e) };
+		}
+		if (!reply.ok) return view.message(reply.error);
+		const r = reply.result;
+		view.setTitle(`${r.title}: release notes`);
+		view.show(r.releases.map((rel) => {
+			const v = version(rel.tag);
+			return { heading: v === "v" + r.version ? `${v} (installed)` : v, notes: rel.notes };
+		}));
 	}
 
 	const info = new Promise((resolve) => {
@@ -159,5 +209,5 @@ const hub = (() => {
 	});
 	info.then(() => whatsNew()).catch(() => {});
 
-	return { ready, call, key, info, modules, drawSide, whatsNew, restart };
+	return { ready, call, key, info, modules, drawSide, whatsNew, releaseNotes, restart };
 })();

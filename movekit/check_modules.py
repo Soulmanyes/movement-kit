@@ -573,6 +573,49 @@ def check_whats_new():
     calls()
 
 
+def check_release_notes():
+    """A card's Release notes: every release of that line newest first, empty notes kept, drafts and
+    other lines left out, the installed version named; GitHub's list reused for a while. Through the
+    bridge: unknown keys refused, GitHub down is an error reply."""
+    from movekit import hub
+
+    gh = GitHub()
+    kit, data = TMP / "rn-kit", TMP / "rn-data"
+    mgr = modules.Manager(kit_root=kit, data=data, api=gh.base + "/releases?per_page=100")
+    gh.release("alpha-v1.0.0", "alpha-module.zip", module_zip("alpha", "1.0.0"))
+    gh.release("alpha-v1.1.0", "alpha-module.zip", module_zip("alpha", "1.1.0"), body="")
+    gh.release("alpha-beta-v2.0.0", "alpha-beta-module.zip", module_zip("alpha-beta", "2.0.0"))
+    gh.release("alpha-v1.2.0", "alpha-module.zip", module_zip("alpha", "1.2.0"),
+               body="- two\r\n\r\n**Full Changelog**: x")
+    gh.release("alpha-v1.3.0", "alpha-module.zip", module_zip("alpha", "1.3.0"), draft=True)
+    gh.release(f"hub-v{CORE}")
+    mgr.check(force=True)
+    mgr.install("alpha")
+    got = mgr.release_notes("alpha")
+    expect([(r["tag"], r["notes"]) for r in got["releases"]],
+           [("alpha-v1.2.0", "- two"), ("alpha-v1.1.0", ""), ("alpha-v1.0.0", "notes alpha-v1.0.0")],
+           "alpha's release notes")
+    expect((got["key"], got["title"], got["version"]), ("alpha", "Alpha", "1.2.0"), "alpha's notes header")
+    expect([r["tag"] for r in mgr.release_notes("core")["releases"]], [f"hub-v{CORE}"], "the core's notes")
+    expect(mgr.release_notes("alpha-beta")["version"], None, "a module not installed: no version")
+    gh.release("alpha-v1.4.0", "alpha-module.zip", module_zip("alpha", "1.4.0"))
+    expect(mgr.release_notes("alpha")["releases"][0]["tag"], "alpha-v1.2.0", "GitHub's list reused")
+    mgr._notes_cache = (0, [])
+    expect(mgr.release_notes("alpha")["releases"][0]["tag"], "alpha-v1.4.0", "GitHub read again once old")
+
+    bridge = hub.Bridge([], (), mgr, TMP / "rn-core", {})
+    r = bridge.release_notes("alpha")
+    expect((r["ok"], r["result"]["releases"][0]["tag"]), (True, "alpha-v1.4.0"), "notes through the bridge")
+    expect(bridge.release_notes("nope")["ok"], False, "notes of an unknown module")
+    expect(bridge.release_notes(["alpha"])["ok"], False, "notes with a key that isn't a string")
+    expect(bridge.release_notes("core")["ok"], True, "the core's notes through the bridge")
+    mgr._notes_cache = None
+    mgr.api = f"http://127.0.0.1:{closed_port()}/releases"
+    r = bridge.release_notes("alpha")
+    expect((r["ok"], r["error"].startswith("couldn't read the release notes")), (False, True), "notes with GitHub down")
+    calls()
+
+
 def check_checkout():
     root = TMP / "checkout"
     (root / ".git").mkdir(parents=True)
@@ -803,6 +846,7 @@ def main():
     check_manager()
     check_split_out()
     check_whats_new()
+    check_release_notes()
     check_checkout()
     check_groups()
     check_bridge()

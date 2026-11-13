@@ -203,8 +203,8 @@ def kit_sections(manager, root=KIT, platform=sys.platform):
 
 
 class Bridge:
-    """What pages reach as pywebview.api: call(), sections(), modules(), whats_new(), notes_seen()
-    and restart() are public;
+    """What pages reach as pywebview.api: call(), sections(), modules(), whats_new(), notes_seen(),
+    release_notes() and restart() are public;
     pywebview exposes every public attribute, so everything else here starts with an underscore.
 
     With a manager (movekit/modules.py), the sections follow what is installed: an install,
@@ -315,6 +315,19 @@ class Bridge:
             known = {"core", *self._manager.installed()}  # "core": modules.CORE
             self._manager.mark_seen([k for k in keys if k in known])
         return True
+
+    def release_notes(self, key):
+        """Every release's notes for one card, newest first (Manager.release_notes): {ok, result,
+        error}. Takes no lock: it reads GitHub and the cards' facts, and changes nothing, so it
+        works while an update runs."""
+        if self._manager is None:
+            return {"ok": False, "error": "no module manager"}
+        if not isinstance(key, str) or key not in {"core", *self._manager.known()}:  # "core": modules.CORE
+            return {"ok": False, "error": f"no module {key!r}"}
+        try:
+            return {"ok": True, "result": self._manager.release_notes(key)}
+        except (OSError, ValueError) as e:
+            return {"ok": False, "error": f"couldn't read the release notes: {e}"}
 
     def restart(self):
         """Start a new hub and close this one, so a core update on disk runs (the card's

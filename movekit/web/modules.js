@@ -130,6 +130,8 @@
 			button(c.previous ? `Roll back to ${ver(c.previous)}` : "Roll back", "",
 				() => act("rollback", { key: c.key }, c.key));
 		}
+		// read only, so it stays clickable while the manager is busy
+		button("Release notes", "", () => hub.releaseNotes(c.key, c.title)).disabled = false;
 		if (c.installed && c.key !== "core") {
 			const blocked = c.needed_by.length > 0;
 			const b = button("Uninstall…", "danger", () => {

@@ -92,6 +92,7 @@ REPO = "Soulmanyes/movement-kit"
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=100"
 AGENT = "movement-kit-modules"
 CHECK_EVERY = 6 * 3600  # seconds between automatic looks at GitHub
+NOTES_FOR = 300  # seconds the release list read for the cards' Release notes is reused
 MANIFEST = "module.json"
 GROUPS = ("tool", "hud")
 # modules released before module.json had "group"
@@ -219,6 +220,26 @@ def clean_notes(text):
     return "\n".join(lines).strip()
 
 
+def release_lines(releases):
+    """GitHub's release list split by line: {key: [(version, {"tag", "url", "notes"})] newest
+    first}, key "core" for hub-v* tags. Drafts, pre-releases and tags with no version are left
+    out; notes without the Full Changelog line, "" when none were written."""
+    out = {}
+    for r in releases:
+        if not isinstance(r, dict) or r.get("draft") or r.get("prerelease"):
+            continue
+        tag = r.get("tag_name")
+        v = updater.parse_version(tag) if isinstance(tag, str) else None
+        if not v:
+            continue
+        key = CORE if tag.startswith(CORE_PREFIX) else tag.rsplit("-v", 1)[0]
+        out.setdefault(key, []).append((v, {"tag": tag, "url": r.get("html_url", ""),
+                                            "notes": clean_notes(r.get("body") or "")}))
+    for rel in out.values():
+        rel.sort(key=lambda x: x[0], reverse=True)
+    return out
+
+
 def newer(tag, version):
     theirs, mine = updater.parse_version(tag), updater.parse_version(version)
     return bool(theirs and (not mine or theirs > mine))
@@ -296,6 +317,7 @@ class Manager:
         self.state_file = self.data / "modules.json"
         self.state = self._load()
         self._auto_changed = set()  # switches set here and not saved yet (see the top)
+        self._notes_cache = None  # (time, GitHub's release list) for release_notes()
 
     # state
 
@@ -515,30 +537,28 @@ class Manager:
             self.mark_seen(quiet)
         if not todo:
             return []
-        found = {key: [] for key in todo}
-        for r in self.fetch():
-            if not isinstance(r, dict) or r.get("draft") or r.get("prerelease"):
-                continue
-            tag = r.get("tag_name")
-            v = updater.parse_version(tag) if isinstance(tag, str) else None
-            notes = clean_notes(r.get("body") or "")
-            if not v or not notes:
-                continue
-            key = CORE if tag.startswith(CORE_PREFIX) else tag.rsplit("-v", 1)[0]
-            if key not in todo:
-                continue
-            mine, seen, only_mine = todo[key]
-            if v == mine or (seen < v < mine and not only_mine):
-                found[key].append((v, {"tag": tag, "url": r.get("html_url", ""), "notes": notes}))
+        lines = release_lines(self.fetch())
+        found = {}
+        for key, (mine, seen, only_mine) in todo.items():
+            found[key] = [r for v, r in lines.get(key, []) if r["notes"]
+                          and (v == mine or (seen < v < mine and not only_mine))]
         empty = [k for k, rel in found.items() if not rel]
         if empty:  # no notes written for these versions
             self.mark_seen(empty)
-        out = []
-        for key, rel in found.items():
-            if rel:
-                rel.sort(key=lambda x: x[0], reverse=True)
-                out.append({"key": key, "title": self.info(key)["title"], "releases": [r for _v, r in rel]})
-        return out
+        return [{"key": key, "title": self.info(key)["title"], "releases": rel}
+                for key, rel in found.items() if rel]
+
+    def release_notes(self, key):
+        """Every release of the core ("core") or a module, for its card's Release notes: {"key",
+        "title", "version" (the installed one, or None), "releases": [{"tag", "url", "notes"}]
+        newest first}; notes may be "". GitHub's list is reused for NOTES_FOR seconds. Raises
+        OSError/ValueError when GitHub can't be read."""
+        cached = self._notes_cache
+        if cached is None or time.time() - cached[0] > NOTES_FOR:
+            cached = self._notes_cache = (time.time(), self.fetch())
+        info = self.info(key)
+        return {"key": key, "title": info["title"], "version": info["version"],
+                "releases": [r for _v, r in release_lines(cached[1]).get(key, [])]}
 
     def mark_seen(self, keys):
         for key in keys:
