@@ -106,7 +106,8 @@ def _form(cfg, game):
     """The settings in the page's units (percent for position and tone volume)."""
     cues = _store().CUES
     return {
-        "enabled": cfg["enabled"], "show_offset": cfg["show_offset"], "offset_key": cfg["offset_key"],
+        "enabled": cfg["enabled"], "when_jump": cfg["when_jump"], "when_timer": cfg["when_timer"],
+        "show_offset": cfg["show_offset"], "offset_key": cfg["offset_key"],
         "x": round(cfg["x"] * 100, 4), "y": round(cfg["y"] * 100, 4), "size": cfg["size"],
         "colors": dict(cfg["colors"]),
         "repeat": cfg["repeat"], "tone_volume": round(cfg["tone_volume"] * 100, 4), "target": cfg["target"],
@@ -233,8 +234,11 @@ def _value(game, form, saved=None):
         clean[name] = _number(form, name)
     clean["tickrate"] = None if game == "momentum" or form.get("tickrate") is None else _number(form, "tickrate")
     clean["colors"] = {k: _color(form["colors"][k], f"the {k} colour") for k in ("early", "perfect", "late")}
-    for name in ("enabled", "show_offset", *cues.values()):
+    for name in ("enabled", "when_jump", "when_timer", "show_offset", *cues.values()):
         clean[name] = bool(form[name])
+    # CS:S has no timer marker, so there only the jump key can turn the trainer on
+    if not (clean["when_jump"] or (clean["when_timer"] and game == "momentum")):
+        raise ValueError("Pick when the trainer listens: Jump held" + (" or Timer started" if game == "momentum" else ""))
     for cue in cues:
         clean[f"{cue}_sound"] = form.get(f"{cue}_sound") or "tone"
     clean["offset_key"] = form.get("offset_key") or ""

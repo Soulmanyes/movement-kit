@@ -18,6 +18,9 @@ GAMES = ("css", "momentum")
 
 DEFAULTS = {
     "enabled": False,
+    # when the trainer listens: while a jump key is held, while the timer runs (Momentum only:
+    # the HUD marker's timer_started), or either one when both are on
+    "when_jump": True, "when_timer": True,
     "tone_volume": 0.3,            # 0-1, for the constant tone
     "repeat": 0.2,                 # game sound: seconds between plays while wrong; 0 = once
     # the cues (CUES): on/off, sound ("tone" or a game sound), the tone's Hz, and the

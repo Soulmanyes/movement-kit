@@ -9,7 +9,7 @@
 	const CUES = { wrong: "cue_wrong_key", none: "cue_no_key", overlap: "cue_overlap" };
 	const NUMBERS = ["x", "y", "target", "size", "repeat", "tone_volume",
 		...Object.keys(CUES).flatMap((c) => [c + "_pitch", c + "_ticks"])];
-	const SWITCHES = ["enabled", "show_offset", ...Object.values(CUES)];
+	const SWITCHES = ["enabled", "when_jump", "when_timer", "show_offset", ...Object.values(CUES)];
 
 	let st = null;       // what load() returned for the current game
 	let keyInfo = null;  // keys(): code map, mouse map, valid bind names
@@ -34,9 +34,23 @@
 		return f;
 	}
 
+	// Momentum only: CS:S has no timer marker, so its trainer always waits for a jump key
+	function showWhen() {
+		const mom = st.game === "momentum";
+		$("st-when-timer-field").hidden = !mom;
+		const jump = T("when_jump").checked, timer = mom && T("when_timer").checked;
+		const text = !mom ? "While a jump key is held"
+			: jump && timer ? "While a jump key is held or the run timer is running (either one)"
+			: timer ? "While the run timer is running; not in practice mode or replays"
+			: jump ? "While a jump key is held"
+			: "⚠ Pick at least one";
+		note("st-when-note", { text, warn: !jump && !timer });
+	}
+
 	let statusAsked = 0;
 	async function showStatus() {
 		document.querySelectorAll(".mk-dims").forEach((n) => n.classList.toggle("off", !T("enabled").checked));
+		showWhen();
 		// the pitch only means something for the tone; the box keeps its place so the rows line up
 		const cues = Object.keys(CUES);
 		for (const cue of cues) {

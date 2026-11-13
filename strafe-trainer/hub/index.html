@@ -25,7 +25,7 @@
 	<div id="st-form" hidden>
 		<section class="card">
 			<h2>Strafe Trainer</h2>
-			<div class="muted mk-desc">While a jump key is held: sounds when you turn without that way's strafe key
+			<div class="muted mk-desc">While it listens (see When): sounds when you turn without that way's strafe key
 				or hold both strafe keys<span data-linux>, and each strafe's offset on screen in ticks (minus: key early,
 				plus: key late, 0: same tick)</span>.</div>
 			<div id="st-game-row" class="mk-row" hidden>
@@ -41,6 +41,13 @@
 				<button id="st-service-copy" title="Copy the install command">Copy command</button>
 			</div>
 			<div class="mk-dims">
+			<div class="mk-row">
+				<div class="mk-label">When<div id="st-when-note" class="muted"></div></div>
+				<label class="mk-field" for="st-t-when_jump">Jump held
+					<input id="st-t-when_jump" type="checkbox" class="mk-switch"></label>
+				<label class="mk-field" id="st-when-timer-field" for="st-t-when_timer">Timer started
+					<input id="st-t-when_timer" type="checkbox" class="mk-switch"></label>
+			</div>
 			<div class="mk-row">
 				<div class="mk-label">Keys<div id="st-binds" class="muted"></div></div>
 			</div>

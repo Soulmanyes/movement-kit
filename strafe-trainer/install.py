@@ -8,7 +8,8 @@ Usage: install.py [--uninstall] [--apply GAME] [--quiet]
 - Writes the `// movekit:strafe-trainer` block into each found game's autoexec.cfg while the
   trainer is on there (gamecfg.py), and records the offset key for the other tools.
 - Momentum: puts the pause menu marker (panorama/scripts/hud/movekit-menu.ts) in custom/ and has the
-  kit include it in timer.xml (movekit/panorama.py), so the trainer stays silent in the pause menu.
+  kit include it in timer.xml (movekit/panorama.py), so the trainer stays silent in the pause menu
+  and can listen while the run timer runs (the When setting's Timer started).
 - Linux: builds the overlay layer (overlay/, needs a C compiler and make), puts the library in
   ~/.local/share/strafe-trainer/overlay and its manifest in vulkan/implicit_layer.d, and registers
   launch-hook.sh with movekit-run. Without a compiler the trainer still plays its sounds.
@@ -44,7 +45,7 @@ MANIFEST = MANIFESTS / f"{LAYER_NAME}.json"
 # Source Yaw's copy before Phase 13; its install.sh (1.11.0 and later) deletes it
 OLD_LIBRARY_DIR = paths.data_dir("sourceyaw") / "overlay"
 
-# Momentum: the HUD script that marks the pause menu in yaw.log (the trainer is silent while it's open)
+# Momentum: the HUD script that marks the pause menu and the run timer in yaw.log
 FOLDER = "movekit-strafe-trainer"  # custom/<FOLDER>
 MENU_TS = Path("panorama/scripts/hud/movekit-menu.ts")
 PATCHES = [  # for movekit/panorama.py
@@ -70,7 +71,8 @@ def apply_game(game, quiet=False):
 
 def install_menu_marker(game_dir, quiet=False):
     """The pause menu marker (MENU_TS) into Momentum's custom/ folder and its timer.xml include. A
-    skipped include (the game changed timer.xml) only means the trainer can't hear the pause menu."""
+    skipped include (the game changed timer.xml) only means the trainer can't hear the pause menu
+    or the timer."""
     if game_dir is None:
         return
     dest = Path(game_dir) / "custom" / FOLDER

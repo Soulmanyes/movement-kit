@@ -126,6 +126,12 @@ def check_section(css, mom):
     expect((store.config("css")["offset_key"], store.config("css")["x"]), ("j", 1.0), "saved, x clamped to 100%")
     expect('bind "j" "sourceyaw_offsets"' in block_of(css), True, "apply wrote the block")
     expect(section.apply("css", dict(form, offset_key="nokey"))["saved"], False, "a key the game can't bind")
+    expect(section.apply("css", dict(form, when_jump=False, when_timer=True))["saved"], False,
+           "CS:S: no timer marker, so Jump held must stay on")
+    expect(section.apply("momentum", dict(form, when_jump=False, when_timer=True))["saved"], True,
+           "Momentum: Timer started alone")
+    expect(section.apply("momentum", dict(form, when_jump=False, when_timer=False))["saved"], False,
+           "Momentum: neither switch")
     expect(section.set_game("momentum")["game"], "momentum", "set_game")
 
 

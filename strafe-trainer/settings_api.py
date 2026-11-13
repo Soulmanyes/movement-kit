@@ -31,7 +31,7 @@ def trainer_config(saved):
 def trainer_value(cfg, form, game):
     """The dict to save: `cfg` (from trainer_config) with the form's values on top.
 
-    `form` holds what the page shows, in its units: enabled, show_offset, offset_key,
+    `form` holds what the page shows, in its units: enabled, when_jump, when_timer, show_offset, offset_key,
     x and y (percent), size, colors {early, perfect, late}, repeat, tone_volume (percent), target,
     tickrate (ticks per second for `game`, or None where the map sets it, as on Momentum), and per
     cue (store.CUES) its switch plus <cue>_sound, <cue>_pitch and <cue>_ticks.
@@ -40,6 +40,8 @@ def trainer_value(cfg, form, game):
     cfg = dict(cfg)
     cfg.update({
         "enabled": form["enabled"],
+        "when_jump": form["when_jump"],
+        "when_timer": form["when_timer"],
         "show_offset": form["show_offset"],
         "offset_key": form["offset_key"],
         "x": round(form["x"] / 100, 3),

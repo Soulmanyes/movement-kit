@@ -53,7 +53,16 @@ sudo sh ~/.local/share/movekit/kit/strafe-trainer/inputd/install-inputd.sh remov
 
 ## Cues
 
-While a jump key is held, the trainer listens to your strafe keys, turn keys and mouse. Three cues:
+**When** sets when the trainer listens to your strafe keys, turn keys and mouse:
+
+- **Jump held**: while a jump key is held.
+- **Timer started** (Momentum only): while the run timer is running on your own run, without holding
+  jump. It goes quiet when the timer stops (finish, reset, practice mode) and in replays and
+  spectating. Savelocs aren't checked in game yet.
+- Both on (default): either one is enough. In a timed run it listens without jump; with the timer off it listens
+  while jump is held.
+
+CS:S has no timer signal, so there it always waits for a jump key. Three cues:
 
 - turning one way while holding the other strafe key,
 - turning with no strafe key held,
@@ -123,7 +132,9 @@ installed, this module stays off, so no cue plays twice.
 ## Limits
 
 - The trainer can't see CS:S's pause menu or either game's console: with a map loaded, scrolling
-  there still counts as jumping. Momentum's pause menu is covered (see below).
+  there still counts as jumping. Momentum's pause menu is covered (see above).
+- **Timer started** listens on the ground too, so turning on the ground without the matching
+  strafe key cues.
 
 ## License
 

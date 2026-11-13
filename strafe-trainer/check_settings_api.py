@@ -31,7 +31,7 @@ def expect(got, want, what):
         fail(f"{what}: got {got!r}, want {want!r}")
 
 
-FORM = {"enabled": True, "show_offset": False, "offset_key": "o", "x": 33.0, "y": 57.12345,
+FORM = {"enabled": True, "when_jump": True, "when_timer": True, "show_offset": False, "offset_key": "o", "x": 33.0, "y": 57.12345,
         "size": 40.0, "colors": {"early": "#112233", "perfect": "#445566", "late": "#778899"},
         "repeat": 0.354, "tone_volume": 45.0, "target": -2.0, "tickrate": 85.0,
         "cue_wrong_key": True, "wrong_sound": "tone", "wrong_pitch": 330.0, "wrong_ticks": 4.0,

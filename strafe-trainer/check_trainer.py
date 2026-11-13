@@ -84,6 +84,29 @@ def main():
         t.check(0.5)
         expect(states, [], "overlap without a jump key")
 
+        expect((trainer.TRAINER_DEFAULTS["when_jump"], trainer.TRAINER_DEFAULTS["when_timer"]), (True, True),
+               "When defaults: both on")
+
+        # when_timer: the running timer is enough, no jump key needed
+        t, states, cues = make(trainer, when_timer=True)
+        t.timer = True
+        press(t, 0.0, A, D)
+        t.check(0.5)
+        expect(states, ["overlap"], "timer running: overlap without a jump key")
+        t, states, cues = make(trainer, when_timer=True)
+        press(t, 0.0, SPACE, A, D)
+        t.check(0.5)
+        expect(states, ["overlap"], "both on, timer off (saveloc): the jump key still counts")
+        t, states, cues = make(trainer, when_jump=False, when_timer=True)
+        press(t, 0.0, SPACE, A, D)
+        t.check(0.5)
+        expect(states, [], "timer only, timer off: a jump key alone is silent")
+        t, states, cues = make(trainer, when_timer=True)
+        t.timer, t.focused = True, False
+        press(t, 0.0, A, D)
+        t.check(0.5)
+        expect(states, [], "timer running but in the pause menu: silent")
+
         # switched off
         t, states, cues = make(trainer, cue_overlap=False)
         press(t, 0.0, SPACE, A, D)

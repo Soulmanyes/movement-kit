@@ -2,7 +2,8 @@
 """Strafe Trainer: runs beside the game (launch-hook.sh through movekit-run on Linux; on Windows a
 thread in the core exe's launch process, module_hooks.launch).
 
-Reads the strafe, turn and jump keys plus mouse movement, and while a jump key is held:
+Reads the strafe, turn and jump keys plus mouse movement, and while it listens (a jump key held,
+the timer running in Momentum, or either: the when_jump and when_timer settings):
   - plays a sound when you turn one way for a few ticks without holding that
     way's strafe key (no key, or the other one), and one when both strafe
     keys are held at once,
@@ -41,7 +42,7 @@ if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and
 from movekit import binds, games, maps, session  # after the path above
 from movekit.hub import local_import
 
-VERSION = "1.0.1"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.0"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
 
 store = local_import(__file__, "store")
 gamecfg = local_import(__file__, "gamecfg")
@@ -240,12 +241,20 @@ class Trainer:
     # loaded, or Momentum's pause menu over one): keys and mouse are still tracked, so nothing sticks when you come
     # back, but nothing counts or sounds
     focused = True
+    # Momentum's timer runs on the player's own run (GameEvents.timer)
+    timer = False
 
     def jumping(self, now):
-        if not self.focused:
-            return False
         return (any(c in self.roles["jump"] for c in self.held)
                 or ("wheel" in self.roles["jump"] and now - self.last_wheel < 0.1))
+
+    def listening(self, now):
+        """Whether turns and keys count now: focused, and a jump key held (when_jump) or the timer
+        running (when_timer)."""
+        if not self.focused:
+            return False
+        return ((self.cfg["when_timer"] and self.timer)
+                or (self.cfg["when_jump"] and self.jumping(now)))
 
     def _strafe(self):
         """Direction of the most recently pressed strafe key still held."""
@@ -273,7 +282,7 @@ class Trainer:
         if direction == self.turn_dir or direction == 0:
             return
         self.turn_dir = direction
-        if not self.jumping(t):
+        if not self.listening(t):
             self.pending = None
             return
         window = self.cfg["window"]
@@ -348,14 +357,14 @@ class Trainer:
         if self.pending and now - self.pending[0] > self.cfg["window"]:
             self.pending = None
         # an overlap outranks a wrong-key turn: it is the cause of it
-        if (self.cfg["cue_overlap"] and self.overlap_since is not None and self.jumping(now)
+        if (self.cfg["cue_overlap"] and self.overlap_since is not None and self.listening(now)
                 and now - self.overlap_since >= self.cfg["overlap_ticks"] / self.tickrate):
             self._cue("overlap", now)
             self.wrong_since = None  # a wrong-key turn waits its ticks again after the overlap
             return
         turning = self._button_turn() or (self.mouse_dir if now - self.last_motion < 0.03 else 0)
         reason = None
-        if turning and self.jumping(now) and self.strafe_dir != turning:
+        if turning and self.listening(now) and self.strafe_dir != turning:
             reason = "none" if self.strafe_dir == 0 else "wrong"
             if not self.cfg["cue_no_key" if reason == "none" else "cue_wrong_key"]:
                 reason = None
@@ -389,8 +398,8 @@ def map_tickrate(cfg, game, name):
 
 
 class GameEvents:
-    """What the movekit session's events (map loads, Momentum's pause menu, the offsets toggle's echo)
-    mean for the trainer."""
+    """What the movekit session's events (map loads, Momentum's pause menu and run timer, the offsets
+    toggle's echo) mean for the trainer."""
 
     def __init__(self, cfg, game, tickrate, in_map, showing):
         self.cfg, self.game = cfg, game
@@ -398,6 +407,7 @@ class GameEvents:
         self.in_map = in_map
         self.showing = showing
         self.menu = False  # Momentum's pause menu is open (the map stays loaded under it)
+        self.timer = False  # Momentum's timer runs on the player's own run
 
     @property
     def playing(self):
@@ -414,11 +424,17 @@ class GameEvents:
             if menu != self.menu:
                 print(f"trainer: pause menu {'open' if menu else 'closed'}", flush=True)
             self.menu = menu
+        elif kind in ("timer_started", "timer_stopped"):
+            timer = kind == "timer_started"
+            if timer != self.timer:
+                print(f"trainer: timer {'started' if timer else 'stopped'}", flush=True)
+            self.timer = timer
         elif kind == "map_loaded":
             if not self.in_map:
                 print("trainer: in a map", flush=True)
             self.in_map = True
             self.menu = False  # a lost menu_hidden never keeps the trainer quiet past a map load
+            self.timer = False  # nor a lost timer_stopped listening
             rate = map_tickrate(self.cfg, self.game, data.get("name"))
             if rate:
                 self.tickrate = rate
@@ -428,6 +444,7 @@ class GameEvents:
                 print("trainer: in the menu", flush=True)
             self.in_map = False
             self.menu = False
+            self.timer = False
 
 
 def run(game, platform, stop=None):
@@ -492,6 +509,7 @@ def run(game, platform, stop=None):
                     overlay.hide()
                     shown_until = 0.0
             trainer.focused = focus.focused and game_events.playing
+            trainer.timer = game_events.timer
             trainer.check(platform.clock())
             if shown_until and time.monotonic() > shown_until:
                 overlay.hide()

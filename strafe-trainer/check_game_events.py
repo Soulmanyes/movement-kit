@@ -5,7 +5,7 @@ Moved out of Source Yaw's check_session_use.py with the trainer (Phase 13).
 Usage: python strafe-trainer/check_game_events.py   (exits 1 on the first failure)
 
 Covers the offsets toggle (SY_OFFSETS, the token kept from Source Yaw), the map tickrate by prefix,
-CS:S's nameless map line, menu and map, Momentum's pause menu.
+CS:S's nameless map line, menu and map, Momentum's pause menu and run timer.
 """
 import sys
 from pathlib import Path
@@ -50,9 +50,17 @@ def main():
     g.handle(ev("menu_shown"))
     g.handle(ev("map_loaded", name="surf_mesa"))
     check("a map load clears a lost menu_hidden", g.playing, True)
+    g.handle(ev("timer_started"))
+    check("timer started", g.timer, True)
+    g.handle(ev("timer_stopped"))
+    check("timer stopped", g.timer, False)
+    g.handle(ev("timer_started"))
+    g.handle(ev("map_loaded", name="bhop_eazy"))
+    check("a map load clears a lost timer_stopped", g.timer, False)
     g.handle(ev("menu_shown"))
+    g.handle(ev("timer_started"))
     g.handle(ev("map_left"))
-    check("menu", (g.in_map, g.menu, g.playing), (False, False, False))
+    check("menu", (g.in_map, g.menu, g.playing, g.timer), (False, False, False, False))
     print("all game event checks passed")
 
 
