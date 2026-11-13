@@ -49,6 +49,8 @@ Version 1.1.0 changes how recordings are read, so numbers on attempts you alread
    - Linux: `movekit-run %command%`, shared with the other tools (see the repository's README). The older `strafe-review-run %command%` still works and starts only Strafe Review. The server runs as the systemd user unit `strafe-review`.
 4. Restart Momentum once, so it reads the new `autoexec.cfg` lines.
 
+The page opens in the browser as the game starts, so it updates live. To stop that, turn off **Open the review page when the game starts** in the hub's Strafe Review section; the server still starts and records, and **Open review** opens the page when you want it. The switch is kept in `%APPDATA%\strafe-review\settings.json` on Windows and `~/.config/strafe-review/settings.json` on Linux.
+
 The server keeps running after the game quits, so the page stays up for review. **Stop** on the page or in the hub's Strafe Review section ends it; **Open review** there starts it again (or before playing, without the launch option).
 
 Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts` on Windows and `~/.local/share/strafe-review/attempts` on Linux. What the server prints also goes to `strafe-review.log` in the folder above.

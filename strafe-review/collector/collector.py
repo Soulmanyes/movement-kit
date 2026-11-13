@@ -39,7 +39,7 @@ def _bundled():
 
 # Strafe Review's folder, or the old exe's unpacked bundle (it holds recorder/ and viewer/static/ the same way)
 ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent.parent
-VERSION = "1.10.2"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.11.0"  # Strafe Review's (module.json reads it); bump in the same commit as the release tag
 GAME = steam.find_game()  # None if Momentum isn't found; then the game folder must be given
 STORE = attempts.store()
 LOG = os.path.join(GAME, "yaw.log") if GAME else None  # con_logfile, shared with Source Yaw's yaws.cfg

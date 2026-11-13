@@ -8,5 +8,5 @@
   "version_from": "collector/collector.py",
   "needs_core": "1.6.0",
   "needs": [],
-  "data": ["data:strafe-review/attempts", "data:strafe-review/updates.json"]
+  "data": ["data:strafe-review/attempts", "data:strafe-review/updates.json", "config:strafe-review"]
 }

@@ -664,3 +664,7 @@ Refit of `Momentum = 1 - (1 - CS:S)^K` over the store (own runs, wishVel, no sur
 - K by dead ticks, jump 1 / jumps 2+: 0-1 too few / 1.48; 2: 1.35 / 1.44; 3-5: 1.32 / 1.38; 6-9: 1.25 / 1.32; 10+: 1.18 / 1.09. Jumps 2+ with 6-9 dead ticks reproduce jump 1's K. A remainder of about 0.07 at equal dead count is unexplained; takeoff speed is not it (jumps 2+ under 400 u/s: 1.43).
 - Ruled out: the takeoff row, pre-timer rows and no-key rows (SSJ scores them 1) move jump-1 K only to 1.28-1.33.
 - Owner's decision: K stays 1.45 (right for clean jumps, 0-2 dead ticks fit 1.44-1.48) in gain.js and Strafe Review; no picker. The converter page and README say it converts single jumps and that dead ticks, jump 1 and whole runs read lower. The SSJ line has no dead-tick count, so no single K can be exact.
+
+## Auto-open switch (owner, 2026-11-13)
+
+Hub switch "Open the review page when the game starts" (default on), in `sr_settings.py`: `config_dir("strafe-review")/settings.json`, key `open_on_launch`, read fresh at each launch. Off skips only the game-start open: `strafe_review.prepare_launch` (Windows / core exe) and the `xdg-open` in `collector/launch-hook.sh`. The hook runs `sr_settings.py open_on_launch` with the kit's folder on PYTHONPATH; exit 10 means off, so a crash still opens the page. The server still starts. A double-click and the hub's Open review always open it.

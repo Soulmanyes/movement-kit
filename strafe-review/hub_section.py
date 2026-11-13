@@ -1,4 +1,5 @@
-"""The Strafe Review section (movekit/hub.py): is it running, its setup and updates, and "Open review".
+"""The Strafe Review section (movekit/hub.py): is it running, its setup and updates, "Open review",
+and its own settings (sr_settings.py).
 
 The review page stays in the browser. This section only talks to the running server over HTTP
 (127.0.0.1, port 8765 or STRAFE_REVIEW_PORT) and never imports Strafe Review's modules: they put
@@ -115,11 +116,29 @@ def stop():
     return _request("api/stop", {})
 
 
+def _settings():
+    # by path, under a name only this folder uses (no bare sr_settings left in sys.modules)
+    from movekit.hub import local_import
+
+    return local_import(__file__, "sr_settings")
+
+
+def settings():
+    """The hub page's switches (sr_settings.py). Works while the server is down."""
+    return _settings().load()
+
+
+def set_settings(changes):
+    """Save some of the switches; returns all of them."""
+    return _settings().save(changes)
+
+
 SECTION = {
     "key": "strafe-review",
     "title": "Strafe Review",
     "os": ["linux", "win32"],
     "page": "hub/index.html",
-    "api": {"status": status, "start": start, "open_review": open_review, "stop": stop},
+    "api": {"status": status, "start": start, "open_review": open_review, "stop": stop,
+            "settings": settings, "set_settings": set_settings},
     "order": 15,
 }

@@ -8,9 +8,11 @@ install, server or updater module behind; status with nothing on the port; open_
 then; status against a running server; the update calls gone (the Modules page has them, 3.7b);
 start() not starting a second copy; open_review opening the server's URL (webbrowser patched);
 stop() ending the server (a POST, so the server's local_request accepts the section's POSTs); the server serving the
-shared /web/tokens.css that style.css imports; and start() bringing a stopped server back (the
+shared /web/tokens.css that style.css imports; the settings calls and sr_settings.py's exit code
+for the launch hook; and start() bringing a stopped server back (the
 detached fallback, systemd-run hidden, so no user unit is made).
-Everything runs in a temp folder: XDG_DATA_HOME, LOCALAPPDATA and MOMENTUM_DIR point there, and the
+Everything runs in a temp folder: XDG_DATA_HOME, LOCALAPPDATA, XDG_CONFIG_HOME, APPDATA and MOMENTUM_DIR
+point there, and the
 update check goes to a closed port instead of GitHub.
 """
 import os
@@ -57,6 +59,7 @@ def main():
         port = free_port()
         os.environ["XDG_DATA_HOME"] = os.environ["LOCALAPPDATA"] = str(tmp / "data")
         os.environ["MOMENTUM_DIR"] = str(tmp / "nogame")
+        os.environ["XDG_CONFIG_HOME"] = os.environ["APPDATA"] = str(tmp / "config")
         os.environ["STRAFE_REVIEW_PORT"] = str(port)
         os.environ["STRAFE_REVIEW_UPDATE_API"] = f"http://127.0.0.1:{free_port()}/releases"
         sys.path.insert(0, str(KIT))
@@ -75,6 +78,22 @@ def main():
 
         def serving():
             return call("status")["result"]["serving"]
+
+        expect(call("settings")["result"], {"open_on_launch": True}, "settings with no file")
+        expect(call("set_settings", changes={"open_on_launch": False})["result"], {"open_on_launch": False}, "set_settings")
+        expect(call("settings")["result"], {"open_on_launch": False}, "settings after set_settings")
+        expect(call("set_settings", changes={"open_on_launch": "no"})["ok"], False, "set_settings with a non-bool")
+        expect(call("set_settings", changes={"bogus": True})["ok"], False, "set_settings with an unknown key")
+        expect(bool(list((tmp / "config" / "strafe-review").glob("settings.json"))), True, "settings.json in XDG_CONFIG_HOME")
+        bad = [m for m in (*BARE, "sr_settings") if m in sys.modules]
+        expect(bad, [], "bare modules after the settings calls")
+        hook_env = {**os.environ, "PYTHONPATH": str(KIT)}
+        sr_settings_py = str(KIT / "strafe-review" / "sr_settings.py")
+        expect(subprocess.run([sys.executable, sr_settings_py, "open_on_launch"], env=hook_env, check=False).returncode,
+               10, "the launch hook's check while off")
+        call("set_settings", changes={"open_on_launch": True})
+        expect(subprocess.run([sys.executable, sr_settings_py, "open_on_launch"], env=hook_env, check=False).returncode,
+               0, "the launch hook's check while on")
 
         got = call("status")
         expect(got, {"ok": True, "result": {"serving": False, "url": f"http://127.0.0.1:{port}/"}}, "status, nothing on the port")

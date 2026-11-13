@@ -6,12 +6,13 @@
 # The server is started as its own systemd user unit, outside Steam's process tree, so it
 # keeps running after the game quits (review after playing) and Steam doesn't wait for it.
 # The page opens in the default browser as the game starts, so it updates live during play
-# (the server itself is started with --no-browser; this hook opens the page once it answers).
+# (the server itself is started with --no-browser; this hook opens the page once it answers),
+# unless "Open the review page when the game starts" is off on the hub page (sr_settings.py).
 # Output: journalctl --user -u strafe-review. Stop it: systemctl --user stop strafe-review.
 # If it is already running (the unit, or a server started by hand on port 8765), the new
 # copy finds the port taken and exits.
 [ "$GAME" = momentum ] || return 0
-local SERVER PORT v env_args
+local SERVER PORT v env_args open_rc
 SERVER="$HOOK_DIR/../viewer/server.py"
 PORT=8765
 
@@ -27,6 +28,12 @@ if ! systemctl --user is-active --quiet strafe-review; then
 	systemd-run --user --quiet --collect --unit=strafe-review "${env_args[@]}" \
 		python3 "$SERVER" --port "$PORT" --no-browser || echo "movekit-run (strafe-review): could not start $SERVER" >&2
 fi
+
+# the hub's switch: exit 10 means off; any other failure still opens the page. The kit's
+# folder on PYTHONPATH lets sr_settings.py import movekit
+open_rc=0
+PYTHONPATH="$HOOK_DIR/../..${PYTHONPATH:+:$PYTHONPATH}" python3 "$HOOK_DIR/../sr_settings.py" open_on_launch || open_rc=$?
+[ "$open_rc" -eq 10 ] && return 0
 
 # open the page once a server answers (this one, or one started by hand on the port); a server
 # started just now may need a moment, so wait up to 10 s in the background while the game starts

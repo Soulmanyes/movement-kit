@@ -1,6 +1,6 @@
 // The Strafe Review section (strafe-review/hub_section.py): whether the server runs, a short setup
-// summary and "Open review", which starts the server first if it's down. The full setup check stays
-// on the review page; updates are the Modules page's (movekit/web/modules.js, 3.7b in PLAN.md).
+// summary, "Open review", which starts the server first if it's down, and the auto-open switch. The
+// full setup check stays on the review page; updates are the Modules page's (movekit/web/modules.js, 3.7b in PLAN.md).
 // Every request goes through Python: the server takes POSTs only from its own page's origin.
 "use strict";
 
@@ -102,5 +102,28 @@
 		setTimeout(refresh, 500);
 	});
 
+	// the switch writes sr_settings.py's file through Python, so it works while the server is down
+	async function loadSettings() {
+		try {
+			$("sr-auto-open").checked = (await hub.call("settings")).open_on_launch;
+			$("sr-auto-open").disabled = false;
+		} catch (e) {
+			note("Couldn't read the settings: " + e.message, true);
+		}
+	}
+
+	$("sr-auto-open").addEventListener("change", async (ev) => {
+		const box = ev.target;
+		box.disabled = true;
+		try {
+			box.checked = (await hub.call("set_settings", { changes: { open_on_launch: box.checked } })).open_on_launch;
+		} catch (e) {
+			box.checked = !box.checked;
+			note("Couldn't save the setting: " + e.message, true);
+		}
+		box.disabled = false;
+	});
+
+	loadSettings();
 	refresh();
 })();

@@ -37,6 +37,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "collector"), str(ROOT / "viewer")]  # fin
 import collector
 import install
 import server
+import sr_settings
 import steam
 
 from movekit import logfile
@@ -117,12 +118,15 @@ def open_when_serving(wait):
 
 def prepare_launch():
     """What the launch option does before the game starts: install, start the server in the
-    background unless one runs, and open the page once it answers (a thread, returned). The kit's
-    core runs the game itself and calls this through module_hooks.launch."""
+    background unless one runs, and open the page once it answers (a thread, returned; None when
+    the hub's "Open the review page when the game starts" is off). The kit's core runs the game
+    itself and calls this through module_hooks.launch."""
     try_install()
     started = not serving()
     if started:
         start_background()
+    if not sr_settings.load()["open_on_launch"]:
+        return None
     # the page opens while the game starts, so it updates live during play; a server started just
     # now may need a moment before it answers
     opener = threading.Thread(target=open_when_serving, args=(START_WAIT if started else 0,))
@@ -133,7 +137,8 @@ def prepare_launch():
 def launch(game_cmd):
     opener = prepare_launch()
     status = subprocess.call(game_cmd, env=game_env())
-    opener.join()
+    if opener:
+        opener.join()
     return status
 
 
