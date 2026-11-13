@@ -102,6 +102,8 @@ def check_session(tmp):
     check("emptied log: read from the top", kinds(s.poll()), [("token", "YAW_30"), ("token", "SY_OFFSETS")])
     s2 = session.Session(log, start="begin")
     check("start=begin reads it all", kinds(s2.poll()), [("token", "YAW_30"), ("token", "SY_OFFSETS")])
+    write(log, b"[panorama] MK_MENU_ON\n[panorama] MK_MENU_OFF\n[panorama] MK_MENU_ONX\n")
+    check("pause menu markers as events", kinds(s.poll()), [("menu_shown",), ("menu_hidden",)])
     check("status", (s.status()["inMap"], s.status()["map"]), (True, "bhop_eazy"))
     return log
 

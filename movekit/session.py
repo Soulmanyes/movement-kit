@@ -4,6 +4,11 @@ Session(log).poll() reads what the game wrote since the last call (movekit.logta
 events on its Bus:
   map_loaded {name}  a map started loading (name is None for CS:S's "Connected to" line)
   map_left           the game went back to its menu
+  menu_shown         Momentum's pause menu (the main menu over a loaded map) opened; the map stays
+                     loaded, so no map_left. From the MK_MENU_ON marker a tool's HUD script writes
+                     (strafe-trainer/panorama); MK_MENU_OFF gives menu_hidden. Nothing installed
+                     to write them: neither event comes.
+  menu_hidden        the pause menu closed
   token {name}       a marker a tool's bind echoes (YAW_<speed>, SY_OFFSETS). It counts as soon as
                      something follows it, without waiting for the line break, which the console
                      sometimes leaves out for a while. Chat ("Name :  text") is ignored.
@@ -50,8 +55,11 @@ HISTORY = 500  # events kept for clients that reconnect
 PING = 15  # seconds between keep-alive comments on /events
 LISTEN_TIMEOUT = 2 * PING + 5  # a client gives up on a stream this quiet and reconnects
 # markers the tools' binds echo into the console: Source Yaw's yaw_cycle (YAWSURF_ for its surf
-# list), its bhop/surf list switch and the trainer's toggle
-TOKENS = (r"YAW_\d+(?:\.\d+)?", r"YAWSURF_\d+(?:\.\d+)?", r"SY_MODE_(?:BHOP|SURF)", r"SY_OFFSETS")
+# list), its bhop/surf list switch and the trainer's toggle; MK_MENU_ON/OFF from a HUD script
+TOKENS = (r"YAW_\d+(?:\.\d+)?", r"YAWSURF_\d+(?:\.\d+)?", r"SY_MODE_(?:BHOP|SURF)", r"SY_OFFSETS",
+          r"MK_MENU_(?:ON|OFF)")
+
+MENU_EVENTS = {"MK_MENU_ON": "menu_shown", "MK_MENU_OFF": "menu_hidden"}  # markers published as events
 
 
 class Bus:
@@ -149,11 +157,16 @@ class Session:
             for line in got:
                 out += self._line(line)
         for name in self._tokens.scan(self._tail.pending, complete=False):
-            out.append(self.bus.publish("token", name=name))
+            out.append(self._token(name))
         return out
 
+    def _token(self, name):
+        if name in MENU_EVENTS:
+            return self.bus.publish(MENU_EVENTS[name])
+        return self.bus.publish("token", name=name)
+
     def _line(self, line):
-        out = [self.bus.publish("token", name=name) for name in self._tokens.scan(line, complete=True)]
+        out = [self._token(name) for name in self._tokens.scan(line, complete=True)]
         state = logtail.map_state(line)
         if state:
             name = logtail.map_name(line)
