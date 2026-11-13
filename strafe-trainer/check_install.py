@@ -129,6 +129,19 @@ def check_section(css, mom):
     expect(section.set_game("momentum")["game"], "momentum", "set_game")
 
 
+def check_menu_marker(mom):
+    install = local_import(str(HERE / "x.py"), "install")
+    timer = mom / "panorama" / "layout" / "hud" / "timer.xml"
+    timer.parent.mkdir(parents=True)
+    timer.write_text("<root>\n\t<scripts>\n\t\t<include src=\"timer.ts\" />\n\t</scripts>\n</root>\n")
+    install.install_menu_marker(mom, quiet=True)
+    kit = (mom / "custom" / "0-movekit" / "panorama" / "layout" / "hud" / "timer.xml").read_text()
+    expect(((mom / "custom" / install.FOLDER / install.MENU_TS).is_file(), "hud/movekit-menu.ts" in kit),
+           (True, True), "Momentum: menu marker copied and included in the kit's timer.xml")
+    install.remove_menu_marker(mom)
+    expect((mom / "custom" / install.FOLDER).exists(), False, "menu marker removed")
+
+
 def check_guard(css):
     kit = TMP / "kit"
     (kit / "sourceyaw").mkdir(parents=True)
@@ -169,6 +182,7 @@ def main():
     check_import()
     check_block(css)
     check_section(css, mom)
+    check_menu_marker(mom)
     check_guard(css)
     import shutil
     shutil.rmtree(TMP, ignore_errors=True)

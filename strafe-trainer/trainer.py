@@ -41,7 +41,7 @@ if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and
 from movekit import binds, games, maps, session  # after the path above
 from movekit.hub import local_import
 
-VERSION = "1.0.0"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.0.1"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
 
 store = local_import(__file__, "store")
 gamecfg = local_import(__file__, "gamecfg")
@@ -236,8 +236,8 @@ class Trainer:
     def has(self, role, code):
         return code in self.roles[role]
 
-    # False while another window has focus or the game is in its menu (no map
-    # loaded): keys and mouse are still tracked, so nothing sticks when you come
+    # False while another window has focus or the game is in a menu (no map
+    # loaded, or Momentum's pause menu over one): keys and mouse are still tracked, so nothing sticks when you come
     # back, but nothing counts or sounds
     focused = True
 
@@ -389,23 +389,36 @@ def map_tickrate(cfg, game, name):
 
 
 class GameEvents:
-    """What the movekit session's events (map loads, the offsets toggle's echo) mean for the trainer."""
+    """What the movekit session's events (map loads, Momentum's pause menu, the offsets toggle's echo)
+    mean for the trainer."""
 
     def __init__(self, cfg, game, tickrate, in_map, showing):
         self.cfg, self.game = cfg, game
         self.tickrate = tickrate
         self.in_map = in_map
         self.showing = showing
+        self.menu = False  # Momentum's pause menu is open (the map stays loaded under it)
+
+    @property
+    def playing(self):
+        """In a map and not in its pause menu: the only time the keys and the mouse are play."""
+        return self.in_map and not self.menu
 
     def handle(self, event):
         kind, data = event["type"], event["data"]
         if kind == "token" and data.get("name") == gamecfg.OFFSETS_TOKEN:
             self.showing = not self.showing
             print(f"trainer: offset {'shown' if self.showing else 'hidden'}", flush=True)
+        elif kind in ("menu_shown", "menu_hidden"):
+            menu = kind == "menu_shown"
+            if menu != self.menu:
+                print(f"trainer: pause menu {'open' if menu else 'closed'}", flush=True)
+            self.menu = menu
         elif kind == "map_loaded":
             if not self.in_map:
                 print("trainer: in a map", flush=True)
             self.in_map = True
+            self.menu = False  # a lost menu_hidden never keeps the trainer quiet past a map load
             rate = map_tickrate(self.cfg, self.game, data.get("name"))
             if rate:
                 self.tickrate = rate
@@ -414,6 +427,7 @@ class GameEvents:
             if self.in_map:
                 print("trainer: in the menu", flush=True)
             self.in_map = False
+            self.menu = False
 
 
 def run(game, platform, stop=None):
@@ -477,7 +491,7 @@ def run(game, platform, stop=None):
                 if overlay and was_showing and not game_events.showing:
                     overlay.hide()
                     shown_until = 0.0
-            trainer.focused = focus.focused and game_events.in_map
+            trainer.focused = focus.focused and game_events.playing
             trainer.check(platform.clock())
             if shown_until and time.monotonic() > shown_until:
                 overlay.hide()

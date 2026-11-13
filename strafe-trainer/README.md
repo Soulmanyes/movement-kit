@@ -43,8 +43,8 @@ Click **Install** on the Strafe Trainer card of the hub's Modules page. Then:
    sudo sh ~/.local/share/movekit/kit/strafe-trainer/inputd/install-inputd.sh
    ```
 
-**Uninstall** on its card takes the block out of `autoexec.cfg`, removes the offset display and
-the launch hook, and keeps your settings unless you tick **Also delete saved data**. The input
+**Uninstall** on its card takes the block out of `autoexec.cfg`, removes the offset display, the
+pause menu script and the launch hook, and keeps your settings unless you tick **Also delete saved data**. The input
 service stays; remove it with the same command plus `remove`:
 
 ```
@@ -69,7 +69,8 @@ running game. An optional **Offset key** shows or hides the number in game with 
 
 It only counts while the game's window has focus and the cursor is inside it (on Hyprland and
 Windows; other Linux desktops can't be asked, so there it always counts) and while a map is
-loaded, so scrolling in the main menu or another window stays quiet.
+loaded and Momentum's pause menu (Esc) is closed, so scrolling in a menu or another window stays
+quiet.
 
 It reads your binds from the game's `config.cfg`, following aliases, so null binds and turn binds
 (`+left`/`+right`) work as they are. The tickrate is picked from the map (`surf_` maps 66, `bhop_`
@@ -109,6 +110,10 @@ service installed for Source Yaw keeps working.
   and plays its tone through `waveOut`.
 - **Both:** the `autoexec.cfg` block turns on `con_logfile yaw.log`, so the trainer sees which map
   loads (the tickrate) and the offset key's echo.
+- **Momentum:** a small HUD script in the game's `custom/movekit-strafe-trainer` folder
+  (`panorama/scripts/hud/movekit-menu.ts`, included through the kit's `timer.xml`) writes
+  `MK_MENU_ON`/`MK_MENU_OFF` into that log when the pause menu opens and closes, so the trainer
+  stays quiet in it. Needs core 1.12.1 or later.
 
 Settings are stored in `~/.config/strafe-trainer` (`%APPDATA%\strafe-trainer` on Windows). The
 first install copies them from Source Yaw's settings, once per game; Source Yaw keeps its copy, so
@@ -117,8 +122,8 @@ installed, this module stays off, so no cue plays twice.
 
 ## Limits
 
-- The trainer can't see in-game menus: with a map loaded, scrolling in the pause menu or console
-  still counts as jumping.
+- The trainer can't see CS:S's pause menu or either game's console: with a map loaded, scrolling
+  there still counts as jumping. Momentum's pause menu is covered (see below).
 
 ## License
 

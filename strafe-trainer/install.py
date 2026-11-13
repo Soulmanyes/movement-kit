@@ -7,6 +7,8 @@ Usage: install.py [--uninstall] [--apply GAME] [--quiet]
   (store.import_from_sourceyaw: Source Yaw held the trainer until Phase 13).
 - Writes the `// movekit:strafe-trainer` block into each found game's autoexec.cfg while the
   trainer is on there (gamecfg.py), and records the offset key for the other tools.
+- Momentum: puts the pause menu marker (panorama/scripts/hud/movekit-menu.ts) in custom/ and has the
+  kit include it in timer.xml (movekit/panorama.py), so the trainer stays silent in the pause menu.
 - Linux: builds the overlay layer (overlay/, needs a C compiler and make), puts the library in
   ~/.local/share/strafe-trainer/overlay and its manifest in vulkan/implicit_layer.d, and registers
   launch-hook.sh with movekit-run. Without a compiler the trainer still plays its sounds.
@@ -25,7 +27,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and str(_HERE.parent) not in sys.path:
     sys.path.insert(0, str(_HERE.parent))  # the kit root (repo or core copy); the core exe bundles movekit
-from movekit import games, keys, paths  # after the path above
+from movekit import games, keys, panorama, paths  # after the path above
 from movekit.hub import local_import
 
 ROOT = Path(__file__).resolve().parent
@@ -42,6 +44,14 @@ MANIFEST = MANIFESTS / f"{LAYER_NAME}.json"
 # Source Yaw's copy before Phase 13; its install.sh (1.11.0 and later) deletes it
 OLD_LIBRARY_DIR = paths.data_dir("sourceyaw") / "overlay"
 
+# Momentum: the HUD script that marks the pause menu in yaw.log (the trainer is silent while it's open)
+FOLDER = "movekit-strafe-trainer"  # custom/<FOLDER>
+MENU_TS = Path("panorama/scripts/hud/movekit-menu.ts")
+PATCHES = [  # for movekit/panorama.py
+    {"file": "panorama/layout/hud/timer.xml", "before": "</scripts>",
+     "line": '<include type="module" src="file://{scripts}/hud/movekit-menu.ts" />'},
+]
+
 
 def linux():
     return sys.platform.startswith("linux") and not getattr(sys, "frozen", False)
@@ -51,6 +61,44 @@ def apply_game(game, quiet=False):
     path = gamecfg.apply(game, store.config(game))
     if path and not quiet:
         print(f"{games.GAMES[game].name}: {path}")
+    if game == "momentum":
+        try:  # never at the cost of the block above or the launch
+            install_menu_marker(games.find(game), quiet)
+        except (OSError, ValueError) as e:
+            print(f"warning: the pause menu marker isn't installed ({e})", file=sys.stderr)
+
+
+def install_menu_marker(game_dir, quiet=False):
+    """The pause menu marker (MENU_TS) into Momentum's custom/ folder and its timer.xml include. A
+    skipped include (the game changed timer.xml) only means the trainer can't hear the pause menu."""
+    if game_dir is None:
+        return
+    dest = Path(game_dir) / "custom" / FOLDER
+    shutil.rmtree(dest, ignore_errors=True)
+    (dest / MENU_TS).parent.mkdir(parents=True)
+    shutil.copyfile(ROOT / MENU_TS, dest / MENU_TS)
+    # after the copy: the kit's timer.xml must never include a script that isn't there
+    result = panorama.install(game_dir, FOLDER, TOOL, PATCHES)
+    for w in result["warnings"]:
+        print(f"warning: {w}", file=sys.stderr)
+    for row in result["patches"]:
+        if row["state"] == "skipped" and row["tool"] == TOOL:
+            print(f"warning: the pause menu marker isn't loaded ({row['reason']}); the trainer "
+                  "may sound in Momentum's pause menu", file=sys.stderr)
+    if not quiet:
+        print(f"Momentum: pause menu marker in {dest}")
+
+
+def remove_menu_marker(game_dir):
+    if game_dir is None or not (Path(game_dir) / "custom" / FOLDER).is_dir():
+        return
+    try:
+        panorama.uninstall(game_dir, FOLDER)
+    except OSError as e:
+        print(f"warning: couldn't update custom/{panorama.KIT_FOLDER} ({e}), so the marker stays",
+              file=sys.stderr)
+        return
+    shutil.rmtree(Path(game_dir) / "custom" / FOLDER, ignore_errors=True)
 
 
 def build_overlay(quiet=False):
@@ -121,6 +169,8 @@ def uninstall():
         game_dir = games.find(game)
         if game_dir:
             gamecfg.remove(game_dir)
+            if game == "momentum":
+                remove_menu_marker(game_dir)
     keys.forget(TOOL)
     if linux():
         remove_overlay()

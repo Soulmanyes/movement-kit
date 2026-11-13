@@ -6,7 +6,7 @@
   "os": ["linux", "win32"],
   "tag_prefix": "strafe-trainer-v",
   "version_from": "trainer.py",
-  "needs_core": "1.10.0",
+  "needs_core": "1.12.1",
   "needs": [],
   "data": ["config:strafe-trainer", "data:strafe-trainer"],
   "group": "tool"
