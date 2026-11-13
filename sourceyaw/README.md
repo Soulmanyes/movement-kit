@@ -128,9 +128,12 @@ before writing its own, and uninstalling puts it back.
   - With it on, both lists are in game, and the game starts on the bhop list.
   - **Mode key:** each press switches to the other list's ticked yawspeed.
   - **Auto by map prefix:** on a `bhop_` map the bhop list is used, on a `surf_` map the surf list.
-    The switch happens on your first press of the cycle key after the map loads: that press
-    sets the list's ticked yawspeed. Other maps keep the list you're on. Needs `movekit-run` in
-    the launch options.
+    In Momentum Mod the switch happens as the map loads: the list's ticked yawspeed is set (with
+    its colour and sound), and your next press goes to the one after it. **Switch when the map
+    loads** (on by default) turns that off, so the switch waits for your first press as in CS:S,
+    and **Sound on a map-load switch** (on by default) can mute it. In CS:S it happens on
+    your first press of the cycle key after the map loads: that press sets the list's ticked
+    yawspeed. Other maps keep the list you're on. Needs `movekit-run` in the launch options.
 - **Change crosshair colour:** turn the colour changing off if you only want the sounds.
   In Momentum Mod, turning it off puts your own crosshair colour back.
 - **Crosshair** (CS:S): the image that gets recoloured. Choose your crosshair-maker crosshair if
@@ -164,6 +167,10 @@ If the game is already running when you press Apply, run `exec yaws` in the cons
   `exec sourceyaw_auto` before it cycles. That file is normally empty. When a map of the other
   list loads, `mode_watch.py` (started by `movekit-run`) writes one line into it, and the next
   press switches the list. It empties the file again once the game reports the switch.
+  Momentum Mod runs `cfg/<gamemode>.cfg` (`surf.cfg`, `bhop.cfg`, ...) itself each time a map of
+  that gamemode loads. With auto and the map-load switch on, Apply puts a `// movekit:sourceyaw` block into the ones your map
+  prefixes name. It runs `sourceyaw_load_surf` or `sourceyaw_load_bhop`, which switches at once when
+  the game is on the other list and does nothing otherwise. Your own lines in those files stay.
 
 - **Windows:** the hub exe's launch step (`launch_win.py`) does what `movekit-run` does on
   Linux, with the list switcher as a thread of that process, which ends with the game.

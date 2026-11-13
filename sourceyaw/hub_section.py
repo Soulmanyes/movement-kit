@@ -196,6 +196,9 @@ def load(game=None):
         "entries": entries,
         "surf": surf, "separate": core.surf_on(data), "active": core.active_mode(data),
         "mode_key": data["mode_key"], "auto_mode": data["auto_mode"],
+        # Momentum runs a cfg per gamemode on map load, so it can switch then; CS:S on the next press
+        "map_load": core.runs_mode_cfgs(game),
+        "load_switch": data["load_switch"], "load_sound": data["load_sound"],
         "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
         "notes": key_notes(game, data["key"], data["mode_key"]),
@@ -293,7 +296,8 @@ def play_sound(game, sound):
 def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
     form = {key, crosshair, start, base, entries: [{speed, color, sound}],
-            surf: {entries, start} or null, separate, active, mode_key, auto_mode}.
+            surf: {entries, start} or null, separate, active, mode_key, auto_mode,
+            load_switch, load_sound}.
     The saved "trainer" dict (from before Phase 13) is kept as it was, for a roll back to 1.10."""
     data = _core().load_settings(game)
     entries, start = _list_value(form["entries"], form.get("start", 0))
@@ -306,7 +310,9 @@ def settings(game, form):
                           entries, surf=surf, mode_key=str(form.get("mode_key") or ""),
                           auto_mode=bool(form.get("auto_mode", True)), map_modes=data.get("map_modes"),
                           separate=bool(form.get("separate")) and surf is not None,
-                          active=str(form.get("active") or "bhop"))
+                          active=str(form.get("active") or "bhop"),
+                          load_switch=bool(form.get("load_switch", True)),
+                          load_sound=bool(form.get("load_sound", True)))
 
 
 def _list_value(form_entries, start):

@@ -78,19 +78,23 @@ def base_options(base_choice):
 # ---------------------------------------------------------------- saving
 
 def collect(key, crosshair, start, base, original_color, trainer, entries,
-            surf=None, mode_key="", auto_mode=True, map_modes=None, separate=False, active="bhop"):
+            surf=None, mode_key="", auto_mode=True, map_modes=None, separate=False, active="bhop",
+            load_switch=True, load_sound=True):
     """The settings dict that yawcore.validate checks and yawcore.apply writes. `trainer` is the
     saved "trainer" dict, kept as it was (None: none): the Strafe Trainer has its own settings since
     Phase 13, and a Source Yaw rolled back to 1.10 still reads this one.
     `start` is the index of the yawspeed a game starts on, `entries` the yawspeeds in order (the
     bhop list). `surf` is the saved surf list {entries, start}, or None. With `separate` both lists
-    are in game; without it only the `active` one ("bhop" or "surf"), and the other stays saved."""
+    are in game; without it only the `active` one ("bhop" or "surf"), and the other stays saved.
+    `load_switch`: with auto on, switch lists as a map loads where the game runs gamemode cfgs
+    (Momentum), else on the next press; `load_sound`: play the start yawspeed's sound then."""
     data = {"key": key, "crosshair": crosshair, "start": start,
             "base": base,
             # Momentum: the user's own crosshair colour, put back when colours are off
             "original_color": original_color,
             "entries": entries,
             "mode_key": mode_key, "auto_mode": auto_mode,
+            "load_switch": load_switch, "load_sound": load_sound,
             "separate": separate, "active": active if active in ("bhop", "surf") else "bhop",
             "map_modes": dict(map_modes or {"bhop_": "bhop", "surf_": "surf"})}
     if surf is not None:

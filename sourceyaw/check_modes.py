@@ -9,13 +9,17 @@ Covers:
     for its own module in Phase 13) changes nothing;
   - with a surf list, yaws.cfg run through a small console model (aliases, exec, echo, binds):
     the start yawspeed, cycling, the mode key, the auto file's arm landing on the list's start,
-    an arm working once, Momentum's colour cfgs;
+    an arm working once, a gamemode cfg's load alias switching only from the other list (silent
+    with load_sound off),
+    Momentum's colour cfgs;
   - validate() for the surf list and the mode key;
   - mode_watch.Watcher on session events: arm on a map of the other list, clear on a mode token or
     a map of the current list, unknown maps change nothing;
   - apply(): the auto cfg emptied, stale colour cfgs gone, the mode key not unbound, watch.env's AUTO;
-    remove_from_game deleting the auto cfg; crosshair images for the surf tokens;
-  - the hub section's settings()/load() keeping the surf list, the mode key and the auto switch.
+    the gamemode cfg blocks by map_modes (the player's own lines kept, our empty files deleted, none
+    for CS:S, none with load_switch off); remove_from_game deleting the auto cfg and the blocks; crosshair images for the surf tokens;
+  - the hub section's settings()/load() keeping the surf list, the mode key, the auto switch and the
+    map-load switch settings.
 --mutations breaks the code in a few ways and expects this check to fail each time.
 Everything runs in a temp folder: HOME and the XDG folders point there, the games are fake folders.
 """
@@ -225,6 +229,45 @@ def check_console(core, tmp):
         expect(con.press("q"), "120", f"{game}: arming the current list does nothing")
         (cfg / f"{core.AUTO_CFG}.cfg").write_text("sourceyaw_arm_bhop\n")
         expect(con.press("q"), "90", f"{game}: armed press lands on the bhop start")
+        # a gamemode cfg on map load (Momentum): switches at once, only from the other list
+        (cfg / f"{core.AUTO_CFG}.cfg").write_text("")
+        con.press("g")  # to the surf start (30)
+        con.press("g")  # back to the bhop start (90)
+        con.echoes.clear()
+        con.run(f"{core.LOAD_ALIAS}surf")
+        expect((con.cvars["cl_yawspeed"], con.echoes), ("30", ["SY_MODE_SURF", "YAWSURF_30"]),
+               f"{game}: surf map load switches to the surf start")
+        expect(con.press("q"), "90", f"{game}: the press after a map-load switch cycles on")
+        con.echoes.clear()
+        con.run(f"{core.LOAD_ALIAS}surf")
+        expect((con.cvars["cl_yawspeed"], con.echoes), ("90", []), f"{game}: surf map on surf: nothing")
+        con.run(f"{core.LOAD_ALIAS}bhop")
+        expect(con.cvars["cl_yawspeed"], "90", f"{game}: bhop map load switches to the bhop start")
+        expect(con.echoes[-2:], ["SY_MODE_BHOP", "YAW_90"], f"{game}: bhop map load echoes")
+        expect(con.press("q"), "210", f"{game}: the press after a bhop map load cycles on")
+        # a stale arm from the watcher after a map-load switch does nothing
+        (cfg / f"{core.AUTO_CFG}.cfg").write_text("sourceyaw_arm_bhop\n")
+        expect(con.press("q"), "60", f"{game}: arm of the list already on after a map load")
+        (cfg / f"{core.AUTO_CFG}.cfg").write_text("")
+        # load_sound off: the same switch without the start yawspeed's sound
+        con.run(f"{core.LOAD_ALIAS}bhop")  # back to bhop (with sound, as before)
+        (cfg / "yaws.cfg").write_text(core.yaws_cfg(dict(data, load_sound=False), ("x",), game))
+        con.run("exec yaws")
+        con.sounds.clear()
+        con.echoes.clear()
+        con.run(f"{core.LOAD_ALIAS}surf")
+        expect((con.cvars["cl_yawspeed"], con.echoes, con.sounds), ("30", ["SY_MODE_SURF", "YAWSURF_30"], []),
+               f"{game}: quiet map-load switch")
+        expect(con.press("q"), "90", f"{game}: the press after a quiet switch cycles on")
+        expect(con.sounds, [], f"{game}: surf 90 has no sound of its own")
+        con.run(f"{core.LOAD_ALIAS}bhop")
+        expect((con.cvars["cl_yawspeed"], con.sounds), ("90", []), f"{game}: quiet switch back to bhop")
+        con.press("q")
+        con.press("q")
+        expect(con.sounds, ["buttons/blip3", "buttons/blip1"], f"{game}: presses still play their sounds")
+        if core.GAMES[game]["colors"] == "cvar":
+            con.run(f"{core.LOAD_ALIAS}surf")
+            expect(con.cvars["cl_crosshair_color"], "255 0 0 255", f"{game}: quiet switch sets the colour")
         # without auto the key cycles directly
         data["auto_mode"] = False
         con = Console(cfg)
@@ -325,9 +368,44 @@ def check_files(core, tmp):
     expect(core.load_settings("momentum")["surf"]["entries"][1]["speed"], 120, "unused list saved")
     data["surf"] = {"entries": entries(30), "start": 0}
     data["separate"] = True
+    cfg = game_dir / "cfg"
+    (cfg / "kz.cfg").write_text("sv_airaccelerate 100\n")  # the player's own gamemode cfg
+    (cfg / "rj.cfg").write_text("")  # the player's own empty one: never ours to delete
+    core.apply(data, game_dir, game="momentum")
+    block = "// movekit:sourceyaw begin\n{}\n// movekit:sourceyaw end\n"
+    expect((cfg / "surf.cfg").read_text(), block.format(f"{core.LOAD_ALIAS}surf"), "surf.cfg block")
+    expect((cfg / "bhop.cfg").read_text(), block.format(f"{core.LOAD_ALIAS}bhop"), "bhop.cfg block")
+    expect((cfg / "kz.cfg").read_text(), "sv_airaccelerate 100\n", "unmapped gamemode cfg untouched")
+    expect((cfg / "bhophl.cfg").exists(), False, "no cfg for an unmapped gamemode")
+    data["map_modes"] = {"kz_": "bhop", "surf_": "surf"}
+    core.apply(data, game_dir, game="momentum")
+    expect((cfg / "kz.cfg").read_text(), "sv_airaccelerate 100\n\n" + block.format(f"{core.LOAD_ALIAS}bhop"),
+           "map_modes picks the gamemode cfgs; own lines kept")
+    expect((cfg / "bhop.cfg").exists(), False, "bhop.cfg deleted once unmapped")
+    data["auto_mode"] = False
+    core.apply(data, game_dir, game="momentum")
+    expect(sorted(p.name for p in cfg.glob("*.cfg") if p.name in ("surf.cfg", "bhop.cfg", "kz.cfg")),
+           ["kz.cfg"], "auto off: our gamemode cfgs gone, the player's kept")
+    expect((cfg / "kz.cfg").read_text(), "sv_airaccelerate 100\n", "auto off: kz.cfg back to its own lines")
+    data["auto_mode"] = True
+    data["load_switch"] = False
+    core.apply(data, game_dir, game="momentum")
+    expect([(cfg / f).exists() for f in ("surf.cfg", "kz.cfg")], [False, True],
+           "map-load switch off: our gamemode cfgs gone")
+    expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").exists(), True, "map-load switch off: the press arm stays")
+    data["load_switch"] = True
     core.apply(data, game_dir, game="momentum")
     core.remove_from_game(game_dir, "momentum")
     expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").exists(), False, "remove_from_game deletes the auto cfg")
+    expect([(cfg / f).exists() for f in ("surf.cfg", "kz.cfg")], [False, True],
+           "remove_from_game takes the gamemode blocks out")
+    expect((cfg / "rj.cfg").exists(), True, "an empty gamemode cfg without our block stays")
+    # CS:S runs no gamemode cfgs
+    css_dir = tmp / "files/cstrike"
+    (css_dir / "cfg").mkdir(parents=True)
+    core.apply(base_data(surf={"entries": entries(30), "start": 0}), css_dir, game="css")
+    expect(sorted(p.name for p in (css_dir / "cfg").iterdir()), [f"{core.AUTO_CFG}.cfg", "yaws.cfg"],
+           "CS:S: no gamemode cfgs")
     # CS:S: an image per token, the bhop start in current.png
     core.write_crosshairs(base_data(surf={"entries": entries(90, 500), "start": 0}), True)
     names = sorted(p.name for p in core.CROSSHAIRS.iterdir())
@@ -351,13 +429,18 @@ def check_hub(tmp):
     core.SETTINGS.unlink(missing_ok=True)  # start from a new profile
     st = section.load("momentum")
     expect((st["surf"], st["mode_key"], st["auto_mode"]), (None, "", True), "load without a surf list")
+    expect((st["map_load"], st["load_switch"], st["load_sound"]), (True, True, True),
+           "Momentum: map-load switch with its sound by default")
+    expect(section.load("css")["map_load"], False, "CS:S: no map-load switch")
     form = {"key": st["key"], "crosshair": st["crosshair"], "start": st["start"], "base": st["base"],
             "entries": st["entries"],
             "surf": {"entries": [{"speed": 30, "color": "#123456", "sound": ""}], "start": 0},
-            "separate": True, "active": "bhop", "mode_key": "g", "auto_mode": False}
+            "separate": True, "active": "bhop", "mode_key": "g", "auto_mode": False,
+            "load_switch": False, "load_sound": False}
     got = section.apply("momentum", form)
     expect(got["saved"], True, f"apply with a surf list ({got['messages']})")
     st = section.load("momentum")
+    expect((st["load_switch"], st["load_sound"]), (False, False), "map-load switch settings kept")
     expect((st["surf"], st["mode_key"], st["auto_mode"]),
            ({"entries": [{"speed": 30.0, "color": "#123456", "sound": ""}], "start": 0}, "g", False),
            "surf list, mode key and auto kept through apply and load")
@@ -402,6 +485,22 @@ MUTATIONS = [
     ("arm lands one past the start", "yawcore.py",
      'alias sy_arm_{mode} "sy_{mode}_state; alias yaw_cycle {starts[mode]}"',
      'alias sy_arm_{mode} "sy_{mode}_state; {starts[mode]}"'),
+    ("map load switches from the list already on", "yawcore.py",
+     "alias {LOAD_ALIAS}{mode} sy_noop; ", ""),
+    ("map load arms instead of switching", "yawcore.py",
+     "alias {LOAD_ALIAS}{other} sy_load_{other}; ", "alias {LOAD_ALIAS}{other} sy_arm_{other}; "),
+    ("map-load switch can't be turned off", "yawcore.py",
+     'if not auto_on(data) or not data.get("load_switch", True):', 'if not auto_on(data):'),
+    ("load sound setting ignored", "yawcore.py",
+     'loud = bool(data.get("load_sound", True))', "loud = True"),
+    ("hub drops the load sound", "hub_section.py",
+     'load_sound=bool(form.get("load_sound", True))', "load_sound=True"),
+    ("gamemode cfgs ignore map_modes", "yawcore.py",
+     'mode = prefix_value(f"{gamemode}_", table)', 'mode = gamemode'),
+    ("gamemode cfgs left behind", "yawcore.py",
+     "            path.unlink()\n", "            pass\n"),
+    ("someone else's empty gamemode cfg deleted", "yawcore.py",
+     "        if had_block:\n", "        if True:\n"),
     ("arm works more than once", "yawcore.py",
      "alias sourceyaw_arm_{mode} sy_noop; ", ""),
     ("one token for both lists", "yawcore.py",

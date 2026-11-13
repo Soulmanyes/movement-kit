@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -115,12 +115,19 @@ COLOR_DIR = "yaws_colors"
 # PRESS_ALIAS: it first execs AUTO_CFG (normally empty), then cycles. When a map of the other mode
 # loads, mode_watch.py writes that mode's arm alias into AUTO_CFG, so the next press starts that
 # list. Every switch echoes MODE_TOKENS[mode]; the surf list echoes SURF_PREFIX tokens.
+# A game that runs cfg/<gamemode>.cfg on map load (movekit.games mode_cfgs: Momentum) switches at
+# once instead: apply() puts LOAD_ALIAS + mode into the cfgs of the gamemodes map_modes names, and
+# that alias switches only when the game is on the other list (no press, so the next press cycles).
+# load_switch (on by default) turns that off, back to the press-time switch; load_sound plays the
+# start yawspeed's sound on a map-load switch (on by default).
 MODES = ("bhop", "surf")
 MODE_TOKENS = {"bhop": "SY_MODE_BHOP", "surf": "SY_MODE_SURF"}
 SURF_PREFIX = "YAWSURF_"
 MODE_ALIAS = "sourceyaw_mode"
 PRESS_ALIAS = "sourceyaw_press"
 AUTO_CFG = "sourceyaw_auto"
+LOAD_ALIAS = "sourceyaw_load_"
+CFG_TOOL = "sourceyaw"  # its cfgblock name in autoexec.cfg and the gamemode cfgs
 DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
 # commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
 # (the strafe trainer's sourceyaw_offsets left with it in Phase 13: its own module binds and unbinds it)
@@ -409,6 +416,8 @@ def load_settings(game="css"):
     data["start"] = start_index(data)
     data.setdefault("mode_key", "")
     data.setdefault("auto_mode", True)
+    data.setdefault("load_switch", True)
+    data.setdefault("load_sound", True)
     data.setdefault("map_modes", dict(DEFAULT_MAP_MODES))
     if data.get("surf"):
         data["surf"]["start"] = start_index(data["surf"])
@@ -587,11 +596,24 @@ def _yaws_cfg_modes(data, unbind, game):
     for mode, other in (("bhop", "surf"), ("surf", "bhop")):
         lines.append(f'alias sy_{mode}_state "alias {MODE_ALIAS} sourceyaw_{other}; '
                      f'alias sourceyaw_arm_{mode} sy_noop; alias sourceyaw_arm_{other} sy_arm_{other}; '
+                     f'alias {LOAD_ALIAS}{mode} sy_noop; alias {LOAD_ALIAS}{other} sy_load_{other}; '
                      f'echo {MODE_TOKENS[mode]}"')
     for mode in MODES:
         lines.append(f'alias sourceyaw_{mode} "sy_{mode}_state; {starts[mode]}"')
     for mode in MODES:
         lines.append(f'alias sy_arm_{mode} "sy_{mode}_state; alias yaw_cycle {starts[mode]}"')
+    # a map-load switch (the gamemode cfgs run LOAD_ALIAS + mode): the start yawspeed, silent unless load_sound
+    loud = bool(data.get("load_sound", True))
+    for mode, letter, lst, _ in mode_lists(data):
+        if loud:
+            lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {starts[mode]}"')
+            continue
+        start, entries = start_index(lst), lst["entries"]
+        quiet = f"yaw_{letter}{start + 1}_quiet"
+        lines.append(_set_alias(quiet, dict(entries[start], sound=None),
+                                f"yaw_{letter}{(start + 1) % len(entries) + 1}", mode == "surf",
+                                f"{letter}{start + 1}" if cvar_colors else None))
+        lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {quiet}"')
     if auto_on(data):
         lines.append(f'alias {PRESS_ALIAS} "exec {AUTO_CFG}; yaw_cycle"')
     start = start_index(data)
@@ -652,7 +674,7 @@ def yaws_cfg(data, unbind=(), game="css"):
 _EXEC_YAWS = re.compile(r'^\s*exec\s+"?yaws(\.cfg)?"?\s*(//.*)?$', re.IGNORECASE)
 # autoexec.cfg runs yaws.cfg from a `// movekit:sourceyaw begin` ... `end` block (cfgblock). Before
 # 2026-11-02 it was this comment line with the exec line under it; set_autoexec replaces that in place.
-_AUTOEXEC_TOOL = "sourceyaw"
+_AUTOEXEC_TOOL = CFG_TOOL
 _AUTOEXEC_COMMENTS = ("// added by Source Yaw", "// added by CS:S Yaw")
 
 
@@ -750,6 +772,41 @@ def restore_crosshair_color(data, game_dir, game):
     return None
 
 
+def mode_cfg_lists(data, game):
+    """{gamemode: "bhop"|"surf"} for the gamemode cfgs `game` runs on map load, by map_modes
+    (gamemode surf matches the surf_ prefix). Empty when auto isn't on or the game runs none."""
+    if not auto_on(data) or not data.get("load_switch", True):
+        return {}
+    table = data.get("map_modes") or DEFAULT_MAP_MODES
+    found = {}
+    for gamemode in getattr(kit_games.GAMES.get(game), "mode_cfgs", ()):  # () with an older core
+        mode = prefix_value(f"{gamemode}_", table)
+        if mode in MODES:
+            found[gamemode] = mode
+    return found
+
+
+def runs_mode_cfgs(game):
+    """Whether `game` runs gamemode cfgs on map load, so the map-load switch settings apply."""
+    return bool(getattr(kit_games.GAMES.get(game), "mode_cfgs", ()))
+
+
+def set_mode_cfgs(game_dir, wanted, game):
+    """Puts the load alias block into each wanted gamemode cfg and takes it out of the others;
+    a cfg left with nothing but blank lines once our block is out is deleted (the game ships none)."""
+    for gamemode in getattr(kit_games.GAMES.get(game), "mode_cfgs", ()):
+        path = game_dir / "cfg" / f"{gamemode}.cfg"
+        mode = wanted.get(gamemode)
+        if mode:
+            cfgblock.set_block(path, CFG_TOOL, [f"{LOAD_ALIAS}{mode}"], True, BACKUPS)
+            continue
+        had_block = bool(cfgblock.spans(cfgblock.read_cfg(path)[0], *cfgblock.markers(CFG_TOOL)))
+        if had_block:
+            cfgblock.set_block(path, CFG_TOOL, [], False, BACKUPS)
+            if not path.read_text(errors="replace").strip():
+                path.unlink()
+
+
 def write_text_atomic(path, text):
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text)
@@ -786,6 +843,7 @@ def apply(data, cstrike, reset_current=False, game="css"):
         write_text_atomic(auto, "")
     else:
         auto.unlink(missing_ok=True)
+    set_mode_cfgs(cstrike, mode_cfg_lists(data, game), game)
     krosshair = GAMES[game]["colors"] == "krosshair"
     # read by launch-hook.sh (shell), so quote the path: it has spaces
     write_text_atomic(WATCH_ENV, f"LOG={shlex.quote(str(cstrike / 'yaw.log'))}\n"
@@ -808,6 +866,7 @@ def remove_from_game(cstrike, game="css"):
     ours), putting back a yaws.cfg the user had before."""
     set_autoexec(cstrike, False)
     (cstrike / "cfg" / f"{AUTO_CFG}.cfg").unlink(missing_ok=True)
+    set_mode_cfgs(cstrike, {}, game)
     if GAMES[game]["colors"] == "cvar":
         shutil.rmtree(cstrike / "cfg" / COLOR_DIR, ignore_errors=True)
         if has_profile(game):

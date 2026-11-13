@@ -142,8 +142,16 @@
 	const LIST_NAME = { bhop: "Bhop", surf: "Surf" };
 	const other = (mode) => (mode === "bhop" ? "surf" : "bhop");
 
+	// the map-load switch rows: only for a game that runs gamemode cfgs (Momentum), with auto on
+	function showLoadRows() {
+		const load = surfOn && st.map_load && $("sy-auto").checked;
+		$("sy-load-row").hidden = !load;
+		$("sy-load-sound-row").hidden = !load || !$("sy-load-switch").checked;
+	}
+
 	function showLists() {
 		document.querySelectorAll("[data-surf]").forEach((n) => { n.hidden = !surfOn; });
+		showLoadRows();
 		document.querySelectorAll("#sy-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
 		$("sy-surf-note").textContent = surfOn
 			? "Both lists in game; the mode key or the map picks one"
@@ -177,7 +185,9 @@
 		changed();
 	};
 	document.querySelectorAll("#sy-tabs button").forEach((b) => { b.onclick = () => { if (b.dataset.tab !== tab) openTab(b.dataset.tab); }; });
-	$("sy-auto").onchange = changed;
+	$("sy-auto").onchange = () => { showLoadRows(); changed(); };
+	$("sy-load-switch").onchange = () => { showLoadRows(); changed(); };
+	$("sy-load-sound").onchange = changed;
 
 	$("sy-add").onclick = async () => {
 		entries.push(await call("new_entry", { entries }));
@@ -309,7 +319,8 @@
 		const bhop = copyList(lists.bhop);
 		return { key, crosshair: $("sy-crosshair").checked, start: bhop.start, base, entries: bhop.entries,
 			surf: lists.surf ? copyList(lists.surf) : null, separate: surfOn, active,
-			mode_key: modeKey, auto_mode: $("sy-auto").checked };
+			mode_key: modeKey, auto_mode: $("sy-auto").checked,
+			load_switch: $("sy-load-switch").checked, load_sound: $("sy-load-sound").checked };
 	}
 
 	$("sy-apply").onclick = async () => {
@@ -338,6 +349,8 @@
 		modeKey = st.mode_key;
 		$("sy-surf-on").checked = surfOn;
 		$("sy-auto").checked = st.auto_mode;
+		$("sy-load-switch").checked = st.load_switch;
+		$("sy-load-sound").checked = st.load_sound;
 		$("sy-auto-note").textContent = st.mode_note;
 		key = st.key;
 		base = st.base;
