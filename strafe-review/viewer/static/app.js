@@ -198,17 +198,19 @@ function shown(a) {
 	return listable(a) && passesFilters(a);
 }
 
-// Finish times only compare on one map: with Map on All, "Fastest finish" is greyed out. Other sorts
-// are never greyed out, even when they happen to order the list the same as another (owner 2026-11-02).
-// A greyed out saved choice falls back to Newest first and comes back once a map is picked.
-function syncSort() {
+// Finish times only compare on one map: with Map on All, "Fastest finish" is greyed out, and also when
+// none of the listed attempts (hs, after the filters) is a finish. Other sorts are never greyed out,
+// even when they happen to order the list the same as another (owner 2026-11-02). A greyed out saved
+// choice falls back to Newest first and comes back once a map with finishes is picked.
+function syncSort(hs) {
 	const sel = $('f-sort');
 	const one = !!$('f-map').value;
+	const finishes = hs.some((h) => !Number.isNaN(finishTime(h)));
 	for (const o of sel.options) {
 		const [, label] = LIST_SORTS.find((s) => s[0] === o.value);
-		const off = o.value === 'finish' && !one;
-		o.disabled = off;
-		o.textContent = off ? `${label} (pick a map)` : label;
+		const why = o.value !== 'finish' ? '' : !one ? 'pick a map' : !finishes ? 'no finishes' : '';
+		o.disabled = !!why;
+		o.textContent = why ? `${label} (${why})` : label;
 	}
 	const want = localStorage.getItem(SORT_KEY) || 'newest';
 	const opt = [...sel.options].find((o) => o.value === want);
@@ -218,14 +220,60 @@ function syncSort() {
 
 // ---------- list ----------
 
+// A freshly started server reads every attempt file before it can answer (seconds with a few thousand),
+// so the list comes in pages, newest files first, each page growing so the list is rebuilt only a few
+// times. loadList() resolves once the first page is shown; the rest keep coming. A newer call
+// abandons an older one's pages. listLoading tells renderList() older runs are still on their way.
+const LIST_PAGES = [100, 400, 1500];
+let listGen = 0;
+let listLoading = false;
+let listGot = new Map(); // the newest load's heads so far, by key; a delete takes its keys out
+
 async function loadList() {
-	list = await (await fetch('/api/attempts')).json();
-	applyWanted(); // edits still on their way to the server
-	autoTags(list);
-	fillFilters();
-	fillTagList();
-	renderList();
-	findMistakes(); // the takeoff baseline comes from the list
+	const gen = ++listGen;
+	const got = (listGot = new Map());
+	const page = async (offset, limit) => {
+		const res = await fetch(`/api/attempts?offset=${offset}&limit=${limit}`);
+		if (!res.ok) throw new Error(`attempts ${res.status}`);
+		const body = await res.json();
+		// a server started before paging ignores the query and sends the whole list
+		return Array.isArray(body) ? { heads: body, total: body.length, whole: true } : body;
+	};
+	const show = (done) => {
+		// started order, as the server sorts the full list; a file saved between pages can come twice
+		list = [...got.values()].sort((a, b) => (b.started || 0) - (a.started || 0));
+		listLoading = !done;
+		applyWanted(); // edits still on their way to the server
+		autoTags(list);
+		fillFilters();
+		fillTagList();
+		renderList();
+		findMistakes(); // the takeoff baseline comes from the list
+	};
+	const add = (heads) => {
+		for (const h of heads) got.set(`${h.dir}/${h.id}`, h);
+	};
+	let offset = 0;
+	let step = 0;
+	const first = await page(0, LIST_PAGES[0]);
+	if (gen !== listGen) return;
+	add(first.heads);
+	offset = first.whole ? first.total : LIST_PAGES[0];
+	show(offset >= first.total);
+	(async () => {
+		let total = first.total;
+		while (offset < total) {
+			const limit = LIST_PAGES[Math.min(++step, LIST_PAGES.length - 1)];
+			const next = await page(offset, limit);
+			if (gen !== listGen) return;
+			add(next.heads);
+			total = next.total;
+			offset += limit;
+			show(offset >= total);
+		}
+	})().catch(() => {
+		if (gen === listGen) listLoading = false;
+	});
 }
 
 function renderList() {
@@ -244,12 +292,12 @@ function renderList() {
 	const total = list.filter((a) => !isFragment(a)).length;
 	const hits = list.filter(shown).length;
 	const drills = $('show-drills').checked ? 0 : list.filter((a) => isDrill(a) && !isFragment(a) && passesFilters(a)).length;
-	$('f-count').textContent = `${hits} of ${total} shown${drills ? `, ${drills} more in drills` : ''}`;
+	$('f-count').textContent = `${hits} of ${total} shown${drills ? `, ${drills} more in drills` : ''}${listLoading ? ', loading older…' : ''}`;
 	$('f-clear').hidden = !FILTERS.some(([, id]) => $(id).value) && !$('f-search').value.trim() && !who.get();
 	const maps = [...new Set(visible.map(course))]; // newest attempt's course first, whatever the sort
 	picker.shown(visible.map((a) => `${a.dir}/${a.id}`));
 	box.classList.toggle('picking', picker.active);
-	const sorted = sortHeads(visible, syncSort());
+	const sorted = sortHeads(visible, syncSort(visible));
 	for (const m of maps) {
 		const title = document.createElement('div');
 		title.className = 'map-name';
@@ -457,6 +505,7 @@ async function removeAttempts(keys) {
 	const openKey = cur && `${cur.head.dir}/${cur.head.id}`;
 	for (const k of gone) metaWant.delete(k); // a queued note save for it would only fail
 	list = list.filter((a) => !gone.has(`${a.dir}/${a.id}`));
+	for (const k of gone) listGot.delete(k); // a page still loading would bring it back
 	fillFilters();
 	fillTagList();
 	if (gone.has(openKey)) {

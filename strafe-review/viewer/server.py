@@ -20,6 +20,9 @@ Routes:
                              (null if it didn't land before the run end), landed, jumps 1+ that
                              landed before the run end, and runGaps, missed ticks inside
                              the run), newest first; note and tags from meta.json are merged in
+  /api/attempts?offset=N&limit=M  the same for one page of files, picked newest first by file name
+                             (the id starts with the save time), as {"heads": [...], "total": files}:
+                             the page shows the newest runs while the rest are still read
   /api/attempt/<map>/<id>    one attempt, the .json.gz file sent as it is
   /api/mouse                 sensitivity and m_yaw from the game's config.cfg now, for attempts
                              recorded before the recorder stamped them (null if unreadable)
@@ -48,6 +51,7 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs
 
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
 import collector
@@ -305,10 +309,17 @@ def restore_attempts(store, keys):
     return trash.restore(store, keys, lambda k, m: write_meta(store, k, m))
 
 
-def attempts(store):
+def newest_files(store):
+    """Every attempt file, newest first without opening any: an id is the save time in base 36 (fixed
+    width) and a few random characters, so a longer name is later and same-length names sort by time."""
+    return sorted(store.glob("*/*.json.gz"), key=lambda p: (len(p.name), p.name), reverse=True)
+
+
+def attempts(store, paths=None):
+    """The heads of paths (every attempt file when None), newest first by start time."""
     out = []
     meta = read_meta(store)
-    for path in store.glob("*/*.json.gz"):
+    for path in store.glob("*/*.json.gz") if paths is None else paths:
         try:
             h = head(path)  # the cached dict: copied below, never changed
             m = meta.get(f"{path.parent.name}/{h.get('id')}") or {}
@@ -479,6 +490,16 @@ class Handler(BaseHTTPRequestHandler):
         elif parts == ["api", "mouse"]:
             return self.send(200, json.dumps(game_mouse(self.game_cfg)).encode(), "application/json")
         elif parts == ["api", "attempts"]:
+            query = parse_qs(self.path.partition("?")[2])
+            if "limit" in query:
+                try:
+                    offset = max(int(query.get("offset", ["0"])[0]), 0)
+                    limit = max(int(query["limit"][0]), 0)
+                except ValueError:
+                    return self.fail(400, "offset and limit must be numbers")
+                files = newest_files(self.store)
+                page = {"heads": attempts(self.store, files[offset : offset + limit]), "total": len(files)}
+                return self.send(200, json.dumps(page).encode(), "application/json")
             body = json.dumps(attempts(self.store)).encode()
             return self.send(200, body, "application/json")
         elif len(parts) == 4 and parts[:2] == ["api", "attempt"]:
