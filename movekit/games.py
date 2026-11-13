@@ -18,6 +18,10 @@ class Game:
     env: str = ""  # environment variable that overrides the game folder (the mod folder)
     process: str = ""  # the game's process name on Linux (/proc/<pid>/comm), to tell when it has focus
     sound_vpks: tuple = ()  # VPKs that hold its sounds, relative to the install folder, in search order
+    # gamemodes whose cfg/<gamemode>.cfg the game runs by itself each time a map of that gamemode
+    # loads (Momentum Mod: the names engine.so holds; surf and bhop probed in game 2026-11-13). The game
+    # ships none of these files, so a tool may write them.
+    mode_cfgs: tuple = ()
 
 
 CSS = Game("css", "Counter-Strike: Source", ("240",), "cstrike", folders=("Counter-Strike Source",),
@@ -25,7 +29,9 @@ CSS = Game("css", "Counter-Strike: Source", ("240",), "cstrike", folders=("Count
            sound_vpks=("cstrike/cstrike_pak_dir.vpk", "hl2/hl2_sound_misc_dir.vpk", "hl2/hl2_misc_dir.vpk"))
 MOMENTUM = Game("momentum", "Momentum Mod", ("1802710",), "momentum",
                 folders=("Momentum Mod Playtest", "Momentum Mod"), name_hint="momentum", env="MOMENTUM_DIR",
-                process="momentum", sound_vpks=("mount/hl2_dir.vpk",))
+                process="momentum", sound_vpks=("mount/hl2_dir.vpk",),
+                mode_cfgs=("surf", "bhop", "bhophl", "ahop", "kz", "rj", "sj", "conc",
+                           "df_vq3", "df_cpm", "df_vtg"))
 
 GAMES = {g.key: g for g in (CSS, MOMENTUM)}
 
