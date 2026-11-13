@@ -406,7 +406,14 @@ class Handler(BaseHTTPRequestHandler):
         if parts == ["api", "stop"]:
             if not self.local_request():
                 return self.fail(403, "forbidden")
-            self.send(200, b"{}", "application/json")
+            # read the body first: closing a socket with unread data sends a reset, and the browser then
+            # drops the reply and shows a NetworkError even though the stop worked
+            try:
+                self.rfile.read(min(max(int(self.headers.get("Content-Length") or 0), 0), MAX_BODY))
+            except ValueError:
+                pass
+            self.close_connection = True
+            self.send(200, b"{}", "application/json", {"Connection": "close"})
             print("Strafe Review: stopped from the page", flush=True)
             # shutdown() waits for serve_forever() to return, so it can't run on this request's thread
             threading.Thread(target=self.server.shutdown, daemon=True).start()
