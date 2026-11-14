@@ -49,7 +49,7 @@ if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and
 from movekit import binds, games, maps, session  # after the path above
 from movekit.hub import local_import
 
-VERSION = "1.1.0"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.1"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
 
 store = local_import(__file__, "store")
 gamecfg = local_import(__file__, "gamecfg")

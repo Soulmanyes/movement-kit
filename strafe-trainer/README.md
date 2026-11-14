@@ -32,7 +32,9 @@ Click **Install** on the Strafe Trainer card of the hub's Modules page. Then:
    own settings.
 2. Turn on **Strafe trainer** and press **Apply**. Apply writes a short block into the game's
    `autoexec.cfg` (the console log the trainer reads, and the offset key's bind). If the game is
-   already open, run `exec autoexec` in its console.
+   already open, run `exec autoexec` in its console. Later changes (on/off, sounds, volume)
+   reach a running trainer within a second of **Apply**. On Linux, the offset display only
+   appears if the trainer was on when the game started.
 3. Add `movekit-run` before `%command%` in the game's launch options (Linux), or
    `"C:\full\path\to\movement-kit.exe" %command%` (Windows). The section shows yours with it
    added. Both games need it: the launch option starts the trainer beside the game.
