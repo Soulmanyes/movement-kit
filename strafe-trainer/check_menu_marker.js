@@ -27,7 +27,7 @@ function expect(got, want, what) {
 	console.log('ok   ' + what);
 }
 
-const game = { state: 0, replay: 0, meta: null, moveType: 2 };
+const game = { state: 0, replay: 0, meta: null, moveType: 2, major: 1, minor: 1 };
 const handlers = {};
 const msgs = [];
 const sandbox = {
@@ -36,7 +36,7 @@ const sandbox = {
 		RegisterForUnhandledEvent: (name, fn) => (handlers[name] = handlers[name] || []).push(fn)
 	},
 	MomentumTimerAPI: {
-		GetObservedTimerStatus: () => ({ state: game.state }),
+		GetObservedTimerStatus: () => ({ state: game.state, majorNum: game.major, minorNum: game.minor }),
 		GetObservedRunMetadata: () => game.meta
 	},
 	MomentumReplayAPI: { GetReplayState: () => game.replay },
@@ -99,5 +99,37 @@ expect(take(), [], 'replay playing: stays off');
 game.replay = 0;
 fire('OnObservedTimerStateChange');
 expect(take(), ['MK_TIMER_ON'], 'replay closed, own timer running: ON');
+
+// stage start zones: off from entering a stage's first zone until leaving it
+fire('OnObservedTimerSegmentEffectiveStart');
+expect(take(), [], 'leaving the map start zone: stays on');
+game.minor = 2;
+fire('OnObservedTimerCheckpointProgressed');
+expect(take(), [], 'a checkpoint inside the first stage: stays on');
+game.major = 2;
+game.minor = 1;
+fire('OnObservedTimerCheckpointProgressed');
+expect(take(), ['MK_TIMER_OFF'], 'entering stage 2\'s start zone: OFF');
+fire('OnObservedTimerStateChange');
+expect(take(), [], 'still in the stage start zone: stays off');
+fire('OnObservedTimerSegmentEffectiveStart');
+expect(take(), ['MK_TIMER_ON'], 'leaving the stage start zone: ON');
+game.major = 3;
+fire('OnObservedTimerCheckpointProgressed');
+expect(take(), ['MK_TIMER_OFF'], 'stage 3\'s start zone: OFF');
+game.minor = 2;
+fire('OnObservedTimerCheckpointProgressed');
+expect(take(), ['MK_TIMER_ON'], 'a later checkpoint without the exit event: ON');
+game.major = 4;
+game.minor = 1;
+fire('OnObservedTimerCheckpointProgressed');
+take();
+game.state = 1;
+game.major = 1;
+fire('OnObservedTimerStateChange');
+expect(take(), [], 'reset from a stage start zone: already off');
+game.state = 2;
+fire('OnObservedTimerStateChange');
+expect(take(), ['MK_TIMER_ON'], 'a new run after that reset: ON (the zone flag is cleared)');
 
 console.log('check_menu_marker: all passed');

@@ -57,6 +57,13 @@ def main():
     g.handle(ev("timer_started"))
     g.handle(ev("map_loaded", name="bhop_eazy"))
     check("a map load clears a lost timer_stopped", g.timer, False)
+    cfg["map_tickrates"] = {"bhop_": 128}
+    g.retune()
+    check("settings changed: the loaded map's tickrate again", g.tickrate, 128)
+    cfg["map_tickrates"] = {}
+    cfg["tickrate"] = {"css": 100}
+    g.retune()
+    check("no rule for the map any more: the game's tickrate", g.tickrate, 100)
     g.handle(ev("menu_shown"))
     g.handle(ev("timer_started"))
     g.handle(ev("map_left"))

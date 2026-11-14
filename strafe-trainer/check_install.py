@@ -156,7 +156,7 @@ def check_guard(css):
     expect(launch_win.start([exe], kit=kit), [], "no trainer next to a Source Yaw with its own")
     (kit / "sourceyaw" / "trainer.py").unlink()
     store.save("css", {**store.saved("css"), "enabled": False})
-    expect(launch_win.start([exe], kit=kit), [], "no trainer while it is off")
+    expect(len(launch_win.start([exe], kit=kit)), 1, "a trainer that is off starts too (it waits)")
     if sys.platform.startswith("linux"):
         check_hook_guard()
 
@@ -164,7 +164,9 @@ def check_guard(css):
 def run_hook():
     """launch-hook.sh sourced the way movekit-run does (inside a function, $GAME and $HOOK_DIR
     set); returns (SOURCEYAW_OVERLAY after it, run.log)."""
-    script = 'hook() { . "$HOOK_DIR/launch-hook.sh"; }; hook; echo "overlay=${SOURCEYAW_OVERLAY-}"'
+    # the trainer the hook starts is stopped again, as movekit-run does when the game exits
+    script = ('hook() { . "$HOOK_DIR/launch-hook.sh"; }; hook; echo "overlay=${SOURCEYAW_OVERLAY-}"; '
+              'kill $HELPERS 2>/dev/null')
     out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False,
                          env={**os.environ, "GAME": "css", "HOOK_DIR": str(HERE), "HELPERS": ""})
     log = (TMP / "config" / "strafe-trainer" / "run.log").read_text()

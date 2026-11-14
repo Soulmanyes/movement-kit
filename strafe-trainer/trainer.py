@@ -17,6 +17,13 @@ settings and the main loop. Where keys come from, how sounds play, focus and the
 the platform's (trainer_linux.Linux, trainer_win.Windows), handed to run(). Settings are store.py's.
 Part of Source Yaw until Phase 13 (PLAN.md).
 
+Settings saved while the game runs (the hub's Apply) are picked up within half a second
+(SettingsWatch): switched off, the trainer goes quiet but keeps running, so switching it on again
+works too. A trainer that is off when the game starts waits (no input read, nothing opened) until
+it is switched on. Two things wait for the next game start: the offset's font size and colours (the
+overlay layer loads its atlas once), and on Linux the offset number itself when the trainer was off
+at the game's start (launch-hook.sh loads the layer only for a trainer that is on).
+
 Siblings (store, gamecfg, trainer_linux, trainer_win) load through movekit.hub.local_import, also
 when this runs as a script, so the hub section and a script get one module object per file.
 
@@ -392,6 +399,41 @@ class Trainer:
 
 # ---------------------------------------------------------------- running
 
+# the settings CueSounds builds its tone from: a change in one needs a new tone
+SOUND_KEYS = ("tone_volume", *(f"{cue}_{part}" for cue in CUES for part in ("sound", "pitch")))
+
+
+class SettingsWatch:
+    """Notices the game's settings being saved while the trainer runs (the hub's Apply rewrites
+    settings.json): changed() gives the new settings once, when they differ from `cfg`."""
+    INTERVAL = 0.5  # seconds between looks at the file
+
+    def __init__(self, game, cfg):
+        self.game, self.cfg = game, cfg
+        self.stamp = self._stamp()
+        self.next = 0.0
+
+    @staticmethod
+    def _stamp():
+        try:
+            stat = store.SETTINGS.stat()
+        except OSError:
+            return None
+        return stat.st_mtime_ns, stat.st_size
+
+    def changed(self):
+        now = time.monotonic()
+        if now < self.next:
+            return None
+        self.next = now + self.INTERVAL
+        stamp = self._stamp()
+        if stamp == self.stamp:
+            return None
+        self.stamp = stamp
+        new = settings(self.game)
+        return new if new != self.cfg else None
+
+
 def map_tickrate(cfg, game, name):
     """The tickrate for map `name`, or None when the name isn't known (CS:S's "Connected to" line)."""
     return maps.prefix_value(name, cfg["map_tickrates"], cfg["tickrate"].get(game, 66))
@@ -404,6 +446,7 @@ class GameEvents:
     def __init__(self, cfg, game, tickrate, in_map, showing):
         self.cfg, self.game = cfg, game
         self.tickrate = tickrate
+        self.map = None  # the loaded map's name, when the log gave one
         self.in_map = in_map
         self.showing = showing
         self.menu = False  # Momentum's pause menu is open (the map stays loaded under it)
@@ -413,6 +456,11 @@ class GameEvents:
     def playing(self):
         """In a map and not in its pause menu: the only time the keys and the mouse are play."""
         return self.in_map and not self.menu
+
+    def retune(self):
+        """The tickrate again, after the settings changed (cfg is the same dict, updated)."""
+        self.tickrate = ((self.map and map_tickrate(self.cfg, self.game, self.map))
+                         or self.cfg["tickrate"].get(self.game, 66))
 
     def handle(self, event):
         kind, data = event["type"], event["data"]
@@ -437,6 +485,7 @@ class GameEvents:
             self.timer = False  # nor a lost timer_stopped listening
             rate = map_tickrate(self.cfg, self.game, data.get("name"))
             if rate:
+                self.map = data["name"]
                 self.tickrate = rate
                 print(f"trainer: map {data['name']} -> {rate} tick", flush=True)
         elif kind == "map_left":
@@ -461,8 +510,18 @@ def run(game, platform, stop=None):
       play(game_dir, sound, game)  a game sound"""
     cfg = settings(game)
     game_dir = games.find(game)
-    if not cfg["enabled"] or game_dir is None:
+    if game_dir is None:
         return 0
+    if not cfg["enabled"]:
+        # off at the game's start: wait for it to be switched on, holding nothing meanwhile
+        print("trainer: switched off, waiting", flush=True)
+        while not cfg["enabled"]:
+            if stop is None:
+                time.sleep(SettingsWatch.INTERVAL)
+            elif stop.wait(SettingsWatch.INTERVAL):
+                return 0
+            cfg = settings(game)
+        print("trainer: switched on", flush=True)
     roles, unseen = read_binds(game_dir) if platform.FORWARDED_ONLY else read_binds(game_dir, None)
     if unseen:
         print(f"trainer: {platform.UNSEEN}: {', '.join(unseen)}", flush=True)
@@ -485,7 +544,11 @@ def run(game, platform, stop=None):
         overlay.show(f"{ticks:+d}" if ticks else "0", row, cfg["x"], cfg["y"])
         shown_until = time.monotonic() + cfg["hide_after"]
 
-    sounds = CueSounds(cfg, lambda sound: platform.play(game_dir, sound, game), platform.Tone)
+    def play(sound):
+        platform.play(game_dir, sound, game)
+
+    sounds = CueSounds(cfg, play, platform.Tone)
+    watch = SettingsWatch(game, cfg)
     trainer = Trainer(cfg, roles, game_events.tickrate, offset,
                       lambda: sounds.cue(trainer.wrong_active), sounds.state)
     focus = platform.focus(game, game_dir)
@@ -508,7 +571,26 @@ def run(game, platform, stop=None):
                 if overlay and was_showing and not game_events.showing:
                     overlay.hide()
                     shown_until = 0.0
-            trainer.focused = focus.focused and game_events.playing
+            new = watch.changed()
+            if new is not None:
+                # cfg is the one dict the trainer, the game events and the sounds read: updated in place
+                was = dict(cfg)
+                cfg.clear()
+                cfg.update(new)
+                print(f"trainer: settings reloaded{'' if cfg['enabled'] else ' (switched off)'}", flush=True)
+                if any(was.get(key) != cfg.get(key) for key in SOUND_KEYS):
+                    sounds.close()
+                    sounds = CueSounds(cfg, play, platform.Tone)
+                    trainer.on_wrong_state = sounds.state
+                    trainer.wrong_active = None  # the new tone hears a cue still sounding at the next check
+                if was.get("show_offset") != cfg["show_offset"]:
+                    game_events.showing = cfg["show_offset"]
+                game_events.retune()
+                trainer.tickrate = game_events.tickrate
+                if overlay and not (cfg["enabled"] and game_events.showing):
+                    overlay.hide()
+                    shown_until = 0.0
+            trainer.focused = cfg["enabled"] and focus.focused and game_events.playing
             trainer.timer = game_events.timer
             trainer.check(platform.clock())
             if shown_until and time.monotonic() > shown_until:

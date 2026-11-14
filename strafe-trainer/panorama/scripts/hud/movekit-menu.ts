@@ -14,6 +14,13 @@
 // the Strafe Review recorder's (strafe-review.ts startAttempt), and it is checked again whenever
 // spectating or the observed timer changes, since those can happen with the timer state unchanged.
 //
+// A stage's start zone counts as off too: the timer keeps running there, but standing and looking
+// around in it is no strafing. The game has no "in a zone" call, so it is worked out from two timer
+// events: OnObservedTimerCheckpointProgressed with minorNum 1 past the first segment is the entry into
+// a stage's first zone, OnObservedTimerSegmentEffectiveStart the exit from it (common/timer.ts:
+// effectiveStartVelocity is taken "when *leaving* the first zone"). Any later checkpoint, or the timer
+// stopping, ends it as well, so a missed exit event can't keep the trainer quiet for long.
+//
 // Both OFF on load: the HUD loads with each map, outside the menu and before a run, so a lost marker
 // never keeps the trainer in the wrong state past the next map. No imports, like the other kit scripts.
 
@@ -24,10 +31,14 @@ const MOVETYPE_OBSERVER = 10;
 
 let timerOn = false;
 let spectating = false; // MomentumSpectateStart/Stop; GetMoveType() covers a panorama_reload mid-spectate
+let inStageStart = false; // between entering a stage's first zone and leaving it
 
 function ownRunTiming() {
+	const status = MomentumTimerAPI.GetObservedTimerStatus();
+	if (status.state !== TIMER_RUNNING) inStageStart = false;
 	return (
-		MomentumTimerAPI.GetObservedTimerStatus().state === TIMER_RUNNING &&
+		status.state === TIMER_RUNNING &&
+		!inStageStart &&
 		MomentumReplayAPI.GetReplayState() === REPLAY_NONE &&
 		!MomentumTimerAPI.GetObservedRunMetadata() &&
 		!spectating &&
@@ -46,6 +57,15 @@ $.RegisterForUnhandledEvent('ShowPauseMenu', () => $.Msg('MK_MENU_ON'));
 $.RegisterForUnhandledEvent('HidePauseMenu', () => $.Msg('MK_MENU_OFF'));
 $.RegisterForUnhandledEvent('OnObservedTimerStateChange', onTimerState);
 $.RegisterForUnhandledEvent('OnObservedTimerReplaced', onTimerState);
+$.RegisterForUnhandledEvent('OnObservedTimerCheckpointProgressed', () => {
+	const status = MomentumTimerAPI.GetObservedTimerStatus();
+	inStageStart = status.majorNum > 1 && status.minorNum === 1;
+	onTimerState();
+});
+$.RegisterForUnhandledEvent('OnObservedTimerSegmentEffectiveStart', () => {
+	inStageStart = false;
+	onTimerState();
+});
 $.RegisterForUnhandledEvent('ObserverTargetChanged', onTimerState);
 $.RegisterForUnhandledEvent('MomentumSpectateStart', () => {
 	spectating = true;

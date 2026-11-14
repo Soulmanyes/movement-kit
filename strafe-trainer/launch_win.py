@@ -34,7 +34,8 @@ def old_sourceyaw_trainer(kit):
 
 def start(argv, kit=None, force=False):
     """Starts the trainer for the game in argv; returns the threads started (none when it isn't
-    CS:S or Momentum, the trainer is off there, or an old Source Yaw runs its own)."""
+    CS:S or Momentum, or an old Source Yaw runs its own). A trainer that is off starts too: it
+    waits in trainer.run until it is switched on in the hub."""
     logfile.tee(LOG, LOG_MAX)
     game = games.from_command(argv)
     if game is None:
@@ -43,10 +44,7 @@ def start(argv, kit=None, force=False):
         print("strafe-trainer: Source Yaw still has its own trainer (1.10 or older); "
               "update Source Yaw to use this one", flush=True)
         return []
-    cfg = store.config(game)
-    if not (cfg["enabled"] or force):
-        return []
-    gamecfg.apply(game, cfg)
+    gamecfg.apply(game, store.config(game))
     trainer = local_import(__file__, "trainer")
     if force:
         trainer.settings = lambda g: {**store.config(g), "enabled": True}

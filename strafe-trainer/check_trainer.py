@@ -388,6 +388,52 @@ def check_run(trainer, tmp):
     expect(trainer.run("css", platform, stop), 0, "run returns 0 when stopped")
     expect(log, ["tone closed", "input closed", "session closed"], "stopped run closes everything")
 
+    # settings saved while it runs (the hub's Apply): a new pitch gives a new tone, which takes up
+    # the cue still sounding; switched off it goes quiet without ending; switched on it sounds again
+    saved = {"stamp": 0, "over": {}}
+    trainer.settings = lambda game: {**trainer.TRAINER_DEFAULTS, "enabled": True, **saved["over"]}
+    trainer.SettingsWatch.INTERVAL = 0
+    trainer.SettingsWatch._stamp = staticmethod(lambda: saved["stamp"])
+
+    def save(**over):
+        saved["over"].update(over)
+        saved["stamp"] += 1
+
+    steps = [(1.000, [(1.000, EV_KEY, SPACE, 1), (1.000, EV_KEY, A, 1), (1.000, EV_KEY, TURN_R, 1)], None),
+             (1.100, [], None),
+             (1.200, [], lambda: save(wrong_pitch=300)),
+             (1.300, [], lambda: save(enabled=False)),
+             (1.400, [], lambda: save(enabled=True)),
+             (1.500, [], lambda: save(hide_after=5.0))]
+
+    class LiveSource(Source):
+        def read(self, timeout):
+            if not steps:
+                return None
+            platform.now, events, change = steps.pop(0)
+            if change:
+                change()
+            return events
+
+    # off at the game's start: waits without opening anything, then runs once it is switched on
+    saved["over"] = {"enabled": False}
+    stop = threading.Event()
+    stop.set()
+    log.clear()
+    expect((trainer.run("css", platform, stop), log), (0, []), "off at the start and stopped: nothing opened")
+    waits = []
+    trainer.time.sleep = lambda seconds: (waits.append(seconds), save(enabled=True))
+    platform.open_input = lambda: None
+    expect((trainer.run("css", platform), len(waits)), (1, 1), "off at the start: runs once switched on")
+    saved["over"] = {}
+
+    platform.open_input = LiveSource
+    log.clear()
+    expect(trainer.run("css", platform), 1, "run with settings saved meanwhile ends when the input is gone")
+    expect(log, ["tone wrong", "tone closed", "tone wrong", "tone None", "tone wrong",
+                 "tone closed", "input closed", "session closed"],
+           "saved settings apply while it runs: new tone, off, on; other settings keep the tone")
+
 
 if __name__ == "__main__":
     main()

@@ -143,8 +143,12 @@ def main():
         trainer.platform = Platform
 
         expect(launch_win.start([r"D:\Games\other.exe"], kit=tmp / "kit"), [], "another game: nothing started")
-        expect(launch_win.start([str(dirs["css"].parent / "hl2.exe")], kit=tmp / "kit"), [],
-               "CS:S with the trainer off: nothing started")
+        # off: the trainer still starts and waits to be switched on, until the exe exits
+        at_exit.clear()
+        threads = launch_win.start([str(dirs["css"].parent / "hl2.exe")], kit=tmp / "kit")
+        expect((len(threads), threads[0].is_alive()), (1, True), "CS:S with the trainer off: started, waiting")
+        at_exit[0]()
+        expect(threads[0].is_alive(), False, "the waiting trainer stops with the exe")
         (tmp / "kit" / "sourceyaw").mkdir(parents=True)
         (tmp / "kit" / "sourceyaw" / "trainer.py").write_text("")
         expect(launch_win.start([exe], kit=tmp / "kit"), [], "a Source Yaw with its own trainer: nothing started")

@@ -2,7 +2,9 @@
 # The Strafe Trainer's launch hook, sourced by movekit-run (see movekit/movekit-run for the rules;
 # install.py registers it). Writes the autoexec block again, then runs trainer.py beside the game:
 # keys from the input service, the offset drawn by the overlay layer, which only loads when
-# SOURCEYAW_OVERLAY=1 (the layer kept Source Yaw's names).
+# SOURCEYAW_OVERLAY=1 (the layer kept Source Yaw's names). A trainer that is off still runs: it
+# waits, reading no input, until it is switched on in the hub (then without the offset number,
+# since the layer loads with the game).
 local DATA RUNLOG
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}/strafe-trainer"
 RUNLOG="${XDG_CONFIG_HOME:-$HOME/.config}/strafe-trainer/run.log"
@@ -16,7 +18,7 @@ fi
 if python3 "$HOOK_DIR/trainer.py" "$GAME" --enabled >> "$RUNLOG" 2>&1; then
     export SOURCEYAW_OVERLAY=1 SOURCEYAW_OVERLAY_ATLAS="$DATA/overlay/atlas.png" \
         SOURCEYAW_OVERLAY_STATE="$DATA/overlay/state"
-    python3 "$HOOK_DIR/trainer.py" "$GAME" >> "$RUNLOG" 2>&1 &
-    HELPERS="$HELPERS $!"
 fi
+python3 "$HOOK_DIR/trainer.py" "$GAME" >> "$RUNLOG" 2>&1 &
+HELPERS="$HELPERS $!"
 return 0
