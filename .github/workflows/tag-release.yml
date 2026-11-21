@@ -24,6 +24,7 @@ concurrency: tag-release
 jobs:
   tag:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:

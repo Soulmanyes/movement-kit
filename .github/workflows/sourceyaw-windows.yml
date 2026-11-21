@@ -10,6 +10,10 @@ on:
     paths: ["sourceyaw/**", "movekit/**", ".github/workflows/sourceyaw-windows.yml"]
 permissions:
   contents: read
+# a newer push cancels the older run
+concurrency:
+  group: sourceyaw-windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: windows-latest

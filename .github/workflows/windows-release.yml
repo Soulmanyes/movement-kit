@@ -54,6 +54,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     defaults:
@@ -77,7 +78,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install pyinstaller "$env:PACKAGES".Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: false
+      # uv installs in a few seconds where pip took 15-25 on Windows
+      - run: uv pip install --system pyinstaller "$env:PACKAGES".Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
       - name: Licences of the bundled packages
         if: inputs.licenses_of != ''
         run: python ../.github/scripts/collect_licenses.py third-party-licenses "$env:LICENSES_OF".Split(' ', [StringSplitOptions]::RemoveEmptyEntries)

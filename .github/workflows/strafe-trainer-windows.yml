@@ -10,6 +10,10 @@ on:
     paths: ["strafe-trainer/**", "movekit/**", ".github/workflows/strafe-trainer-windows.yml"]
 permissions:
   contents: read
+# a newer push cancels the older run
+concurrency:
+  group: strafe-trainer-windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: windows-latest

@@ -10,6 +10,10 @@ on:
     paths: ["z-penalty/**", "movekit/**", ".github/workflows/z-penalty-windows.yml"]
 permissions:
   contents: read
+# a newer push cancels the older run
+concurrency:
+  group: z-penalty-windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: windows-latest
