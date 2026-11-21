@@ -78,7 +78,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0  # no major tag (v10) is published
         with:
           enable-cache: false
       # uv installs in a few seconds where pip took 15-25 on Windows
