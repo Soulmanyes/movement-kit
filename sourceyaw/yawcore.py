@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.13.0"
+VERSION = "1.13.1"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -140,7 +140,8 @@ OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS)
 # its own +left, because Momentum gives the +/- commands an alias runs the code of the key that ran
 # it (kbutton_t frees a slot only for the code that took it), so a -left from the other key does
 # nothing there. Each key also gives its own code (TURN_CODES), which Source 2013 (CS:S) goes by.
-# The yawspeed aliases keep the sign through sy_dir; with both keys up it is positive again.
+# The sign flips with multvar, so a yawspeed set by hand (a toggle bind, the console) is kept; the
+# yawspeed aliases flip their new value too while a right turn is on. Both keys up: positive again.
 # Not in OWN_COMMANDS: apply() unbinds keys bound to those.
 TURNS = {"+left": "+sy_left", "+right": "+sy_right"}
 TURN_CODES = {"+left": 9001, "+right": 9002}
@@ -556,22 +557,17 @@ def key_conflicts(cstrike, key):
 
 def _set_alias(name, entry, nxt, surf, color_cfg, signed=False):
     """`alias <name> "cl_yawspeed ..; echo ..; [exec colour cfg]; [play ..]; alias yaw_cycle <nxt>"`.
-    `signed` (null turnbinds on): <name>_p and _n set the speed either way, and the alias picks the
-    sign the turn keys want through sy_dir."""
+    `signed` (null turnbinds on): sy_resign then flips the new value while a right turn is on."""
     speed = fmt_speed(entry["speed"])
     parts = [f"cl_yawspeed {speed}", f"echo {token(speed, surf)}"]
     if signed:
-        parts[1:1] = [f"alias sy_pos {name}_p", f"alias sy_neg {name}_n", "sy_dir"]
+        parts.insert(1, "sy_resign")
     if color_cfg:
         parts.append(f"exec {COLOR_DIR}/{color_cfg}")
     if entry.get("sound"):
         parts.append(f"play {entry['sound']}")
     parts.append(f"alias yaw_cycle {nxt}")
-    line = f'alias {name} "{"; ".join(parts)}"'
-    if signed:
-        line = (f'alias {name}_p "cl_yawspeed {speed}"\n'
-                f'alias {name}_n "cl_yawspeed {fmt_speed(-float(entry["speed"]))}"\n{line}')
-    return line
+    return f'alias {name} "{"; ".join(parts)}"'
 
 
 def _signed(data, turns):
@@ -613,10 +609,9 @@ def own_turn_keys(cstrike, ours=()):
     return found
 
 
-def _turn_lines(data, turns, start_alias):
+def _turn_lines(data, turns):
     """Null turnbind aliases and binds for `turns` (turn_keys) with null_turns on; with it off,
-    plain binds for the keys still nulled from before, so none is left on an undefined alias.
-    `start_alias`: the yawspeed alias the game starts on, whose _p/_n the turn keys use first."""
+    plain binds for the keys still nulled from before, so none is left on an undefined alias."""
     if not turns:
         return []
     if not data.get("null_turns"):
@@ -626,12 +621,14 @@ def _turn_lines(data, turns, start_alias):
     lines = ["",
              "// null turnbinds: holding both turn keys turns toward the one pressed last. Both keys",
              "// hold +left (each lets go of its own only); the sign of cl_yawspeed is the direction.",
+             "// the sign of cl_yawspeed: sy_goleft/sy_goright flip it when it points the other way",
              'alias sy_tnone ""',
-             f"alias sy_pos {start_alias}_p",
-             f"alias sy_neg {start_alias}_n",
-             'alias sy_goleft "alias sy_dir sy_pos; sy_pos"',
-             'alias sy_goright "alias sy_dir sy_neg; sy_neg"',
-             "alias sy_dir sy_pos",
+             'alias sy_flip "multvar cl_yawspeed -100000 100000 -1"',
+             'alias sy_ispos "alias sy_goleft sy_tnone; alias sy_goright sy_toneg; alias sy_resign sy_tnone"',
+             'alias sy_isneg "alias sy_goleft sy_topos; alias sy_goright sy_tnone; alias sy_resign sy_flip"',
+             'alias sy_toneg "sy_flip; sy_isneg"',
+             'alias sy_topos "sy_flip; sy_ispos"',
+             "sy_ispos",
              "alias sy_lback sy_tnone",
              "alias sy_rback sy_tnone",
              f'alias +sy_left "alias sy_lback sy_goleft; sy_goleft; +left {left}"',
@@ -642,13 +639,13 @@ def _turn_lines(data, turns, start_alias):
     return lines
 
 
-def _key_lines(data, unbind, cycle_command, turns, start_alias):
+def _key_lines(data, unbind, cycle_command, turns=None):
     lines = [f'unbind "{key}"' for key in unbind]
     lines.append(f'bind "{data["key"]}" "{cycle_command}"')
     mode_key = mode_key_of(data)
     if mode_key:
         lines.append(f'bind "{mode_key}" "{MODE_ALIAS}"')
-    return lines + _turn_lines(data, turns, start_alias)
+    return lines + _turn_lines(data, turns)
 
 
 def _yaws_cfg_modes(data, unbind, game, turns=None):
@@ -718,8 +715,7 @@ def _yaws_cfg_modes(data, unbind, game, turns=None):
     if cvar_colors:
         lines.append(f"exec {COLOR_DIR}/b{start + 1}")
     lines += [f"alias yaw_cycle yaw_b{(start + 1) % len(entries) + 1}", "sy_bhop_state", ""]
-    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle", turns,
-                        f"yaw_b{start + 1}")
+    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle", turns)
     return "\n".join(lines) + "\n"
 
 
@@ -758,7 +754,7 @@ def yaws_cfg(data, unbind=(), game="css", turns=None):
         f'alias yaw_cycle "yaw_set{(start + 1) % len(entries) + 1}"',
         "",
     ]
-    lines += _key_lines(data, unbind, "yaw_cycle", turns, f"yaw_set{start + 1}")
+    lines += _key_lines(data, unbind, "yaw_cycle", turns)
     return "\n".join(lines) + "\n"
 
 

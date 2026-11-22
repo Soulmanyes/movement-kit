@@ -115,6 +115,10 @@ class Console:
                 self.binds.pop(args[0], None)
             elif name in ("cl_yawspeed", "cl_crosshair_color", "con_logfile"):
                 self.cvars[name] = args[0]
+            elif name == "multvar":
+                low, high, factor = (float(a) for a in args[1:4])
+                value = min(max(float(self.cvars[args[0]]) * factor, low), high)
+                self.cvars[args[0]] = f"{value:f}"
             elif name in ("+left", "-left", "+right", "-right"):
                 if self.code is not None:
                     args = [str(self.code)]
@@ -485,11 +489,24 @@ def check_turns(core, tmp):
     # code the alias gives: a -left from MOUSE2 can't let go of MOUSE1's +left
     turn_cases(con, "Momentum", {"MOUSE1": 107, "MOUSE2": 108})
     # cycling while turning right keeps the sign; both keys up: positive again
+    def yawspeed():
+        return float(con.cvars["cl_yawspeed"])
+
     con.hold("MOUSE2")
     con.press("q")
-    expect(con.cvars["cl_yawspeed"], "-210", "yaw cycle while turning right keeps it right")
+    expect(yawspeed(), -210, "yaw cycle while turning right keeps it right")
     con.hold("MOUSE2", False)
-    expect(con.cvars["cl_yawspeed"], "210", "both up: positive yawspeed")
+    expect(yawspeed(), 210, "both up: positive yawspeed")
+    # a yawspeed set by hand (console, a toggle bind) is kept through turns
+    for codes in (None, {"MOUSE1": 107, "MOUSE2": 108}):
+        con.run("cl_yawspeed 77")
+        con.hold("MOUSE2", code=codes and codes["MOUSE2"])
+        expect(yawspeed(), -77, "hand-set yawspeed: turning right flips it")
+        con.hold("MOUSE1", code=codes and codes["MOUSE1"])
+        expect(yawspeed(), 77, "hand-set yawspeed: left over right")
+        con.hold("MOUSE1", False, codes and codes["MOUSE1"])
+        con.hold("MOUSE2", False, codes and codes["MOUSE2"])
+        expect(yawspeed(), 77, "hand-set yawspeed kept once both are up")
     # with a bhop and a surf list too
     data2 = base_data(null_turns=True, surf={"entries": entries(30, 120), "start": 1}, mode_key="g")
     core.apply(data2, game_dir, game="momentum")
@@ -498,7 +515,7 @@ def check_turns(core, tmp):
     turn_cases(con, "Momentum, two lists", {"MOUSE1": 107, "MOUSE2": 108})
     con.hold("MOUSE2")
     con.press("g")
-    expect(con.cvars["cl_yawspeed"], "-120", "mode switch while turning right keeps it right")
+    expect(float(con.cvars["cl_yawspeed"]), -120, "mode switch while turning right keeps it right")
     con.hold("MOUSE2", False)
     # the game saves the nulled binds in config.cfg on exit
     (cfg / "config.cfg").write_text('bind "MOUSE1" "+sy_left"\nbind "MOUSE2" "+sy_right"\n')
@@ -668,7 +685,9 @@ MUTATIONS = [
     ("right key turns with +right (the other key can't let go in Momentum)", "yawcore.py",
      'sy_goright; +left {right}"', 'sy_goright; -left {left}; +right {right}"'),
     ("yawspeed alias drops the turn's sign", "yawcore.py",
-     '"alias sy_neg {name}_n", "sy_dir"]', '"alias sy_neg {name}_n"]'),
+     'parts.insert(1, "sy_resign")', 'parts.insert(1, "sy_tnone")'),
+    ("turn keys set the yawspeed instead of flipping it", "yawcore.py",
+     'alias sy_flip "multvar cl_yawspeed -100000 100000 -1"', 'alias sy_flip "cl_yawspeed 210"'),
     ("yawspeed stays negative after a right turn", "yawcore.py",
      "-left {right}; sy_goleft; sy_lback", "-left {right}; sy_lback"),
     ("uninstall leaves nulled binds", "yawcore.py", "    unnull_config(cstrike)\n", ""),
