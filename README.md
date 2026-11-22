@@ -4,8 +4,8 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 
 | Tool | What it does | Runs on |
 | --- | --- | --- |
-| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key (bhop and surf lists), colours the crosshair per yawspeed (Linux) | Windows, Linux |
-| [Strafe Trainer](strafe-trainer/) | Sounds when you turn without the matching strafe key or hold both, and each strafe's key timing in ticks on screen (Linux) | Windows, Linux |
+| [Source Yaw](sourceyaw/) | Cycles `cl_yawspeed` with one key, with separate bhop and surf lists (switched as the map loads in Momentum), colours the crosshair per yawspeed (Linux) | Windows, Linux |
+| [Strafe Trainer](strafe-trainer/) | Sounds when you turn without the matching strafe key or hold both (while jump is held or Momentum's run timer runs), and each strafe's key timing in ticks on screen (Linux) | Windows, Linux |
 | [Strafe Review](strafe-review/) | Records every attempt per tick and reviews it in the browser | Windows, Linux |
 | [Gain Converter](gain-converter/) | Converts CS:S SSJ gain % to Momentum gain % and back | Windows, Linux |
 | [Strafe Trainer Height](trainer-height/) | Lets Momentum's strafe trainer be dragged taller in the HUD editor | Windows, Linux |
@@ -68,9 +68,9 @@ hub/              the hub's Windows exe: entry point, build script and release l
 .github/          the Windows builds and the module releases
 ```
 
-`movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. It also has the game session (`session.py`), the patched Momentum HUD files several tools share (`panorama.py`, which writes them into the game's `custom/0-movekit`), the launch wrapper (`movekit-run`), the constant tone player (`tone.py`, Z Penalty's; a copy of the Strafe Trainer's) and a reader for Strafe Review's saved attempts (`attempts.py`, format in [strafe-review/FORMAT.md](strafe-review/FORMAT.md)). A tool imports it from the folder above its own: the repo root in a clone, the core's folder when the hub installed it (modules sit next to the core's `movekit`).
+`movekit` holds what the tools used to copy between them: Steam and game discovery, autoexec cfg blocks, VPK reading, bind and alias parsing, and the GitHub release updater. It also has the game session (`session.py`: map loads, and Momentum's pause menu and run timer starting and stopping, from markers its HUD scripts write), the gamemode cfgs Momentum runs as a map loads (`games.py`), the patched Momentum HUD files several tools share (`panorama.py`, which writes them into the game's `custom/0-movekit`), the launch wrapper (`movekit-run`), the constant tone player (`tone.py`, Z Penalty's; a copy of the Strafe Trainer's) and a reader for Strafe Review's saved attempts (`attempts.py`, format in [strafe-review/FORMAT.md](strafe-review/FORMAT.md)). A tool imports it from the folder above its own: the repo root in a clone, the core's folder when the hub installed it (modules sit next to the core's `movekit`).
 
-`movekit/hub.py` is the hub: the Modules page (`movekit/modules.py` is the manager behind it) and one section per installed tool. Strafe Review (status, Open review and Stop), Gain Converter, Source Yaw (the same settings as its old window; on Windows without the crosshair parts) and Strafe Trainer (on Windows without the offset display) have sections, and the HUD settings (`hud/`, part of the core) show while Strafe Review, Strafe Trainer Height or a tool set up in the game's HUD editor (JHUD, Strafe Speed Histogram) is installed. It is the one part of `movekit` that needs a package outside the standard library: [pywebview](https://pywebview.flowrl.com/). A tool is a module through its `module.json` (key, release line, the core version it needs, its saved data, and a card for the HUD section if it has one) and `module_hooks.py` (install, uninstall, launch).
+`movekit/hub.py` is the hub: the Modules page (`movekit/modules.py` is the manager behind it) and one section per installed tool. Strafe Review (status, Open review, Stop, and whether the review page opens when the game starts), Gain Converter, Source Yaw (the same settings as its old window; on Windows without the crosshair parts), Strafe Trainer (on Windows without the offset display) and Z Penalty (its constant tone) have sections, and the HUD settings (`hud/`, part of the core) show while Strafe Review, Strafe Trainer Height or a tool set up in the game's HUD editor (JHUD, Strafe Speed Histogram, First Jump HUD, Zone Exit Speed, Z Penalty) is installed. It is the one part of `movekit` that needs a package outside the standard library: [pywebview](https://pywebview.flowrl.com/). A tool is a module through its `module.json` (key, release line, the core version it needs, its saved data, and a card for the HUD section if it has one) and `module_hooks.py` (install, uninstall, launch).
 
 ## Launch option
 
@@ -79,7 +79,7 @@ One Steam launch option starts every installed tool that needs to run beside the
 - **Linux:** put `movekit-run` right before `%command%`, for example `movekit-run %command%`. Each tool's installer registers its part with it (a launch hook, linked into `~/.local/share/movekit/hooks`).
 - **Windows:** `"C:\full\path\to\movement-kit.exe" %command%`, with the quotes and your real path.
 
-Tools that don't fit the game skip themselves: Strafe Review only runs for Momentum Mod. On Linux, to turn a tool off for one game, list the ones you want in `~/.config/movekit/settings.toml`; a game it leaves out runs every installed tool:
+Tools that don't fit the game skip themselves: Strafe Review only runs for Momentum Mod. Strafe Review opens its review page as the game starts unless that is turned off in its hub section. On Linux, to turn a tool off for one game, list the ones you want in `~/.config/movekit/settings.toml`; a game it leaves out runs every installed tool:
 
 ```toml
 [launch]
