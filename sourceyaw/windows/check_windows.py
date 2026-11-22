@@ -4,7 +4,8 @@ CI job (Phase 12 in PLAN.md) runs it on windows-latest, with the same Python as 
 
 Usage: python sourceyaw/windows/check_windows.py   (Windows only; exits 1 on the first failure)
 
-Checks what Linux can't: the config folder in %APPDATA%, no crosshair colour; launch_win through
+Checks what Linux can't: the config folder in %APPDATA%, no crosshair colour for CS:S (Momentum's
+cvar colour stays); launch_win through
 module_hooks.launch (yaws.cfg without colour, the list switcher started and stopped, no trainer
 thread: the trainer is its own module since Phase 13, checked by strafe-trainer/windows/); and the
 hub section loading on Windows.
@@ -79,14 +80,14 @@ def check_launch(yawcore, game_dir):
            f"launch: run.log ({launch_win.LOG})")
 
 
-def check_hub(game_dir):
+def check_hub(game_dir, momentum_dir):
     from movekit import hub
     sections, problems = hub.discover(KIT, platform="win32")
     expect([p for p in problems if p[0] == "sourceyaw"], [], "hub: no sourceyaw problems")
     expect("sourceyaw" in [s.key for s in sections], True, "hub: sourceyaw listed")
     bridge = hub.Bridge(sections, problems)
     api = hub.local_import(SOURCEYAW / "hub_section.py", "settings_api")
-    api.core.find_game = lambda game: game_dir if game == "css" else None
+    api.core.find_game = {"css": game_dir, "momentum": momentum_dir}.get
 
     def call(name, **args):
         got = bridge.call("sourceyaw", name, args)
@@ -97,6 +98,17 @@ def check_hub(game_dir):
     st = call("load", game="css")
     expect((st["windows"], st["previews"], st["uses_krosshair"]), (True, [], False), "hub: load on Windows")
     expect("movement-kit.exe" in st["launch"]["text"], True, "hub: the core exe's launch option")
+    expect(st["colors"], False, "hub: no crosshair colour for CS:S")
+    # Momentum keeps its crosshair colour: the page and the colour cfgs work without Pillow
+    (momentum_dir / "cfg" / "config.cfg").write_text('cl_crosshair_color "10 20 30 255"\n')
+    mom = call("load", game="momentum")
+    expect((mom["colors"], mom["previews"], mom["entries"][0]["color"]), (True, [], "#0a141e"),
+           "hub: Momentum's colour from the game, no previews")
+    core = api.core
+    data = core.load_settings("momentum")
+    core.apply(data, momentum_dir, reset_current=True, game="momentum")
+    expect((momentum_dir / "cfg" / core.COLOR_DIR / "c1.cfg").read_text(),
+           'cl_crosshair_color "10 20 30 255"\n', "hub: Momentum's colour cfgs written")
 
 
 def main():
@@ -111,11 +123,12 @@ def main():
         sys.path[:0] = [str(SOURCEYAW), str(KIT)]
         import yawcore
         expect(yawcore.CONFIG_DIR, tmp / "appdata" / "sourceyaw", "config in %APPDATA%")
-        expect({g["colors"] for g in yawcore.GAMES.values()}, {None}, "no crosshair colour on Windows")
+        expect({k: g["colors"] for k, g in yawcore.GAMES.items()}, {"css": None, "momentum": "cvar"},
+               "crosshair colour on Windows: Momentum's only")
         game_dir = fake_game(tmp / "Steam", "Counter-Strike Source")
         yawcore.find_game = lambda game: game_dir if game == "css" else None
         check_launch(yawcore, game_dir)
-        check_hub(game_dir)
+        check_hub(game_dir, fake_game(tmp / "Steam", "Momentum Mod"))
     print("check_windows: all passed")
 
 

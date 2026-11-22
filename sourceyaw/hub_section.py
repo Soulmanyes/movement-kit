@@ -4,9 +4,10 @@ The logic is settings_api.py and yawcore.py, loaded by path (hub.local_import), 
 goes on sys.path. hub.discover() loads this file on every OS before it looks at "os", so the top of
 the file imports only the standard library and movekit; settings_api loads on the first call.
 
-On Windows (Phase 12) the page hides what Windows doesn't have (data-linux in hub/index.html: the
-crosshair colour), load() says so with "windows", and the launch option is the core exe's
-(movekit/launchopt.py). Pillow is only needed for the crosshair previews, which Windows doesn't draw.
+On Windows (Phase 12) load() says so with "windows", and the launch option is the core exe's
+(movekit/launchopt.py). CS:S has no crosshair colour there, so load()'s "colors" is false and the page
+hides the Crosshair card (data-colors in hub/index.html) and the colour column; Momentum keeps them
+(1.13.0). Pillow is only needed for the crosshair previews, which Windows doesn't draw.
 The strafe trainer has its own section since Phase 13 (strafe-trainer/hub_section.py).
 
 What the GTK window keeps in its widgets, the page keeps in its own state and sends back whole:
@@ -179,6 +180,8 @@ def load(game=None):
                   for g in installed],
         "found": bool(cstrike), "problem": api.setup_problem(game, cstrike),
         "uses_krosshair": uses_krosshair,
+        # False where the game has no crosshair colour (CS:S on Windows): no Crosshair card or colour column
+        "colors": info["colors"] is not None,
         "color_note": ("Shows a KROSSHAIR crosshair in the colour of the current yawspeed" if uses_krosshair
                        else f"Sets {info['name']}'s own crosshair to the colour of the current yawspeed"),
         "windows": core.WINDOWS,
@@ -236,7 +239,7 @@ def _base_png(game, base):
 
 def previews(game, base, colors):
     """Data URLs of the crosshair recoloured for each colour, in one call for every row (none on
-    Windows, which has no crosshair colour and no Pillow)."""
+    Windows, which has no Pillow)."""
     core = _core()
     if core.WINDOWS:
         return []

@@ -20,8 +20,10 @@
 	border: 1px solid var(--border);
 	border-radius: 6px;
 }
-/* Windows: no crosshair colour, so no preview and colour columns */
+/* CS:S on Windows: no crosshair colour, so no preview and colour columns */
 .sy-entry.sy-nocolor { grid-template-columns: auto auto 22px minmax(90px, 120px) minmax(150px, 1fr) auto auto; }
+/* Momentum on Windows: a colour but no preview (no Pillow to draw one) */
+.sy-entry.sy-nopreview { grid-template-columns: auto auto 22px minmax(90px, 120px) 46px minmax(150px, 1fr) auto auto; }
 .sy-entry.start { border-color: var(--accent); }
 /* the list not used in game while the lists aren't separate: still editable, greyed out */
 #sy-entries.sy-inactive .sy-entry { opacity: 0.45; }

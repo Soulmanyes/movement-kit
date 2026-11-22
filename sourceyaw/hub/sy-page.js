@@ -39,7 +39,7 @@
 
 	let previewTimer = null;
 	function refreshPreviews() {
-		if (st.windows) return;  // no crosshair colour on Windows
+		if (st.windows || !st.colors) return;  // no previews on Windows (no Pillow) or without colours
 		clearTimeout(previewTimer);
 		previewTimer = setTimeout(async () => {
 			const urls = await call("previews", { game: st.game, base, colors: entries.map((e) => e.color) },
@@ -70,7 +70,7 @@
 			numberBox(speed, entry.speed, (v) => { entry.speed = v; changed(); });
 
 			const color = el("input", { type: "color", value: entry.color, title: "Crosshair colour",
-				hidden: st.windows });
+				hidden: !st.colors });
 			color.oninput = () => { entry.color = color.value; refreshPreviews(); changed(); };
 
 			const choices = st.sounds.some(([v]) => v === entry.sound) ? st.sounds
@@ -94,7 +94,7 @@
 				changed();
 			};
 
-			box.append(el("div", { className: "sy-entry" + (i === start ? " start" : "") + (st.windows ? " sy-nocolor" : "") },
+			box.append(el("div", { className: "sy-entry" + (i === start ? " start" : "") + (!st.colors ? " sy-nocolor" : st.windows ? " sy-nopreview" : "") },
 				el("div", { className: "sy-move" }, up, down), radio,
 				el("span", { className: "sy-num", textContent: String(i + 1) }), preview, speed, color,
 				el("div", { className: "sy-sound-wrap" }, sound, play), remove));
@@ -364,7 +364,7 @@
 		$("sy-color-note").textContent = st.color_note;
 		$("sy-steam-note").textContent = st.steam_note;
 		document.querySelectorAll("[data-krosshair]").forEach((n) => { n.hidden = !st.uses_krosshair; });
-		document.querySelectorAll("[data-linux]").forEach((n) => { n.hidden = st.windows; });
+		document.querySelectorAll("[data-colors]").forEach((n) => { n.hidden = !st.colors; });
 		if (st.uses_krosshair) {
 			showBase(st.base_options, st.base_shown);
 			showKrosshair(st.krosshair);

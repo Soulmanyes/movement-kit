@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.12.0"
+VERSION = "1.13.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -96,12 +96,11 @@ GAMES = {
     "momentum": {"name": "Momentum Mod", "short": "Momentum Mod", "colors": "cvar",
                  "process": kit_games.MOMENTUM.process},
 }
-# no crosshair colour on Windows, for either game (Phase 12): KROSSHAIR is a Linux Vulkan layer,
-# and the owner left Momentum's cvar colour out there too
+# no crosshair colour for CS:S on Windows: KROSSHAIR is a Linux Vulkan layer (Phase 12). Momentum's
+# cvar colour is only cfg files, so it works there too (1.13.0; Phase 12 had left it out)
 WINDOWS = sys.platform == "win32"
 if WINDOWS:
-    for _game in GAMES.values():
-        _game["colors"] = None
+    GAMES["css"]["colors"] = None
 # first line of every yaws.cfg the app writes; anything else is the user's own file
 YAWS_HEADER = "// Written by Source Yaw."
 YAWS_HEADERS = (YAWS_HEADER, "// Written by CS:S Yaw.")
@@ -411,6 +410,16 @@ def load_settings(game="css"):
             # remember the user's own crosshair colour, to start from and to put back
             game_dir = find_game(game)
             data["original_color"] = game_crosshair_color(game_dir) if game_dir else None
+    elif WINDOWS and GAMES[game]["colors"] == "cvar" and "original_color" not in data:
+        # a profile made while this game had no colour here (Momentum on Windows before 1.13.0): its
+        # yawspeeds hold white placeholders. Start from the user's own colour, as a new profile does,
+        # so nothing changes in game until they pick colours.
+        game_dir = find_game(game)
+        data["original_color"] = game_crosshair_color(game_dir) if game_dir else None
+        for lst in saved_lists(data):
+            if all(e.get("color") in (None, "", "#ffffff") for e in lst["entries"]):
+                for entry in lst["entries"]:
+                    entry["color"] = ""  # filled from original_color below
     data.setdefault("crosshair", True)
     data.setdefault("base", "crosshair-maker")
     data["start"] = start_index(data)
@@ -425,9 +434,11 @@ def load_settings(game="css"):
         for entry in lst["entries"]:
             if not entry.get("color"):
                 original = data.get("original_color")
-                # no colour on Windows: a placeholder, kept for when the profile is used on Linux
+                # no colour (CS:S on Windows): a placeholder, kept for when the profile is used on
+                # Linux. Momentum on Windows has no Pillow to read an image: the game's default green.
                 entry["color"] = (rgba_to_hex(original) if original
                                   else "#ffffff" if GAMES[game]["colors"] is None
+                                  else "#00ff00" if WINDOWS and GAMES[game]["colors"] == "cvar"
                                   else main_color(resolve_base(data)))
     return data
 

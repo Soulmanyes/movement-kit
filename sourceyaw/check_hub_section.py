@@ -258,13 +258,15 @@ def main():
 
 def check_windows(call, core, games):
     """The section as Windows sees it, faked on Linux: yawcore's WINDOWS switch and no crosshair
-    colour (what yawcore sets at import on Windows), a Steam with launch options to read."""
+    colour for CS:S (what yawcore sets at import on Windows), a Steam with launch options to read."""
     core.WINDOWS = True
-    for game in core.GAMES.values():
-        game["colors"] = None
+    core.GAMES["css"]["colors"] = None
     st = call("load", game="css")
-    expect((st["windows"], st["previews"], st["uses_krosshair"], st["krosshair"]), (True, [], False, None),
-           "Windows: load")
+    expect((st["windows"], st["colors"], st["previews"], st["uses_krosshair"], st["krosshair"]),
+           (True, False, [], False, None), "Windows: load")
+    mom = call("load", game="momentum")
+    expect((mom["windows"], mom["colors"], mom["previews"], mom["uses_krosshair"]), (True, True, [], False),
+           "Windows: Momentum keeps its crosshair colour, without previews")
     expect(st["steam_note"].startswith("CS:S Properties → Launch Options. movement-kit.exe"), True,
            "Windows: Steam note")
     expect(call("previews", game="css", base="builtin", colors=["#ff0000"]), [], "Windows: no previews")

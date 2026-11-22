@@ -4,16 +4,16 @@
 options that still say `css-yaw-run` keep working.*
 
 A surf and bhop helper for Counter-Strike: Source and Momentum Mod on Linux and Windows. It
-cycles `cl_yawspeed` with one key and tells you which yawspeed is active. On Windows it does the
-yawspeed cycle without the crosshair colour; see [On Windows](#on-windows).
+cycles `cl_yawspeed` with one key and tells you which yawspeed is active. On Windows the crosshair
+colour works in Momentum Mod but not in CS:S; see [On Windows](#on-windows).
 
 - **Yawspeed cycle:** one key steps through your yawspeeds. A short game sound plays when
   you switch, and only you hear it.
 - **Bhop and surf lists** (optional): separate yawspeeds for bhop and surf. The map's name
   picks the list, and a mode key switches by hand.
-- **Crosshair colour** (Linux): your crosshair changes colour for each yawspeed. In Momentum Mod
-  that's the game's own crosshair. CS:S has no crosshair without a weapon, so there it's a
-  [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair.
+- **Crosshair colour:** your crosshair changes colour for each yawspeed. In Momentum Mod
+  that's the game's own crosshair, on Linux and Windows. CS:S has no crosshair without a weapon,
+  so there it's a [KROSSHAIR](https://github.com/noahlyk/krosshair) crosshair, on Linux only.
 - **Strafe trainer:** moved to its own module, [Strafe Trainer](../strafe-trainer/), in 1.11.0.
   If you had the trainer on, updating Source Yaw installs it, with your trainer settings copied
   over. Otherwise install it from its card on the Modules page.
@@ -109,7 +109,11 @@ removes them, and keeps your settings unless you tick **Also delete saved data**
 
 What's different from Linux:
 
-- No crosshair colour, in either game. The Crosshair card is hidden.
+- In Momentum Mod the crosshair colour works as on Linux (since 1.13.0), but the yawspeed rows
+  have no crosshair preview, only the colour. If you used Source Yaw on Windows before, your
+  yawspeeds start in your own crosshair colour, so nothing changes in game until you pick colours.
+- In CS:S there's no crosshair colour: KROSSHAIR only exists on Linux. The Crosshair card is
+  hidden for CS:S.
 - Settings are in `%APPDATA%\sourceyaw`, and what the launch did goes to `run.log` there. If
   something doesn't work, `run.log` says why.
 

@@ -561,7 +561,7 @@ The owner wants the Source Yaw settings tidied before the Windows version (Phase
 
 Replaces the 2026-10-26 plan for a separate Windows app. Source Yaw becomes a Windows module too, installed from the hub's Modules page, with its settings in the hub section.
 
-- **Scope (owner).** The yaw cycle (binds, sounds) and the strafe trainer, for CS:S and Momentum. No crosshair colour on Windows for either game ("the colour can be left out"). The trainer gives the tone cue only, with no offset number on screen, because hooking DirectX in CS:S risks VAC.
+- **Scope (owner).** The yaw cycle (binds, sounds) and the strafe trainer, for CS:S and Momentum. No crosshair colour on Windows for either game ("the colour can be left out"). *Changed 2026-11-22 (owner, Source Yaw 1.13.0): Momentum's colour is only cfg files, so it is on on Windows too; CS:S still has none, as KROSSHAIR is Linux only.* The trainer gives the tone cue only, with no offset number on screen, because hooking DirectX in CS:S risks VAC.
 - **What is known.** Windows launch hooks run inside the core exe's process (`movekit/dispatch.py`), so a trainer thread lives exactly as long as the game. The exe bundles the standard library only, with no Pillow, so Windows code uses ctypes, `winsound` and `winmm`.
 - **Steps.**
   1. Split `trainer.py`. `Trainer`, `GameEvents`, `read_binds`, `settings` and `map_tickrate` go into a platform-neutral module. The input service socket, `FocusWatch`, the pw-cat `Tone`, `Overlay` and `write_atlas` stay Linux-only. Linux behaviour stays the same.

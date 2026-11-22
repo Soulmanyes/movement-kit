@@ -6,8 +6,9 @@ that process and live exactly as long as the game:
   - yaws.cfg rewritten from the saved settings (yawcore.apply_at_launch),
   - the list switcher (mode_watch.run) when auto mode is on.
 The strafe trainer is its own module since Phase 13 (strafe-trainer/launch_win.py).
-No crosshair colour on Windows. Everything prints to %APPDATA%\\sourceyaw\\run.log, the only
-place a windowed exe's output and a thread's traceback can be read afterwards.
+Crosshair colours on Windows are Momentum's only, from yaws.cfg (none for CS:S). Everything prints
+to %APPDATA%\\sourceyaw\\run.log, the only place a windowed exe's output and a thread's traceback
+can be read afterwards.
 
 Also `py launch_win.py GAME` from a checkout, to try the helpers without the hub (start the game
 yourself, then this): they run until Ctrl+C.

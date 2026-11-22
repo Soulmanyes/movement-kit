@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Checks launch_win.py (Source Yaw's game launch on Windows, Phase 12 in PLAN.md) on Linux, with
-Windows' "no crosshair colour" switched on, temp game folders and a fake movekit session. HOME and the XDG folders point into a temp folder; no game or port needed.
+Windows' colour switch (none for CS:S, Momentum's cvar colour kept) switched on, temp game folders and a fake movekit session. HOME and the XDG folders point into a temp folder; no game or port needed.
 
 Usage: python sourceyaw/check_launch_win.py   (exits 1 on the first failure)
 
-Covers: which game Steam's command starts (exe folder, -game, neither), yaws.cfg written without
-colour lines, the list switcher started as a thread that gets the session's events (a saved
+Covers: which game Steam's command starts (exe folder, -game, neither), Momentum's yaws.cfg written
+with its colour cfgs and no Pillow, an old Windows profile's white placeholders turned into the
+game's own colour (1.13.0), the list switcher started as a thread that gets the session's events (a saved
 "trainer" dict starting nothing: the trainer is its own module since Phase 13, checked by
 strafe-trainer/check_launch_win.py), everything stopped and cleaned up at exit, all without Pillow
 (auto cfg cleared, session closed), a thread's error landing in run.log, another game left alone,
@@ -53,8 +54,8 @@ def main():
 
         from movekit import session
 
-        for game in yawcore.GAMES.values():  # as on Windows
-            game["colors"] = None
+        yawcore.GAMES["css"]["colors"] = None  # as on Windows
+        yawcore.WINDOWS = True
         common = tmp / "Steam" / "steamapps" / "common"
         dirs = {"css": common / "Counter-Strike Source" / "cstrike", "momentum": common / "Momentum Mod" / "momentum"}
         for d in dirs.values():
@@ -79,6 +80,25 @@ def main():
         expect(yawcore.validate(data), [], "settings valid")
         yawcore.save_settings(data, "momentum")
 
+        # a Momentum profile saved on Windows before 1.13.0: white placeholders, no original_color
+        (dirs["momentum"] / "cfg" / "config.cfg").write_text('cl_crosshair_color "10 20 30 200"\n')
+        old = {k: v for k, v in data.items() if k != "original_color"}
+        old["entries"] = [{**e, "color": "#ffffff"} for e in speeds]
+        old["surf"] = {"entries": [{**e, "color": "#ffffff"} for e in speeds[:2]], "start": 0}
+        yawcore.save_settings(old, "momentum")
+        got = yawcore.load_settings("momentum")
+        expect((got["original_color"], {e["color"] for e in got["entries"] + got["surf"]["entries"]}),
+               ("10 20 30 200", {"#0a141e"}), "old Windows profile starts from the game's colour")
+        picked = {**old, "entries": [{**e, "color": "#ffffff"} for e in speeds[:2]] + [speeds[2]]}
+        yawcore.save_settings(picked, "momentum")
+        expect([e["color"] for e in yawcore.load_settings("momentum")["entries"]],
+               ["#ffffff", "#ffffff", "#ff0000"], "a list with a colour of its own is left alone")
+        (dirs["momentum"] / "cfg" / "config.cfg").unlink()
+        yawcore.save_settings(old, "momentum")
+        expect({e["color"] for e in yawcore.load_settings("momentum")["entries"]}, {"#00ff00"},
+               "no colour of their own: the game's default green, without Pillow")
+        yawcore.save_settings(data, "momentum")
+
         joined = []
 
         class FakeJoined:
@@ -98,8 +118,12 @@ def main():
         threads = launch_win.start([str(dirs["momentum"].parent / "momentum.exe")])
         expect(sorted(t.name for t in threads), ["sourceyaw-mode"], "only the list switcher started")
         cfg = (dirs["momentum"] / "cfg" / "yaws.cfg").read_text()
-        expect(("yaws_colors" in cfg, "// play is a local-only sound cue.\n" in cfg, "con_logfile yaw.log" in cfg),
-               (False, True, True), "yaws.cfg without colour, with the console log")
+        expect(("yaws_colors" in cfg, "con_logfile yaw.log" in cfg), (True, True),
+               "Momentum's yaws.cfg with colour, with the console log")
+        expect(sorted(p.name for p in (dirs["momentum"] / "cfg" / yawcore.COLOR_DIR).iterdir()),
+               ["b1.cfg", "b2.cfg", "b3.cfg", "s1.cfg", "s2.cfg"], "Momentum's colour cfgs")
+        expect((dirs["momentum"] / "cfg" / yawcore.COLOR_DIR / "b1.cfg").read_text(),
+               'cl_crosshair_color "255 0 0 255"\n', "a colour cfg")
         wait_for(lambda: len(joined) == 1, "the list switcher joining the session")
         expect({str(j.log) for j in joined}, {str(dirs["momentum"] / "yaw.log")}, "session log path")
         auto = dirs["momentum"] / "cfg" / f"{yawcore.AUTO_CFG}.cfg"
@@ -131,8 +155,8 @@ def main():
             "sys.modules['PIL'] = None\n"
             f"sys.path.insert(0, {str(HERE)!r})\n"
             "import launch_win, yawcore\n"
-            "for g in yawcore.GAMES.values():\n"
-            "    g['colors'] = None\n"
+            "yawcore.GAMES['css']['colors'] = None\n"
+            "yawcore.WINDOWS = True\n"
             f"yawcore.find_game = lambda g: Path({str(dirs['momentum'])!r}) if g == 'momentum' else None\n"
             f"launch_win.start([{str(dirs['momentum'].parent / 'momentum.exe')!r}])\n"
             "import time; time.sleep(0.5)  # the game, briefly\n")
