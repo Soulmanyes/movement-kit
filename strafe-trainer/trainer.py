@@ -49,7 +49,7 @@ if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and
 from movekit import binds, games, maps, session  # after the path above
 from movekit.hub import local_import
 
-VERSION = "1.1.1"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.2"  # the Strafe Trainer's (module.json reads it); bump in the same commit as the release tag
 
 store = local_import(__file__, "store")
 gamecfg = local_import(__file__, "gamecfg")
@@ -95,7 +95,10 @@ def forwarded():
 
 
 ROLES = {"+jump": "jump", "+moveleft": "strafe_left", "+moveright": "strafe_right",
-         "+left": "turn_left", "+right": "turn_right"}
+         "+left": "turn_left", "+right": "turn_right",
+         # Source Yaw's null turnbinds: both keys hold +left (the sign of cl_yawspeed turns), so
+         # their aliases are named here, before resolve() follows them
+         "+sy_left": "turn_left", "+sy_right": "turn_right"}
 
 # the settings' defaults and cues live in store.py; these names stay for the checks and the section
 TRAINER_DEFAULTS = store.DEFAULTS

@@ -84,7 +84,7 @@ loaded and Momentum's pause menu (Esc) is closed, so scrolling in a menu or anot
 quiet.
 
 It reads your binds from the game's `config.cfg`, following aliases, so null binds and turn binds
-(`+left`/`+right`) work as they are. The tickrate is picked from the map (`surf_` maps 66, `bhop_`
+(`+left`/`+right`) work as they are, Source Yaw's null turnbinds too. The tickrate is picked from the map (`surf_` maps 66, `bhop_`
 maps 100); on other CS:S maps it uses the tickrate you set.
 
 Offsets are measured from your keyboard and mouse at the OS, not from the game's own input ticks,
