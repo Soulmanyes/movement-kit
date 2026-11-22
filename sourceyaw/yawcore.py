@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.12.0"
+VERSION = "1.13.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -132,6 +132,18 @@ DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
 # commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
 # (the strafe trainer's sourceyaw_offsets left with it in Phase 13: its own module binds and unbinds it)
 OWN_COMMANDS = ("yaw_cycle", PRESS_ALIAS, MODE_ALIAS)
+# null turnbinds (1.13.0, off by default): with "null_turns" on, yaws.cfg binds the keys config.cfg
+# has on +left/+right to these aliases. Holding both turn keys then turns toward the one pressed last,
+# and letting it go turns back to the one still held. The game writes the new binds into config.cfg,
+# so keys are found by either name; with the option off (or on uninstall) nulled keys go back to plain.
+# Both keys hold +left, and the sign of cl_yawspeed picks the direction: a key can only let go of
+# its own +left, because Momentum gives the +/- commands an alias runs the code of the key that ran
+# it (kbutton_t frees a slot only for the code that took it), so a -left from the other key does
+# nothing there. Each key also gives its own code (TURN_CODES), which Source 2013 (CS:S) goes by.
+# The yawspeed aliases keep the sign through sy_dir; with both keys up it is positive again.
+# Not in OWN_COMMANDS: apply() unbinds keys bound to those.
+TURNS = {"+left": "+sy_left", "+right": "+sy_right"}
+TURN_CODES = {"+left": 9001, "+right": 9002}
 
 # short UI sounds to offer (movekit.sounds); the app only lists the ones this game install has
 SOUNDS = sounds.SOUNDS
@@ -418,6 +430,7 @@ def load_settings(game="css"):
     data.setdefault("auto_mode", True)
     data.setdefault("load_switch", True)
     data.setdefault("load_sound", True)
+    data.setdefault("null_turns", False)
     data.setdefault("map_modes", dict(DEFAULT_MAP_MODES))
     if data.get("surf"):
         data["surf"]["start"] = start_index(data["surf"])
@@ -541,28 +554,104 @@ def key_conflicts(cstrike, key):
     return found
 
 
-def _set_alias(name, entry, nxt, surf, color_cfg):
-    """`alias <name> "cl_yawspeed ..; echo ..; [exec colour cfg]; [play ..]; alias yaw_cycle <nxt>"`."""
+def _set_alias(name, entry, nxt, surf, color_cfg, signed=False):
+    """`alias <name> "cl_yawspeed ..; echo ..; [exec colour cfg]; [play ..]; alias yaw_cycle <nxt>"`.
+    `signed` (null turnbinds on): <name>_p and _n set the speed either way, and the alias picks the
+    sign the turn keys want through sy_dir."""
     speed = fmt_speed(entry["speed"])
     parts = [f"cl_yawspeed {speed}", f"echo {token(speed, surf)}"]
+    if signed:
+        parts[1:1] = [f"alias sy_pos {name}_p", f"alias sy_neg {name}_n", "sy_dir"]
     if color_cfg:
         parts.append(f"exec {COLOR_DIR}/{color_cfg}")
     if entry.get("sound"):
         parts.append(f"play {entry['sound']}")
     parts.append(f"alias yaw_cycle {nxt}")
-    return f'alias {name} "{"; ".join(parts)}"'
+    line = f'alias {name} "{"; ".join(parts)}"'
+    if signed:
+        line = (f'alias {name}_p "cl_yawspeed {speed}"\n'
+                f'alias {name}_n "cl_yawspeed {fmt_speed(-float(entry["speed"]))}"\n{line}')
+    return line
 
 
-def _key_lines(data, unbind, cycle_command):
+def _signed(data, turns):
+    """Whether yaws.cfg nulls turn keys, so the yawspeed aliases keep the turn's sign."""
+    return bool(turns) and bool(data.get("null_turns"))
+
+
+def turn_keys(cstrike, ours=()):
+    """{key: (plain turn command, whether it is nulled now)} for keys config.cfg binds to +left or
+    +right, plain or through TURNS. Keys in `ours` (the cycle and mode keys) are left out."""
+    text = binds.cfg_text(cstrike / "cfg/config.cfg")
+    skip = {k.lower() for k in ours if k}
+    found = {}
+    for plain, null in TURNS.items():
+        for command in (plain, null):
+            for key in binds.keys_bound_to(text, command):
+                if key.lower() not in skip:
+                    found[key] = (plain, command == null)
+    return found
+
+
+def own_turn_keys(cstrike, ours=()):
+    """{key: command} for keys config.cfg binds to a turn through someone's own aliases (a null
+    script's +nleft, say): Source Yaw leaves those as they are. Keys in `ours` are left out."""
+    cfg = cstrike / "cfg"
+    alias_map = binds.aliases(cfg)
+    wanted = {"+left": "left", "+right": "right"}
+    skip = {k.lower() for k in ours if k}
+    found = {}
+    for line in binds.cfg_text(cfg / "config.cfg").splitlines():
+        bind = binds.parse_bind(binds.strip_comment(line))
+        if not bind or bind[0].lower() in skip:
+            continue
+        command = bind[1].strip().strip('"')
+        if command.lower() in wanted or command.lower() in TURNS.values():
+            continue
+        if binds.resolve(command, wanted, alias_map):
+            found[bind[0]] = command
+    return found
+
+
+def _turn_lines(data, turns, start_alias):
+    """Null turnbind aliases and binds for `turns` (turn_keys) with null_turns on; with it off,
+    plain binds for the keys still nulled from before, so none is left on an undefined alias.
+    `start_alias`: the yawspeed alias the game starts on, whose _p/_n the turn keys use first."""
+    if not turns:
+        return []
+    if not data.get("null_turns"):
+        back = [f'bind "{key}" "{plain}"' for key, (plain, nulled) in turns.items() if nulled]
+        return ["", "// null turnbinds off: back to plain turns", *back] if back else []
+    left, right = TURN_CODES["+left"], TURN_CODES["+right"]
+    lines = ["",
+             "// null turnbinds: holding both turn keys turns toward the one pressed last. Both keys",
+             "// hold +left (each lets go of its own only); the sign of cl_yawspeed is the direction.",
+             'alias sy_tnone ""',
+             f"alias sy_pos {start_alias}_p",
+             f"alias sy_neg {start_alias}_n",
+             'alias sy_goleft "alias sy_dir sy_pos; sy_pos"',
+             'alias sy_goright "alias sy_dir sy_neg; sy_neg"',
+             "alias sy_dir sy_pos",
+             "alias sy_lback sy_tnone",
+             "alias sy_rback sy_tnone",
+             f'alias +sy_left "alias sy_lback sy_goleft; sy_goleft; +left {left}"',
+             f'alias -sy_left "alias sy_lback sy_tnone; -left {left}; sy_goleft; sy_rback"',
+             f'alias +sy_right "alias sy_rback sy_goright; sy_goright; +left {right}"',
+             f'alias -sy_right "alias sy_rback sy_tnone; -left {right}; sy_goleft; sy_lback"']
+    lines += [f'bind "{key}" "{TURNS[plain]}"' for key, (plain, _) in turns.items()]
+    return lines
+
+
+def _key_lines(data, unbind, cycle_command, turns, start_alias):
     lines = [f'unbind "{key}"' for key in unbind]
     lines.append(f'bind "{data["key"]}" "{cycle_command}"')
     mode_key = mode_key_of(data)
     if mode_key:
         lines.append(f'bind "{mode_key}" "{MODE_ALIAS}"')
-    return lines
+    return lines + _turn_lines(data, turns, start_alias)
 
 
-def _yaws_cfg_modes(data, unbind, game):
+def _yaws_cfg_modes(data, unbind, game, turns=None):
     """yaws.cfg with a bhop and a surf list (see MODE_ALIAS)."""
     cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
     lines = [f"{YAWS_HEADER} Change it in the app, edits here are overwritten."]
@@ -576,6 +665,7 @@ def _yaws_cfg_modes(data, unbind, game):
         if auto_on(data):
             lines += ["// the list switcher reads map loads from yaw.log",
                       "con_logfile yaw.log"]
+    signed = _signed(data, turns)
     starts = {}
     for mode, letter, lst, _ in mode_lists(data):
         entries = lst["entries"]
@@ -584,7 +674,7 @@ def _yaws_cfg_modes(data, unbind, game):
         for i, entry in enumerate(entries):
             lines.append(_set_alias(f"yaw_{letter}{i + 1}", entry,
                                     f"yaw_{letter}{(i + 1) % len(entries) + 1}", mode == "surf",
-                                    f"{letter}{i + 1}" if cvar_colors else None))
+                                    f"{letter}{i + 1}" if cvar_colors else None, signed))
     lines += [
         "",
         f"// switching lists: sourceyaw_bhop/_surf switch at once ({MODE_ALIAS} runs the other one);",
@@ -612,7 +702,7 @@ def _yaws_cfg_modes(data, unbind, game):
         quiet = f"yaw_{letter}{start + 1}_quiet"
         lines.append(_set_alias(quiet, dict(entries[start], sound=None),
                                 f"yaw_{letter}{(start + 1) % len(entries) + 1}", mode == "surf",
-                                f"{letter}{start + 1}" if cvar_colors else None))
+                                f"{letter}{start + 1}" if cvar_colors else None, signed))
         lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {quiet}"')
     if auto_on(data):
         lines.append(f'alias {PRESS_ALIAS} "exec {AUTO_CFG}; yaw_cycle"')
@@ -628,13 +718,15 @@ def _yaws_cfg_modes(data, unbind, game):
     if cvar_colors:
         lines.append(f"exec {COLOR_DIR}/b{start + 1}")
     lines += [f"alias yaw_cycle yaw_b{(start + 1) % len(entries) + 1}", "sy_bhop_state", ""]
-    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle")
+    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle", turns,
+                        f"yaw_b{start + 1}")
     return "\n".join(lines) + "\n"
 
 
-def yaws_cfg(data, unbind=(), game="css"):
+def yaws_cfg(data, unbind=(), game="css", turns=None):
+    """`turns`: turn_keys() of the game, for the null turnbinds (None: none)."""
     if surf_on(data):
-        return _yaws_cfg_modes(data, unbind, game)
+        return _yaws_cfg_modes(data, unbind, game, turns)
     lst = mode_lists(data)[0][2]  # the one list in game
     entries = lst["entries"]
     cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
@@ -651,7 +743,7 @@ def yaws_cfg(data, unbind=(), game="css"):
     lines.append("")
     for i, entry in enumerate(entries):
         lines.append(_set_alias(f"yaw_set{i + 1}", entry, f"yaw_set{(i + 1) % len(entries) + 1}", False,
-                                f"c{i + 1}" if cvar_colors else None))
+                                f"c{i + 1}" if cvar_colors else None, _signed(data, turns)))
     start = start_index(lst)
     first = fmt_speed(entries[start]["speed"])
     lines += [
@@ -666,7 +758,7 @@ def yaws_cfg(data, unbind=(), game="css"):
         f'alias yaw_cycle "yaw_set{(start + 1) % len(entries) + 1}"',
         "",
     ]
-    lines += _key_lines(data, unbind, "yaw_cycle")
+    lines += _key_lines(data, unbind, "yaw_cycle", turns, f"yaw_set{start + 1}")
     return "\n".join(lines) + "\n"
 
 
@@ -826,6 +918,21 @@ def apply(data, cstrike, reset_current=False, game="css"):
               if k not in ours]
     for key in unbind:
         notes.append(f"'{key}' gets unbound next time yaws.cfg runs")
+    turns = turn_keys(cstrike, ours)
+    if data.get("null_turns"):
+        own = own_turn_keys(cstrike, ours)
+        if turns:
+            notes.append(f"Turn keys nulled: {', '.join(turns)}")
+        if own:
+            notes.append("Left as they are, on your own turn aliases: "
+                         + ", ".join(f"{key} ({command})" for key, command in own.items()))
+            if game == "momentum":
+                notes.append("Null aliases that release the other key's turn (-right; +left) get stuck "
+                             "in Momentum Mod; bind those keys to +left/+right to use Source Yaw's")
+        if not turns and not own:
+            notes.append("Null turnbinds: no +left/+right binds found in config.cfg")
+    else:
+        notes += [f"'{key}' goes back to {plain}" for key, (plain, nulled) in turns.items() if nulled]
     target = cstrike / "cfg/yaws.cfg"
     try:
         theirs = not target.read_text(errors="replace").startswith(YAWS_HEADERS)
@@ -836,7 +943,7 @@ def apply(data, cstrike, reset_current=False, game="css"):
         # someone's own yaws.cfg: keep it rather than silently replace it
         shutil.copyfile(target, backup)
         notes.append(f"Your old yaws.cfg was saved as {backup.name}")
-    write_text_atomic(target, yaws_cfg(data, unbind, game))
+    write_text_atomic(target, yaws_cfg(data, unbind, game, turns))
     # empty, so no arm left from the last game (a crash, a launch without the hook) fires
     auto = cstrike / "cfg" / f"{AUTO_CFG}.cfg"
     if auto_on(data):
@@ -861,10 +968,23 @@ def apply(data, cstrike, reset_current=False, game="css"):
     return notes
 
 
+def unnull_config(cstrike):
+    """Puts config.cfg's binds to the null turn aliases back on +left/+right: yaws.cfg, which
+    defines those aliases, is about to go."""
+    path = cstrike / "cfg/config.cfg"
+    text = binds.cfg_text(path)
+    new = text
+    for plain, null in TURNS.items():
+        new = re.sub(rf'^(bind "[^"]+" )"{re.escape(null)}"', rf'\1"{plain}"', new, flags=re.MULTILINE)
+    if new != text:
+        write_text_atomic(path, new)
+
+
 def remove_from_game(cstrike, game="css"):
     """For uninstalling: takes yaws.cfg out of autoexec.cfg and deletes it (if it is
     ours), putting back a yaws.cfg the user had before."""
     set_autoexec(cstrike, False)
+    unnull_config(cstrike)
     (cstrike / "cfg" / f"{AUTO_CFG}.cfg").unlink(missing_ok=True)
     set_mode_cfgs(cstrike, {}, game)
     if GAMES[game]["colors"] == "cvar":

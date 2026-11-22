@@ -199,6 +199,10 @@ def load(game=None):
         # Momentum runs a cfg per gamemode on map load, so it can switch then; CS:S on the next press
         "map_load": core.runs_mode_cfgs(game),
         "load_switch": data["load_switch"], "load_sound": data["load_sound"],
+        "null_turns": data["null_turns"],
+        "turn_keys": sorted(core.turn_keys(cstrike, (data["key"], data["mode_key"]))) if cstrike else [],
+        "own_turns": ([[k, c] for k, c in core.own_turn_keys(cstrike, (data["key"], data["mode_key"])).items()]
+                      if cstrike else []),
         "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
         "notes": key_notes(game, data["key"], data["mode_key"]),
@@ -297,7 +301,7 @@ def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
     form = {key, crosshair, start, base, entries: [{speed, color, sound}],
             surf: {entries, start} or null, separate, active, mode_key, auto_mode,
-            load_switch, load_sound}.
+            load_switch, load_sound, null_turns}.
     The saved "trainer" dict (from before Phase 13) is kept as it was, for a roll back to 1.10."""
     data = _core().load_settings(game)
     entries, start = _list_value(form["entries"], form.get("start", 0))
@@ -312,7 +316,8 @@ def settings(game, form):
                           separate=bool(form.get("separate")) and surf is not None,
                           active=str(form.get("active") or "bhop"),
                           load_switch=bool(form.get("load_switch", True)),
-                          load_sound=bool(form.get("load_sound", True)))
+                          load_sound=bool(form.get("load_sound", True)),
+                          null_turns=bool(form.get("null_turns", False)))
 
 
 def _list_value(form_entries, start):

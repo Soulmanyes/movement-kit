@@ -19,7 +19,9 @@ Covers:
     the gamemode cfg blocks by map_modes (the player's own lines kept, our empty files deleted, none
     for CS:S, none with load_switch off); remove_from_game deleting the auto cfg and the blocks; crosshair images for the surf tokens;
   - the hub section's settings()/load() keeping the surf list, the mode key, the auto switch and the
-    map-load switch settings.
+    map-load switch settings;
+  - null turnbinds (1.13.0): the +left/+right keys nulled in the console model, found again once the
+    game has saved them nulled, put back plain with the option off and by remove_from_game.
 --mutations breaks the code in a few ways and expects this check to fail each time.
 Everything runs in a temp folder: HOME and the XDG folders point there, the games are fake folders.
 """
@@ -81,6 +83,9 @@ class Console:
         self.cfg_dir = Path(cfg_dir)
         self.aliases, self.binds, self.cvars = {}, {}, {}
         self.echoes, self.sounds = [], []
+        # kbutton_t's two key slots per turn button (in_main.cpp KeyDown/KeyUp); 0 = free
+        self.buttons = {"left": [0, 0], "right": [0, 0]}
+        self.code = None  # the key code a bound key's +/- commands get (Momentum passes it on)
 
     def run(self, text):
         buffer = split_commands(text)
@@ -110,6 +115,10 @@ class Console:
                 self.binds.pop(args[0], None)
             elif name in ("cl_yawspeed", "cl_crosshair_color", "con_logfile"):
                 self.cvars[name] = args[0]
+            elif name in ("+left", "-left", "+right", "-right"):
+                if self.code is not None:
+                    args = [str(self.code)]
+                self.button(name[1:], name[0] == "+", args[0] if args else "")
             else:
                 fail(f"console: unknown command {command!r}")
 
@@ -117,6 +126,34 @@ class Console:
         self.echoes.clear()
         self.run(self.binds[key])
         return self.cvars["cl_yawspeed"]
+
+    def button(self, name, down, arg):
+        """KeyDown/KeyUp of the Source SDK's in_main.cpp: a key code per slot, -1 for none given;
+        an up without a code frees both slots."""
+        slots = self.buttons[name]
+        k = int(arg) if arg else -1
+        if down:
+            if k in slots:
+                return
+            if not slots[0]:
+                slots[0] = k
+            elif not slots[1]:
+                slots[1] = k
+        elif not arg:
+            slots[:] = [0, 0]
+        elif k in slots:
+            slots[slots.index(k)] = 0
+
+    def hold(self, key, down=True, code=None):
+        """A key down (or up: the bind's -command, as the engine runs for a +command bind). With
+        `code`, the +/- turn commands it runs get that key code in place of their own, as Momentum
+        does. Returns the way the view turns: ["left"], ["right"] or []."""
+        command = self.binds[key]
+        self.code = code
+        self.run(command if down else "-" + command[1:])
+        self.code = None
+        net = (any(self.buttons["left"]) - any(self.buttons["right"])) * float(self.cvars["cl_yawspeed"])
+        return ["left"] if net > 0 else ["right"] if net < 0 else []
 
 
 # ---------------------------------------------------------------- the checks
@@ -414,6 +451,95 @@ def check_files(core, tmp):
     print("ok   apply, colour cfgs, auto cfg, images")
 
 
+def turn_cases(con, what, codes):
+    """Every press and release order of two nulled turn keys; `codes` {key: code} as the engine
+    passes it on (None: none, Source 2013)."""
+    def hold(key, down=True):
+        return con.hold(key, down, codes[key] if codes else None)
+
+    for first, second in (("MOUSE1", "MOUSE2"), ("MOUSE2", "MOUSE1")):
+        own = {"MOUSE1": ["left"], "MOUSE2": ["right"]}
+        for up in ((first, second), (second, first)):
+            expect(hold(first), own[first], f"{what}: {first} down")
+            expect(hold(second), own[second], f"{what}: {second} down while {first} held: {second} wins")
+            expect(hold(up[0], False), own[up[1]], f"{what}: {up[0]} up: back to the held {up[1]}")
+            expect(hold(up[1], False), [], f"{what}: {first}, {second} down, {up[0]}, {up[1]} up: no turn")
+            expect(float(con.cvars["cl_yawspeed"]) > 0, True, f"{what}: positive yawspeed once both are up")
+    expect(hold("MOUSE1", False), [], f"{what}: a release with nothing held does nothing")
+
+
+def check_turns(core, tmp):
+    game_dir = tmp / "turns/momentum"
+    cfg = game_dir / "cfg"
+    cfg.mkdir(parents=True)
+    (cfg / "config.cfg").write_text('bind "MOUSE1" "+left"\nbind "MOUSE2" "+right"\nbind "q" "+left"\n')
+    data = base_data(null_turns=True)
+    notes = core.apply(data, game_dir, game="momentum")
+    expect(notes, ["Turn keys nulled: MOUSE1, MOUSE2"], "null turns: notes (the cycle key q left out)")
+    con = Console(cfg)
+    con.run((cfg / "yaws.cfg").read_text())
+    expect((con.binds["MOUSE1"], con.binds["MOUSE2"], con.binds["q"]), ("+sy_left", "+sy_right", "yaw_cycle"),
+           "null turns: binds")
+    turn_cases(con, "Source 2013", None)
+    # Momentum gives the +/- commands an alias runs the code of the key that ran it, whatever
+    # code the alias gives: a -left from MOUSE2 can't let go of MOUSE1's +left
+    turn_cases(con, "Momentum", {"MOUSE1": 107, "MOUSE2": 108})
+    # cycling while turning right keeps the sign; both keys up: positive again
+    con.hold("MOUSE2")
+    con.press("q")
+    expect(con.cvars["cl_yawspeed"], "-210", "yaw cycle while turning right keeps it right")
+    con.hold("MOUSE2", False)
+    expect(con.cvars["cl_yawspeed"], "210", "both up: positive yawspeed")
+    # with a bhop and a surf list too
+    data2 = base_data(null_turns=True, surf={"entries": entries(30, 120), "start": 1}, mode_key="g")
+    core.apply(data2, game_dir, game="momentum")
+    con = Console(cfg)
+    con.run((cfg / "yaws.cfg").read_text())
+    turn_cases(con, "Momentum, two lists", {"MOUSE1": 107, "MOUSE2": 108})
+    con.hold("MOUSE2")
+    con.press("g")
+    expect(con.cvars["cl_yawspeed"], "-120", "mode switch while turning right keeps it right")
+    con.hold("MOUSE2", False)
+    # the game saves the nulled binds in config.cfg on exit
+    (cfg / "config.cfg").write_text('bind "MOUSE1" "+sy_left"\nbind "MOUSE2" "+sy_right"\n')
+    expect(core.apply(data, game_dir, game="momentum"), ["Turn keys nulled: MOUSE1, MOUSE2"],
+           "null turns: keys found again once nulled")
+    con = Console(cfg)
+    con.run((cfg / "yaws.cfg").read_text())
+    expect(con.binds["MOUSE1"], "+sy_left", "still nulled on the next launch")
+    notes = core.apply(dict(data, null_turns=False), game_dir, game="momentum")
+    expect(notes, ["'MOUSE1' goes back to +left", "'MOUSE2' goes back to +right"], "null turns off: notes")
+    con = Console(cfg)
+    con.run((cfg / "yaws.cfg").read_text())
+    expect((con.binds["MOUSE1"], con.binds["MOUSE2"]), ("+left", "+right"), "null turns off: plain binds back")
+    (cfg / "config.cfg").write_text('bind "MOUSE1" "+left"\n')
+    core.apply(dict(data, null_turns=False), game_dir, game="momentum")
+    expect("MOUSE1" in (cfg / "yaws.cfg").read_text(), False, "null turns off, plain binds: nothing written")
+    (cfg / "config.cfg").write_text('bind "c" "+duck"\n')
+    expect(core.apply(data, game_dir, game="momentum"),
+           ["Null turnbinds: no +left/+right binds found in config.cfg"], "null turns: no turn keys")
+    (cfg / "config.cfg").write_text('bind "MOUSE1" "+sy_left"\nbind "MOUSE2" "+sy_right"\nbind "w" "+forward"\n')
+    core.remove_from_game(game_dir, "momentum")
+    expect((cfg / "config.cfg").read_text(), 'bind "MOUSE1" "+left"\nbind "MOUSE2" "+right"\nbind "w" "+forward"\n',
+           "remove_from_game puts the turn keys back")
+    # someone's own null script (CS:S): recognised and left alone
+    css = tmp / "turns/cstrike"
+    (css / "cfg").mkdir(parents=True)
+    (css / "cfg/turnbind.cfg").write_text('alias +nleft "-right;+left;alias chknleft +left"\n'
+                                          'alias +nright "-left;+right;alias chknright +right"\n')
+    (css / "cfg/config.cfg").write_text('bind "MOUSE1" "+nleft"\nbind "MOUSE2" "+nright"\nbind "c" "+duck"\n'
+                                        'bind "x" "+left"\n')
+    notes = core.apply(data, css, game="css")
+    expect(notes, ["Turn keys nulled: x",
+                   "Left as they are, on your own turn aliases: MOUSE1 (+nleft), MOUSE2 (+nright)"],
+           "own null aliases recognised")
+    expect("MOUSE1" in (css / "cfg/yaws.cfg").read_text(), False, "own null aliases not rebound")
+    (css / "cfg/config.cfg").write_text('bind "MOUSE1" "+nleft"\n')
+    expect(core.apply(data, css, game="css"),
+           ["Left as they are, on your own turn aliases: MOUSE1 (+nleft)"], "only own aliases: no 'none found'")
+    expect(len(core.apply(data, css, game="momentum")), 2, "own aliases in Momentum: a warning too")
+
+
 def check_hub(tmp):
     sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != HERE]
     sys.path.insert(0, str(KIT))
@@ -441,6 +567,18 @@ def check_hub(tmp):
     expect(got["saved"], True, f"apply with a surf list ({got['messages']})")
     st = section.load("momentum")
     expect((st["load_switch"], st["load_sound"]), (False, False), "map-load switch settings kept")
+    expect((st["null_turns"], st["turn_keys"]), (False, []), "null turns off by default, no turn keys")
+    (games["momentum"] / "cfg/config.cfg").write_text('bind "MOUSE1" "+sy_left"\nbind "g" "+right"\n')
+    section.apply("momentum", dict(form, null_turns=True))
+    st = section.load("momentum")
+    expect((st["null_turns"], st["turn_keys"]), (True, ["MOUSE1"]), "null turns kept, mode key g left out")
+    (games["momentum"] / "cfg/turnbind.cfg").write_text('alias +nleft "-right;+left"\n')
+    (games["momentum"] / "cfg/config.cfg").write_text('bind "MOUSE2" "+nleft"\n')
+    expect(section.load("momentum")["own_turns"], [["MOUSE2", "+nleft"]], "own turn aliases on the page")
+    (games["momentum"] / "cfg/turnbind.cfg").unlink()
+    form["null_turns"] = False
+    (games["momentum"] / "cfg/config.cfg").write_text('cl_crosshair_color "0 255 0 255"\n')
+    st = section.load("momentum")
     expect((st["surf"], st["mode_key"], st["auto_mode"]),
            ({"entries": [{"speed": 30.0, "color": "#123456", "sound": ""}], "start": 0}, "g", False),
            "surf list, mode key and auto kept through apply and load")
@@ -475,6 +613,7 @@ def run_all():
         check_validate(core)
         check_watcher(mode_watch, tmp)
         check_files(core, tmp)
+        check_turns(core, tmp)
         check_hub(tmp)
     print("all mode checks passed")
 
@@ -518,6 +657,25 @@ MUTATIONS = [
      'return bool(data.get("surf")) and bool(data.get("separate", True))', 'return bool(data.get("surf"))'),
     ("active list ignored", "yawcore.py",
      'return "surf" if data.get("active") == "surf" and data.get("surf") else "bhop"', 'return "bhop"'),
+    ("nulled turn keys not found again", "yawcore.py",
+     "        for command in (plain, null):\n", "        for command in (plain,):\n"),
+    ("null turns off leaves keys on the aliases", "yawcore.py",
+     'return ["", "// null turnbinds off: back to plain turns", *back] if back else []', "return []"),
+    ("null alias doesn't fall back to the held key", "yawcore.py",
+     "-left {left}; sy_goleft; sy_rback", "-left {left}; sy_goleft"),
+    ("turn keys share a code (Source 2013 frees both)", "yawcore.py",
+     'TURN_CODES = {"+left": 9001, "+right": 9002}', 'TURN_CODES = {"+left": 9001, "+right": 9001}'),
+    ("right key turns with +right (the other key can't let go in Momentum)", "yawcore.py",
+     'sy_goright; +left {right}"', 'sy_goright; -left {left}; +right {right}"'),
+    ("yawspeed alias drops the turn's sign", "yawcore.py",
+     '"alias sy_neg {name}_n", "sy_dir"]', '"alias sy_neg {name}_n"]'),
+    ("yawspeed stays negative after a right turn", "yawcore.py",
+     "-left {right}; sy_goleft; sy_lback", "-left {right}; sy_lback"),
+    ("uninstall leaves nulled binds", "yawcore.py", "    unnull_config(cstrike)\n", ""),
+    ("own turn aliases not recognised", "yawcore.py",
+     "        if binds.resolve(command, wanted, alias_map):\n", "        if False:\n"),
+    ("hub drops null turns", "hub_section.py",
+     'null_turns=bool(form.get("null_turns", False))', "null_turns=False"),
     ("hub drops separate", "hub_section.py",
      'separate=bool(form.get("separate")) and surf is not None', 'separate=surf is not None'),
 ]

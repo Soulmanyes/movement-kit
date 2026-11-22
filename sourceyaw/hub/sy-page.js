@@ -188,6 +188,7 @@
 	$("sy-auto").onchange = () => { showLoadRows(); changed(); };
 	$("sy-load-switch").onchange = () => { showLoadRows(); changed(); };
 	$("sy-load-sound").onchange = changed;
+	$("sy-null-turns").onchange = changed;
 
 	$("sy-add").onclick = async () => {
 		entries.push(await call("new_entry", { entries }));
@@ -320,7 +321,8 @@
 		return { key, crosshair: $("sy-crosshair").checked, start: bhop.start, base, entries: bhop.entries,
 			surf: lists.surf ? copyList(lists.surf) : null, separate: surfOn, active,
 			mode_key: modeKey, auto_mode: $("sy-auto").checked,
-			load_switch: $("sy-load-switch").checked, load_sound: $("sy-load-sound").checked };
+			load_switch: $("sy-load-switch").checked, load_sound: $("sy-load-sound").checked,
+			null_turns: $("sy-null-turns").checked };
 	}
 
 	$("sy-apply").onclick = async () => {
@@ -351,6 +353,12 @@
 		$("sy-auto").checked = st.auto_mode;
 		$("sy-load-switch").checked = st.load_switch;
 		$("sy-load-sound").checked = st.load_sound;
+		$("sy-null-turns").checked = st.null_turns;
+		const own = st.own_turns.map(([k, c]) => `${k} (${c})`).join(", ");
+		$("sy-null-note").textContent = "Holding both turn keys turns toward the one pressed last. " + (st.turn_keys.length
+			? `Your +left/+right keys: ${st.turn_keys.join(", ")}.`
+			: own ? "" : "No +left/+right binds found in config.cfg.")
+			+ (own ? ` On your own turn aliases, left as they are: ${own}.` : "");
 		$("sy-auto-note").textContent = st.mode_note;
 		key = st.key;
 		base = st.base;
