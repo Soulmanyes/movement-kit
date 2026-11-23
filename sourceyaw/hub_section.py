@@ -7,7 +7,7 @@ the file imports only the standard library and movekit; settings_api loads on th
 On Windows (Phase 12) load() says so with "windows", and the launch option is the core exe's
 (movekit/launchopt.py). CS:S has no crosshair colour there, so load()'s "colors" is false and the page
 hides the Crosshair card (data-colors in hub/index.html) and the colour column; Momentum keeps them
-(1.13.0). Pillow is only needed for the crosshair previews, which Windows doesn't draw.
+(1.14.0). Pillow is only needed for the crosshair previews, which Windows doesn't draw.
 The strafe trainer has its own section since Phase 13 (strafe-trainer/hub_section.py).
 
 What the GTK window keeps in its widgets, the page keeps in its own state and sends back whole:
@@ -202,6 +202,10 @@ def load(game=None):
         # Momentum runs a cfg per gamemode on map load, so it can switch then; CS:S on the next press
         "map_load": core.runs_mode_cfgs(game),
         "load_switch": data["load_switch"], "load_sound": data["load_sound"],
+        "null_turns": data["null_turns"],
+        "turn_keys": sorted(core.turn_keys(cstrike, (data["key"], data["mode_key"]))) if cstrike else [],
+        "own_turns": ([[k, c] for k, c in core.own_turn_keys(cstrike, (data["key"], data["mode_key"])).items()]
+                      if cstrike else []),
         "mode_note": f"From the map: {modes}; other maps keep the current list",
         "sounds": [list(c) for c in sound_choices],
         "notes": key_notes(game, data["key"], data["mode_key"]),
@@ -300,7 +304,7 @@ def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
     form = {key, crosshair, start, base, entries: [{speed, color, sound}],
             surf: {entries, start} or null, separate, active, mode_key, auto_mode,
-            load_switch, load_sound}.
+            load_switch, load_sound, null_turns}.
     The saved "trainer" dict (from before Phase 13) is kept as it was, for a roll back to 1.10."""
     data = _core().load_settings(game)
     entries, start = _list_value(form["entries"], form.get("start", 0))
@@ -315,7 +319,8 @@ def settings(game, form):
                           separate=bool(form.get("separate")) and surf is not None,
                           active=str(form.get("active") or "bhop"),
                           load_switch=bool(form.get("load_switch", True)),
-                          load_sound=bool(form.get("load_sound", True)))
+                          load_sound=bool(form.get("load_sound", True)),
+                          null_turns=bool(form.get("null_turns", False)))
 
 
 def _list_value(form_entries, start):

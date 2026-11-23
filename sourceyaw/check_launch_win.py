@@ -6,7 +6,7 @@ Usage: python sourceyaw/check_launch_win.py   (exits 1 on the first failure)
 
 Covers: which game Steam's command starts (exe folder, -game, neither), Momentum's yaws.cfg written
 with its colour cfgs and no Pillow, an old Windows profile's white placeholders turned into the
-game's own colour (1.13.0), the list switcher started as a thread that gets the session's events (a saved
+game's own colour (1.14.0), the list switcher started as a thread that gets the session's events (a saved
 "trainer" dict starting nothing: the trainer is its own module since Phase 13, checked by
 strafe-trainer/check_launch_win.py), everything stopped and cleaned up at exit, all without Pillow
 (auto cfg cleared, session closed), a thread's error landing in run.log, another game left alone,
@@ -80,7 +80,7 @@ def main():
         expect(yawcore.validate(data), [], "settings valid")
         yawcore.save_settings(data, "momentum")
 
-        # a Momentum profile saved on Windows before 1.13.0: white placeholders, no original_color
+        # a Momentum profile saved on Windows before 1.14.0: white placeholders, no original_color
         (dirs["momentum"] / "cfg" / "config.cfg").write_text('cl_crosshair_color "10 20 30 200"\n')
         old = {k: v for k, v in data.items() if k != "original_color"}
         old["entries"] = [{**e, "color": "#ffffff"} for e in speeds]

@@ -174,6 +174,17 @@ If the game is already running when you press Apply, run `exec yaws` in the cons
   prefixes name. It runs `sourceyaw_load_surf` or `sourceyaw_load_bhop`, which switches at once when
   the game is on the other list and does nothing otherwise. Your own lines in those files stay.
 
+- **Null turnbinds** (off by default): `yaws.cfg` binds the keys `config.cfg` has on `+left`/`+right`
+  to `+sy_left`/`+sy_right`. Holding both turn keys turns toward the one pressed last. Letting
+  it go turns back to the one still held. Both keys hold `+left`, and the sign of `cl_yawspeed`
+  picks the direction: negative turns right. Each key can only let go of its own `+left`,
+  because Momentum Mod ties a `-left` to the key that sent it. Once both keys are up, the
+  yawspeed is positive again. The turn keys only flip the sign, so a yawspeed you set yourself
+  (a `toggle cl_yawspeed` bind, the console) stays as it is. Keys on your own turn aliases (a null script's `+nleft`, say)
+  are left as they are; Apply names them. The game saves the nulled binds in `config.cfg`, so
+  Source Yaw finds the keys under either name. Turning the option off binds them back to
+  `+left`/`+right`, and so does uninstalling.
+
 - **Windows:** the hub exe's launch step (`launch_win.py`) does what `movekit-run` does on
   Linux, with the list switcher as a thread of that process, which ends with the game.
 
@@ -184,6 +195,12 @@ Windows).
 
 - Recolouring is flat: every visible pixel of the crosshair gets the chosen colour, so
   outlines lose their own colour.
+- Null turnbinds only see binds in `config.cfg`. A `bind ... +left` in `autoexec.cfg` after
+  `exec yaws.cfg` wins over the nulled bind.
+- With null turnbinds, a right turn shows as `+left` with a negative `cl_yawspeed`. Replays and
+  Strafe Review see it that way too.
+- With null turnbinds, a yawspeed you set yourself while holding the right turn key is flipped
+  when you let go, so both keys turn the other way. Set it again (or press the cycle key) to fix it.
 - If another config changes `cl_yawspeed` directly, the colour isn't updated until the
   next press of the cycle key.
 

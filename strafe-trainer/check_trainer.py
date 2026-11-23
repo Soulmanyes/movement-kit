@@ -223,6 +223,7 @@ def main():
         expect((made, quiet.tone), ([], None), "no tone when no cue uses it")
         quiet.state("overlap")  # nothing to switch, nothing raised
 
+        check_null_turns(trainer, Path(tmp))
         check_run(trainer, Path(tmp))
         check_neutral_import()
         check_tone_synth(trainer)
@@ -282,6 +283,19 @@ def check_neutral_import():
             "import trainer, settings_api, trainer_win\n")
     done = subprocess.run([sys.executable, "-c", code], check=False, capture_output=True, text=True)
     expect(done.stderr.strip().splitlines()[-1:], [], "trainer.py and trainer_win import without Pillow, fcntl or trainer_linux")
+
+
+def check_null_turns(trainer, tmp):
+    """Source Yaw's null turnbinds (1.13.0) bind the turn keys to aliases in its yaws.cfg, which
+    both hold +left; read_binds goes by the alias names."""
+    cfg = tmp / "nulls/cfg"
+    cfg.mkdir(parents=True)
+    (cfg / "config.cfg").write_text('bind "MOUSE1" "+sy_left"\nbind "MOUSE2" "+sy_right"\n')
+    (cfg / "yaws.cfg").write_text('alias +sy_left "alias sy_lback sy_goleft; sy_goleft; +left 9001"\n'
+                                  'alias +sy_right "alias sy_rback sy_goright; sy_goright; +left 9002"\n')
+    roles, _ = trainer.read_binds(cfg.parent, None)
+    expect((roles["turn_left"], roles["turn_right"]),
+           ({trainer.SOURCE_KEYS["mouse1"]}, {trainer.SOURCE_KEYS["mouse2"]}), "nulled turn keys keep their roles")
 
 
 def check_run(trainer, tmp):
