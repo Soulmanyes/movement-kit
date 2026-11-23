@@ -36,7 +36,7 @@ def _bundled():
 
 ROOT = Path(sys._MEIPASS) if _bundled() else Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "collector"))
-import steam  # found through the path above; it also puts movekit on the path
+import steam  # noqa: I001 - found through the path above; it also puts movekit on the path
 
 from movekit import cfgblock, panorama, paths
 

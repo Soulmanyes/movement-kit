@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent / "viewer")]
-import collector
+import collector  # noqa: I001 - after the sys.path line above, which makes it importable
 import server
 import trash
 

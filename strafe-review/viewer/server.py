@@ -54,7 +54,7 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 sys.path[:0] = [str(Path(__file__).resolve().parent.parent / "collector"), str(Path(__file__).resolve().parent.parent)]
-import collector
+import collector  # noqa: I001 - after the sys.path line above; movekit must come after it
 import trash
 
 # collector set the path to the repo root, and so to movekit

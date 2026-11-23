@@ -10,7 +10,7 @@ Windows). An attempt already on disk, or deleted from the viewer (trash.py), is 
 reading the same log again is safe.
 --once reads to the end of the log and exits.
 """
-import gzip
+import gzip  # noqa: I001 - steam must run before the movekit imports: it sets their path
 import json
 import os
 import re
