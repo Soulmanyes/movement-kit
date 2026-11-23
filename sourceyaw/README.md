@@ -109,9 +109,7 @@ removes them, and keeps your settings unless you tick **Also delete saved data**
 
 What's different from Linux:
 
-- In Momentum Mod the crosshair colour works as on Linux (since 1.13.0), but the yawspeed rows
-  have no crosshair preview, only the colour. If you used Source Yaw on Windows before, your
-  yawspeeds start in your own crosshair colour, so nothing changes in game until you pick colours.
+- In Momentum Mod the yawspeed rows have no crosshair preview, only the colour.
 - In CS:S there's no crosshair colour: KROSSHAIR only exists on Linux. The Crosshair card is
   hidden for CS:S.
 - Settings are in `%APPDATA%\sourceyaw`, and what the launch did goes to `run.log` there. If
