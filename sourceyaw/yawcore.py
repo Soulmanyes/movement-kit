@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.15.0"
+VERSION = "1.15.1"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)

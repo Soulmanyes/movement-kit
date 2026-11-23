@@ -33,6 +33,58 @@
 	}
 	const changed = () => setDirty(true);
 
+	// Rows a switch shows or hides slide open or shut, and a shown one flashes the accent colour,
+	// so it's clear which rows came and went. A button (not a row) slides in or out sideways.
+	// Off while fill() sets up the page, and with reduced motion asked for.
+	let animate = false;
+	const running = new WeakMap();  // node -> {on, anims}: where it's going, cancelled by a change of mind
+	function reveal(node, on) {
+		const busy = running.get(node);
+		if (busy ? busy.on === on : node.hidden === !on) return;  // already there or on its way
+		if (busy) busy.anims.forEach((a) => a.cancel());
+		running.delete(node);
+		if (node.hidden === !on) return;
+		if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) { node.hidden = !on; return; }
+		// a row slides open or shut downward; a button in a row sideways, its gap to the one before
+		// it going too, so it moves in step with the rows
+		const row = node.classList.contains("mk-row");
+		node.hidden = false;
+		const cs = getComputedStyle(node);
+		const gap = getComputedStyle(node.parentElement).columnGap;
+		// its own opacity, not 1: a disabled button is drawn at 0.5, and ending on 1 snapped back
+		const opacity = Number(cs.opacity);
+		const open = row
+			? { height: `${node.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, opacity }
+			: { width: `${node.offsetWidth}px`, paddingLeft: cs.paddingLeft, paddingRight: cs.paddingRight,
+				borderLeftWidth: cs.borderLeftWidth, borderRightWidth: cs.borderRightWidth, marginLeft: "0px", opacity };
+		const shut = row
+			? { height: "0px", paddingTop: "0px", paddingBottom: "0px", opacity: 0 }
+			: { width: "0px", paddingLeft: "0px", paddingRight: "0px", borderLeftWidth: "0px", borderRightWidth: "0px",
+				marginLeft: gap === "normal" ? "0px" : `-${gap}`, opacity: 0 };
+		const timing = { duration: 220, easing: "ease-out" };
+		const anims = [];
+		const keep = { overflow: node.style.overflow, whiteSpace: node.style.whiteSpace };
+		node.style.overflow = "hidden";
+		if (!row) node.style.whiteSpace = "nowrap";  // the label stays one line while the width shrinks
+		const slide = node.animate(on ? [shut, open] : [open, shut], timing);
+		const done = () => Object.assign(node.style, keep);
+		slide.onfinish = () => { done(); if (!on) node.hidden = true; };
+		slide.oncancel = done;
+		anims.push(slide);
+		if (on && row) {
+			// a new row: the accent at 22%, fading out. A button gets none: its slide shows it, and a
+			// flash on it outlasted the slide as an effect of its own. Worked out here: keyframes may
+			// not resolve var()
+			const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+			anims.push(node.animate([{ backgroundColor: accent + "38" }, { backgroundColor: accent + "00" }],
+				{ duration: 1200, easing: "ease-in" }));
+		}
+		running.set(node, { on, anims });
+		Promise.all(anims.map((a) => a.finished)).then(() => {
+			if (running.get(node)?.anims === anims) running.delete(node);
+		}, () => {});
+	}
+
 	// a number box keeps the last good value (mk.numberBox) within its data-limit range
 	const numberBox = (input, value, onChange) =>
 		mk.numberBox(input, value, st.limits[input.dataset.limit], onChange);
@@ -168,9 +220,9 @@
 		// profile by map on: the map picks the profile, so no button to pick one by hand; off: the
 		// maps aren't used, so no maps field
 		const byMap = $("sy-prof-auto").checked;
-		$("sy-prof-pick").hidden = byMap;
-		$("sy-prof-map").hidden = !byMap;
-		$("sy-prof-maps-row").hidden = !byMap;
+		reveal($("sy-prof-pick"), !byMap);
+		reveal($("sy-prof-map"), byMap);
+		reveal($("sy-prof-maps-row"), byMap);
 		$("sy-prof-del").disabled = l.profiles.length < 2;
 		$("sy-prof-note").textContent = l.profiles.length < 2
 			? "Add a profile for another set of yawspeeds, picked by map or console"
@@ -252,12 +304,12 @@
 	// surf by map prefix on (two lists) or profile by map on
 	function showLoadRows() {
 		const load = st.map_load && ((surfOn && $("sy-auto").checked) || $("sy-prof-auto").checked);
-		$("sy-load-row").hidden = !load;
-		$("sy-load-sound-row").hidden = !load || !$("sy-load-switch").checked;
+		reveal($("sy-load-row"), load);
+		reveal($("sy-load-sound-row"), load && $("sy-load-switch").checked);
 	}
 
 	function showLists() {
-		document.querySelectorAll("[data-surf]").forEach((n) => { n.hidden = !surfOn; });
+		document.querySelectorAll("[data-surf]").forEach((n) => reveal(n, surfOn));
 		showLoadRows();
 		document.querySelectorAll("#sy-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
 		showProfile();
@@ -435,6 +487,7 @@
 
 	function fill(data) {
 		st = data;
+		animate = false;
 		// the list itself is the picked profile, its "sets" the others
 		const profile = (p, name) => ({ name: p.name || name, maps: (p.maps || []).join(", "),
 			entries: copyEntries(p.entries), start: p.start });
@@ -488,6 +541,7 @@
 		$("sy-loading").hidden = true;
 		$("sy-form").hidden = false;
 		setDirty(false);
+		animate = true;
 	}
 
 	mk.leaveGuard(() => dirty, "Source Yaw");

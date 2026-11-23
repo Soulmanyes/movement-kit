@@ -48,20 +48,17 @@
 		<section class="card">
 			<h2>Yaw cycle</h2>
 			<div class="mk-row">
-				<label class="mk-label" for="sy-surf-on">Bhop and surf lists<div id="sy-surf-note" class="muted"></div></label>
-				<input id="sy-surf-on" type="checkbox" class="mk-switch">
-			</div>
-			<div class="mk-row" data-surf>
-				<div class="mk-label">Editing</div>
-				<div id="sy-tabs" class="mk-seg">
-					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
-					<button id="sy-tab-surf" data-tab="surf">Surf</button>
-				</div>
-			</div>
-			<div class="mk-row">
 				<div class="mk-label">Cycle key<div id="sy-key-note" class="muted"></div></div>
 				<span id="sy-key" class="mk-key"></span>
 				<button id="sy-key-change">Change…</button>
+			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="sy-null-turns">Null turnbinds<div id="sy-null-note" class="muted"></div></label>
+				<input id="sy-null-turns" type="checkbox" class="mk-switch">
+			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="sy-surf-on">Bhop and surf lists<div id="sy-surf-note" class="muted"></div></label>
+				<input id="sy-surf-on" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row" data-surf>
 				<div class="mk-label">Mode key<div id="sy-mode-note" class="muted"></div></div>
@@ -73,6 +70,11 @@
 				<label class="mk-label" for="sy-auto">Bhop or surf by map prefix<div id="sy-auto-note" class="muted"></div></label>
 				<input id="sy-auto" type="checkbox" class="mk-switch">
 			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="sy-prof-auto">Profile by map<div class="muted">On a profile's maps,
+					switch to that profile. Off: the profile picked with Use in game, or its console command</div></label>
+				<input id="sy-prof-auto" type="checkbox" class="mk-switch">
+			</div>
 			<div class="mk-row" id="sy-load-row">
 				<label class="mk-label" for="sy-load-switch">Switch when the map loads<div class="muted">Off: the switch waits for your first press of the cycle key</div></label>
 				<input id="sy-load-switch" type="checkbox" class="mk-switch">
@@ -81,14 +83,12 @@
 				<label class="mk-label" for="sy-load-sound">Sound on a map-load switch<div class="muted">Plays the list's ticked yawspeed sound as the map loads</div></label>
 				<input id="sy-load-sound" type="checkbox" class="mk-switch">
 			</div>
-			<div class="mk-row">
-				<label class="mk-label" for="sy-null-turns">Null turnbinds<div id="sy-null-note" class="muted"></div></label>
-				<input id="sy-null-turns" type="checkbox" class="mk-switch">
-			</div>
-			<div class="mk-row">
-				<label class="mk-label" for="sy-prof-auto">Profile by map<div class="muted">On a profile's maps,
-					switch to that profile. Off: the profile picked with Use in game, or its console command</div></label>
-				<input id="sy-prof-auto" type="checkbox" class="mk-switch">
+			<div class="mk-row" data-surf>
+				<div class="mk-label">Editing</div>
+				<div id="sy-tabs" class="mk-seg">
+					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
+					<button id="sy-tab-surf" data-tab="surf">Surf</button>
+				</div>
 			</div>
 			<div class="mk-row">
 				<div class="mk-label">Profile<div id="sy-prof-note" class="muted"></div></div>
