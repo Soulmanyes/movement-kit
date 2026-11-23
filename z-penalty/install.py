@@ -10,8 +10,9 @@ Usage: install.py [--game DIR] [--uninstall]
   otherwise (another HUD mod's in custom/, else the game's own). Type panorama_reload in game after
   installing.
 - Writes a `// movekit:z-penalty` block into cfg/autoexec.cfg (movekit.cfgblock) that turns the console
-  log on (con_logfile yaw.log): the script's ZPEN_ON/ZPEN_OFF markers reach the tone runner
-  (tone_run.py) through it.
+  log on (con_logfile yaw.log): the script's MK_ZPEN_ON/MK_ZPEN_OFF markers reach the tone runner
+  (tone_run.py) through it. It also hides every MK_ marker in the console (con_filter_text_out MK_);
+  yaw.log still gets them.
 - On Linux, registers launch-hook.sh with movekit-run (movekit/launch.py), which runs this install
   again when Momentum starts, so a game update to either file carries over. On Windows the kit's
   core does that through module_hooks.launch.
@@ -31,7 +32,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import cfgblock, games, panorama, steam  # after the path above
 
-VERSION = "1.0.0"  # Z Penalty's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.1.0"  # Z Penalty's (module.json reads it); bump in the same commit as the release tag
 TOOL = "z-penalty"
 FOLDER = "movekit-z-penalty"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 80  # after the other HUD modules (JHUD 40, Strafe Speed Histogram 50, First Jump 60, Zone Exit 70); all only sync the kit
@@ -71,7 +72,9 @@ ENTRY = """    MovekitZPenalty =
     }
 """
 BACKUP = ".bak-z-penalty"
-BLOCK = ["// Z Penalty's tone reads the panel's markers from yaw.log", "con_logfile yaw.log"]
+BLOCK = ["// Z Penalty's tone reads the panel's markers from yaw.log", "con_logfile yaw.log",
+         "// the kit's MK_ markers stay out of the console; yaw.log still gets them",
+         "con_filter_enable 1", "con_filter_text_out MK_"]
 PATCHES = [  # for movekit/panorama.py
     {"file": "panorama/layout/hud/timer.xml", "before": "</scripts>",
      "line": '<include type="module" src="file://{scripts}/hud/movekit-z-penalty.ts" />'},

@@ -23,7 +23,7 @@
 // label while penalised, the z speed (in the penalty colour while penalised), the ticks spent in the band
 // on this stretch, and a vertical z speed bar with the 0-140 band shaded.
 //
-// The tone: while penalised it writes ZPEN_ON into the console, and ZPEN_OFF when that ends (also on
+// The tone: while penalised it writes MK_ZPEN_ON into the console, and MK_ZPEN_OFF when that ends (also on
 // load, while the customizer is open and outside own play, so a tone never keeps sounding). The game
 // logs the console to yaw.log (install.py's autoexec block), where Z Penalty's tone runner
 // (tone_run.py) reads the markers and plays a constant tone on the desktop. Its on/off, pitch and
@@ -200,7 +200,7 @@ let editing = false;
 let spectating = false; // MomentumSpectateStart/Stop; GetMoveType() covers a panorama_reload mid-spectate
 let token = 0;
 let lastKey = '';
-let toneOn = true; // so the first tone(false), at load, writes ZPEN_OFF
+let toneOn = true; // so the first tone(false), at load, writes MK_ZPEN_OFF
 let lastTicks = 0; // the last penalised stretch's ticks in the band, what the tick count shows
 
 // The free fall change in z speed per tick
@@ -313,7 +313,7 @@ function fadeLater() {
 function tone(on: boolean) {
 	if (on === toneOn) return;
 	toneOn = on;
-	$.Msg(on ? 'ZPEN_ON' : 'ZPEN_OFF');
+	$.Msg(on ? 'MK_ZPEN_ON' : 'MK_ZPEN_OFF');
 }
 
 function hide() {

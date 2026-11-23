@@ -112,10 +112,14 @@ def check_runner(sett, hub, tmp):
     expect([tone.started, tone.mode, tone.synth.pitches, tone.synth.volume], [True, None, {"on": 300}, 0.5],
            "tone made from the settings, silent")
     token = lambda name: {"type": "token", "data": {"name": name}}
-    r.handle(token("ZPEN_ON"))
-    expect(tone.mode, "on", "ZPEN_ON: tone on")
+    r.handle(token("MK_ZPEN_ON"))
+    expect(tone.mode, "on", "MK_ZPEN_ON: tone on")
+    r.handle(token("MK_ZPEN_OFF"))
+    expect(tone.mode, None, "MK_ZPEN_OFF: tone off")
+    r.handle(token("ZPEN_ON"))  # an older panel script's names
+    expect(tone.mode, "on", "ZPEN_ON (old name): tone on")
     r.handle(token("ZPEN_OFF"))
-    expect(tone.mode, None, "ZPEN_OFF: tone off")
+    expect(tone.mode, None, "ZPEN_OFF (old name): tone off")
     r.handle(token("ZPEN_ON"))
     r.handle({"type": "map_left", "data": {}})
     expect(tone.mode, None, "map_left: tone off")
@@ -160,11 +164,17 @@ def check_runner(sett, hub, tmp):
         time.sleep(0.1)
         expect(FakeTone.made[-1].mode, None, "run: the old log's marker is skipped")
         with log.open("a") as f:
+            f.write("[panorama] MK_ZPEN_ON\n")
+        wait_for("on", "MK_ZPEN_ON in the log didn't turn the tone on")
+        with log.open("a") as f:
+            f.write("[panorama] MK_ZPEN_OFF\n")
+        wait_for(None, "MK_ZPEN_OFF in the log didn't turn the tone off")
+        with log.open("a") as f:
             f.write("[panorama] ZPEN_ON\n")
-        wait_for("on", "ZPEN_ON in the log didn't turn the tone on")
+        wait_for("on", "ZPEN_ON (old name) in the log didn't turn the tone on")
         with log.open("a") as f:
             f.write("[panorama] ZPEN_OFF\n")
-        wait_for(None, "ZPEN_OFF in the log didn't turn the tone off")
+        wait_for(None, "ZPEN_OFF (old name) in the log didn't turn the tone off")
     finally:
         stop.set()
         th.join(2)
@@ -196,6 +206,7 @@ def main():
         expect(own.read_bytes(), (HERE / inst.TS).read_bytes(), "script copied")
         autoexec = game / "cfg" / "autoexec.cfg"
         expect(autoexec.read_text().count("con_logfile yaw.log"), 1, "autoexec block: the console log on")
+        expect(autoexec.read_text().count("con_filter_text_out MK_"), 1, "autoexec block: markers hidden in the console")
         expect(timer.read_text().count(INCLUDE), 1, "timer.xml includes Z Penalty once")
         expect(timer.read_text().count("other.ts"), 1, "the other tool's timer.xml include kept")
         expect(layout.read_text(), want_layout, "hud_default.kv3: the entry once, before CustomizerSettings")

@@ -1,7 +1,7 @@
 """Z Penalty's tone beside the game: a constant tone on the desktop while the penalty is on.
 
-The panel script (panorama/scripts/hud/movekit-z-penalty.ts) writes ZPEN_ON when a penalised stretch
-starts and ZPEN_OFF when it ends into the game's console, which the autoexec block (install.py) logs
+The panel script (panorama/scripts/hud/movekit-z-penalty.ts) writes MK_ZPEN_ON when a penalised stretch
+starts and MK_ZPEN_OFF when it ends into the game's console, which the autoexec block (install.py) logs
 to yaw.log. This reads that log with a private movekit.session.Session (its own markers, polled every
 POLL seconds; in game 2026-11-09 a marker reached the desktop 0-3 ms after it was written) and turns
 the tone (movekit.tone) on and off.
@@ -27,7 +27,8 @@ if not getattr(sys, "frozen", False) and (_HERE.parent / "movekit").is_dir() and
 from movekit import games, logfile, paths, session, tone  # after the path above
 from movekit.hub import local_import
 
-TOKENS = (r"ZPEN_ON", r"ZPEN_OFF")
+# the panel writes MK_ZPEN_* since 1.1.0; plain ZPEN_* comes from an older panel script still in custom/
+TOKENS = (r"MK_ZPEN_ON", r"MK_ZPEN_OFF", r"ZPEN_ON", r"ZPEN_OFF")
 POLL = 0.005  # seconds between log reads
 MAX_ON = 2.0  # seconds the tone sounds at most without a ZPEN_OFF
 SETTINGS_EVERY = 0.5  # seconds between looks at the settings file
@@ -71,9 +72,10 @@ class Runner:
 
     def handle(self, event):
         kind, data = event["type"], event["data"]
-        if kind == "token" and data.get("name") == "ZPEN_ON":
+        name = (data.get("name") or "").removeprefix("MK_") if kind == "token" else None
+        if name == "ZPEN_ON":
             self.on_since = self.clock()
-        elif (kind == "token" and data.get("name") == "ZPEN_OFF") or kind == "map_left":
+        elif name == "ZPEN_OFF" or kind == "map_left":
             self.on_since = None
         self._apply()
 

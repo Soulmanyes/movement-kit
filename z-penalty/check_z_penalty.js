@@ -66,7 +66,7 @@ const timer = new FakePanel('MomHudTimer', hud, 'Timer');
 const handlers = {};
 let schedules = [];
 let commands = [];
-let markers = []; // the tone runner's ZPEN_ON / ZPEN_OFF lines
+let markers = []; // the tone runner's MK_ZPEN_ON / MK_ZPEN_OFF lines
 let now = 1e6;
 const G = { mode: 1, replay: 0, observed: null, moveType: 2, time: 0, velocity: { x: 900, y: 0, z: 0 }, gravity: 1200 };
 let loaded = null;
@@ -78,7 +78,7 @@ const stubs = {
 		CreatePanel: (type, parent, id, props) => new FakePanel(type, parent, id, props),
 		RegisterForUnhandledEvent: (ev, fn) => { (handlers[ev] = handlers[ev] || []).push(fn); },
 		Schedule: (s, fn) => { schedules.push({ s, fn }); },
-		Msg: (m) => (/^ZPEN_(ON|OFF)$/.test(m) ? markers.push(m) : fail('Msg: ' + m))
+		Msg: (m) => (/^MK_ZPEN_(ON|OFF)$/.test(m) ? markers.push(m) : fail('Msg: ' + m))
 	},
 	GameModeAPI: { GetCurrentGameMode: () => G.mode },
 	GameInterfaceAPI: { GetSettingFloat: (k) => (k === 'sv_gravity' ? G.gravity : 0), ConsoleCommand: (c) => commands.push(c) },
@@ -118,7 +118,7 @@ for (const m of dyn[1].matchAll(/^\s*(\w+) = (.+?)\s*$/gm)) {
 expect(kv, Object.fromEntries(Object.keys(kv).map((k) => [k, api.DEFAULTS[k]])), 'kv3 values = DEFAULTS');
 expect(Object.keys(kv).sort(), Object.keys(api.DEFAULTS).sort(), 'kv3 keys = DEFAULTS keys');
 if (!/^    MovekitZPenalty = \n/.test(entry[1])) fail('kv3 entry is not for the panel id MovekitZPenalty');
-expect(markers, ['ZPEN_OFF'], 'a load turns an earlier copy\'s tone off');
+expect(markers, ['MK_ZPEN_OFF'], 'a load turns an earlier copy\'s tone off');
 markers = [];
 
 // ---- the tracker ----
@@ -240,16 +240,16 @@ for (let vz = -20; vz < 100; vz += 22) {
 	frame(vz);
 	frame(vz);
 }
-expect([panel.visible, labelTexts()[0], markers], [true, 'Z PENALTY', ['ZPEN_ON']], 'a climb with every tick seen twice shows, tone on once');
+expect([panel.visible, labelTexts()[0], markers], [true, 'Z PENALTY', ['MK_ZPEN_ON']], 'a climb with every tick seen twice shows, tone on once');
 for (let vz = 120; vz < 170; vz += 22) frame(vz);
-expect(markers, ['ZPEN_ON', 'ZPEN_OFF'], 'out of the band: tone off once');
+expect(markers, ['MK_ZPEN_ON', 'MK_ZPEN_OFF'], 'out of the band: tone off once');
 frame(0);
 markers = [];
 schedules = schedules.filter((x) => x.fn.name === 'loop');
 hud.FindChildTraverse('MovekitZPenalty').visible = false;
 // a panorama_reload: the new copy takes over
 const zp = loadScript();
-expect(markers, ['ZPEN_OFF'], 'the reload writes ZPEN_OFF');
+expect(markers, ['MK_ZPEN_OFF'], 'the reload writes MK_ZPEN_OFF');
 markers = [];
 for (const [id, value] of Object.entries(S)) loaded.props.dynamicStyles[id].callbackFunc?.(loaded.p, value);
 schedules = schedules.filter((x) => x.fn.name === 'loop').slice(-1); // the new copy's loop; the old one stops (live())
@@ -262,7 +262,7 @@ frame(-40);
 for (let vz = -21.53; vz < 100; vz += 7.9) frame(vz);
 expect(panel.visible, true, 'a ramp climb shows');
 expect(labelTexts(), ['Z PENALTY', 'z 97', '13 ticks'], 'label, z speed, ticks so far');
-expect([commands, markers], [[], ['ZPEN_ON']], 'tone on once per stretch, no console commands');
+expect([commands, markers], [[], ['MK_ZPEN_ON']], 'tone on once per stretch, no console commands');
 const marker = panel.FindChildTraverse('ZPenaltyMarker');
 expect([marker.style.position, marker.style.backgroundColor], [`0px ${api.barGeometry(96.69, S).marker}px 0px`, S.penaltyColor], 'marker placed and in the penalty colour');
 const fades = schedules.length;
@@ -276,18 +276,18 @@ expect([panel.style.opacity, panel.style.transitionDuration], ['0', '0.3s'], 'fa
 schedules.find((x) => x.s > 0.3 && x.s < 0.4).fn();
 expect(panel.visible, false, 'hidden after the fade');
 schedules = schedules.filter((x) => x.fn.name === 'loop');
-expect(markers, ['ZPEN_ON', 'ZPEN_OFF'], 'tone off when the band is left, not at the fade');
+expect(markers, ['MK_ZPEN_ON', 'MK_ZPEN_OFF'], 'tone off when the band is left, not at the fade');
 // a short stretch right after: on and off again
 markers = [];
 frame(0);
 frame(60);
 frame(0);
-expect(markers, ['ZPEN_ON', 'ZPEN_OFF'], 'a short stretch: on, then off at landing');
+expect(markers, ['MK_ZPEN_ON', 'MK_ZPEN_OFF'], 'a short stretch: on, then off at landing');
 // the customizer opened mid-climb turns the tone off
 markers = [];
 frame(60);
 fire('HudCustomizer_Opened');
-expect(markers, ['ZPEN_ON', 'ZPEN_OFF'], 'opening the customizer turns the tone off');
+expect(markers, ['MK_ZPEN_ON', 'MK_ZPEN_OFF'], 'opening the customizer turns the tone off');
 fire('HudCustomizer_Closed');
 frame(0);
 markers = [];
