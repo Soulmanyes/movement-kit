@@ -133,6 +133,9 @@ def check_section(css, mom):
     expect(section.apply("momentum", dict(form, when_jump=False, when_timer=False))["saved"], False,
            "Momentum: neither switch")
     expect(section.set_game("momentum")["game"], "momentum", "set_game")
+    expect([ln for ln in block_of(mom) or [] if ln.startswith("con_filter")],
+           ["con_filter_enable 1", "con_filter_text_out MK_"], "Momentum's block hides the MK_ markers")
+    expect([ln for ln in block_of(css) if ln.startswith("con_filter")], [], "CS:S block without the filter")
 
 
 def check_menu_marker(mom):

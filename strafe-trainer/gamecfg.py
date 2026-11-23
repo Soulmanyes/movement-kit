@@ -59,6 +59,8 @@ def block(cfg, game, game_dir):
     key = offset_key(cfg, game)
     lines = ["// the strafe trainer reads map loads and the offset key's echo from yaw.log",
              "con_logfile yaw.log"]
+    if game == "momentum":  # the pause-menu script's MK_MENU_*/MK_TIMER_* lines; yaw.log still gets them
+        lines += ["con_filter_enable 1", "con_filter_text_out MK_"]
     lines += [f'unbind "{k}"' for k in stale_keys(game_dir, key)]
     if key:
         lines += [f'alias {OFFSETS_ALIAS} "echo {OFFSETS_TOKEN}"', f'bind "{key}" "{OFFSETS_ALIAS}"']
