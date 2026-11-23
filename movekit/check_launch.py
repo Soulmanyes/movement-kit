@@ -35,6 +35,8 @@ local note="$HOOK_DIR/../../ran"
 [ "${{FAIL_{var}:-0}}" = 1 ] && return 1
 echo "{tool} $GAME $HOOK_DIR LD_PRELOAD=${{LD_PRELOAD-unset}}" >> "$note"
 export FROM_{var}=yes
+printf '%s\\n' "${{#GAME_CMD[@]}}" > "$HOOK_DIR/../../cmd-{tool}"
+[ -n "${{ARGS_{var}:-}}" ] && GAME_ARGS+=("${{ARGS_{var}}}" "{tool} two")
 sleep 300 &
 echo "$!" > "$HOOK_DIR/../../helper-{tool}"
 HELPERS="$HELPERS $!"
@@ -216,6 +218,13 @@ def main():
         check("game exit code kept", code, 7)
         check("arguments passed on as they are", [x for x in out if x.startswith("arg=")],
               [f"arg={a}" for a in args])
+        check("hooks see the game's command line in GAME_CMD",
+              (tools / "cmd-sourceyaw").read_text().strip(), str(len(args) + 1))
+        ran(home)
+        _, out = run_wrapper(["movekit-run"], args, home, {"ARGS_SY": "-x y", "ARGS_SR": "-z"})
+        check("hooks' GAME_ARGS go after the game's arguments, in hook order",
+              [x for x in out if x.startswith("arg=")],
+              [f"arg={a}" for a in [*args, "-z", "strafe-review two", "-x y", "sourceyaw two"]])
         check("game gets LD_PRELOAD back", "LD_PRELOAD=libc.so.6" in out, True)
         check("game gets LD_LIBRARY_PATH back", "LD_LIBRARY_PATH=/steam/runtime" in out, True)
         check("hook exports reach the game", ["FROM_SY=yes", "FROM_SR=yes"],

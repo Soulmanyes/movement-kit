@@ -73,6 +73,13 @@ def check_launch():
     log = (cm.modules.data_dir() / "movement-kit.log").read_text()
     if "hook broke" not in log:
         cm.fail("movement-kit.log lacks the broken hook")
+    fixture(kit, "args", 'return ["-netconport", "5"]')
+    fixture(kit, "junk", 'return [1, "x"] if "-y" in argv else "not a list"')
+    fixture(kit, "more", 'return ("-z",)')
+    marker.unlink()
+    r = run_core(*game(marker), "-y", kit=kit)
+    cm.expect((r.returncode, marker.read_text()), (0, "-y -netconport 5 -z"),
+              "hooks' returned arguments after the game's, in key order; others ignored")
 
 
 def check_run_script():

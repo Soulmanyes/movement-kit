@@ -34,7 +34,7 @@ movement-kit/
     binds.py            config.cfg binds and aliases
     logtail.py          follow con_logfile (yaw.log), CRLF, rotation, map load / tickrate lines
     launch.py           movekit-run's plan: the game, the registered launch hooks, settings.toml
-    movekit-run         the one Steam launch option (bash), sources each tool's launch hook
+    movekit-run         the one Steam launch option (bash), sources each tool's launch hook (hooks may add game arguments with GAME_ARGS)
     gain.py             CS:S SSJ <-> Momentum gain formula
     updater.py          GitHub releases filtered by tag prefix; source-install and frozen-exe modes
     paths.py            data/config dirs per OS, PyInstaller resource root

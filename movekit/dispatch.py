@@ -1,7 +1,8 @@
 """The core's launch option (3.7b in PLAN.md): `movement-kit.exe %command%` on Windows.
 
 run() gives every installed module its launch hook (movekit/modules.py), then starts the game with
-the command Steam gave and returns its exit code. A module whose hook is missing, broken or raises
+the command Steam gave, plus the arguments the hooks returned (a list of strings, added at the
+end; anything else adds nothing), and returns its exit code. A module whose hook is missing, broken or raises
 is skipped and logged: the game starts whatever the modules do, also with none installed. On Linux
 movekit-run (movekit/launch.py) is the launch option and passes through the same way.
 
@@ -34,25 +35,30 @@ def game_env():
 
 
 def hooks(manager, argv, log):
-    """Each installed module's launch hook, in key order; failures are logged, never raised."""
+    """Each installed module's launch hook, in key order; failures are logged, never raised.
+    Returns the arguments the hooks add to the game's command line."""
     try:
         keys = sorted(manager.installed())
     except Exception as e:  # noqa: BLE001 - a broken kit folder must not keep the game from starting
         log(f"movement kit: couldn't list the modules ({e}); starting the game without them")
-        return
+        return []
+    extra = []
     for key in keys:
         try:
-            manager.run_hook(key, "launch", list(argv))
+            added = manager.run_hook(key, "launch", list(argv))
         except Exception as e:  # noqa: BLE001 - one module's failure mustn't stop the game or the rest
             log(f"movement kit: {key}'s launch step failed: {type(e).__name__}: {e}")
+            continue
+        if isinstance(added, (list, tuple)) and all(isinstance(a, str) for a in added):
+            extra += added
+    return extra
 
 
 def run(manager, argv, log=print):
     """Launch hooks, then the game (argv); returns the game's exit code."""
-    if manager is not None:
-        hooks(manager, argv, log)
+    extra = hooks(manager, argv, log) if manager is not None else []
     try:
-        return subprocess.call(list(argv), env=game_env())
+        return subprocess.call([*argv, *extra], env=game_env())
     except OSError as e:
         log(f"movement kit: couldn't start the game {argv[:1]}: {e}")
         return 1

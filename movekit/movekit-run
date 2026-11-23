@@ -11,7 +11,10 @@
 #   - export variables for the game (they reach the game; LD_PRELOAD and LD_LIBRARY_PATH
 #     are put back for the game only, so helpers run without Steam's runtime and overlay),
 #   - start helpers in the background and add their pids to $HELPERS: they are stopped
-#     when the game exits.
+#     when the game exits,
+#   - read the game's command line in the array $GAME_CMD and add arguments to its end with
+#     GAME_ARGS+=(...) (an older core has neither array: test for GAME_ARGS with
+#     `declare -p GAME_ARGS` first).
 # It must not start the game or exit. A hook that returns non-zero is reported and skipped.
 
 # keep Steam's runtime libraries and overlay out of our own helpers; the game gets them back
@@ -38,6 +41,8 @@ while IFS= read -r line; do
 done < <(python3 "$DIR/launch.py" plan "$(basename "$0")" "$@" 2> "$LOGDIR/launch.log")
 
 HELPERS=""
+GAME_CMD=("$@")
+GAME_ARGS=()
 run_hook() {
     local HOOK_DIR
     HOOK_DIR="$(dirname "$(readlink -f "$1")")"
@@ -58,4 +63,4 @@ if [ -n "$HELPERS" ]; then
     trap 'exit 143' TERM INT HUP
 fi
 
-LD_PRELOAD=$GAME_PRELOAD LD_LIBRARY_PATH=$GAME_LIBS "$@"
+LD_PRELOAD=$GAME_PRELOAD LD_LIBRARY_PATH=$GAME_LIBS "$@" "${GAME_ARGS[@]}"
