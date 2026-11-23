@@ -91,6 +91,7 @@ function hudLine() {
 		MomentumReplayAPI: stub,
 		MapCacheAPI: stub,
 		GameModeAPI: stub,
+		GameInterfaceAPI: { GetSettingInt: (name) => (name === 'developer' ? 1 : 0) }, // FJLINE needs developer 1
 		UiToolkitAPI: { GetGlobalObject: () => ({}) },
 		Math,
 		JSON,

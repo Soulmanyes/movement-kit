@@ -614,8 +614,14 @@ function workOut(a: Attempt): Line | null {
 	return { s: j.s, e: j.e, land: j.land, pct: j.pct, strafes: strafePcts(d, sts), mistakes: jump1Mistakes(d, j, e, sts) };
 }
 
-// The console line for check_parity.js --log (rounded as the viewer's numbers are compared)
+// The console line for check_parity.js --log (rounded as the viewer's numbers are compared). Only with
+// developer 1 in the console: nothing in the kit reads it, so players don't get a line per run.
 function logLine(a: Attempt, L: Line) {
+	try {
+		if (GameInterfaceAPI.GetSettingInt('developer') < 1) return;
+	} catch {
+		return; // a failed read must never stop the panel from showing the run
+	}
 	$.Msg(
 		`${LINE_TAG} ${a.started} ${JSON.stringify({
 			map: MapCacheAPI.GetMapName(),

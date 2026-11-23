@@ -35,7 +35,7 @@ On Linux, starting the game through `movekit-run %command%` (the kit's launch op
 ## Checks
 
 - `node first-jump/check_first_jump.js`: the customizer settings against the kv3 entry, the drawn rows, and the Panorama side on a made-up run.
-- `node first-jump/check_parity.js`: every own attempt Strafe Review saved, fed tick by tick through the script, against the review page's own code (`--interval 0.015` as if at 66 tick, `--log` for the lines the game logged).
+- `node first-jump/check_parity.js`: every own attempt Strafe Review saved, fed tick by tick through the script, against the review page's own code (`--interval 0.015` as if at 66 tick, `--log` for the lines the game logged, which it writes only with `developer 1`).
 - `python first-jump/check_first_jump.py`: install and uninstall on a fake game folder.
 
 ### Licence

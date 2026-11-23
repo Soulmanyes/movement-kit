@@ -71,7 +71,7 @@ let loads = 0;
 const IV = 0.01;
 // What the game APIs read now; tick() moves it on
 const G = { mode: 2, state: 0, replay: 0, meta: null, moveType: 2, time: 0, gain: 0, ideal: 0, ratio: 0, right: 0,
-	vx: 0, vy: 0, vz: 0, yaw: 0, buttons: 0, wx: 0, wy: 0 };
+	vx: 0, vy: 0, vz: 0, yaw: 0, buttons: 0, wx: 0, wy: 0, developer: 1 };
 const GLOBAL = { HudCustomizerHandler: { customizerReady: false, loadComponent: (p, props) => { loaded = { p, props }; loads++; } } };
 const stubs = {
 	$: {
@@ -98,6 +98,7 @@ const stubs = {
 	MomentumInputAPI: { GetButtons: () => ({ physicalButtons: G.buttons }) },
 	MomentumReplayAPI: { GetReplayState: () => G.replay },
 	MapCacheAPI: { GetMapName: () => 'bhop_check' },
+	GameInterfaceAPI: { GetSettingInt: (name) => (name === 'developer' ? G.developer : fail('GetSettingInt: ' + name)) },
 	UiToolkitAPI: { GetGlobalObject: () => GLOBAL },
 	console
 };
@@ -293,6 +294,11 @@ for (const [id, v] of Object.entries(S)) if (id.startsWith('show')) loaded.props
 reset();
 run();
 expect(panel.visible, true, 'a second run shows again');
+reset();
+G.developer = 0;
+run();
+expect([panel.visible, lines().length], [true, 0], 'developer 0: shown, no FJLINE in the console');
+G.developer = 1;
 reset();
 
 // the customizer: a sample to drag while it is open, hidden when it closes
