@@ -1,15 +1,17 @@
 // Strafe Review recorder. Loaded next to timer.ts (see layout/hud/timer.xml).
 // Records one row per physics tick, keeps the last 2 s before the timer starts, and dumps
-// each attempt to yaw.log as [panorama] SRREC lines when it ends. Reads only and sends no inputs, except
+// each attempt to yaw.log as [panorama] MK_SRREC lines when it ends. Reads only and sends no inputs, except
 // on a replay paused at its end: it steps the paused replay through the ticks it missed (see "Replay rescan").
 //
-// Wire format (format 1), all lines start with "SRREC <id> ":
+// Wire format (format 1), all lines start with "MK_SRREC <id> " (plain "SRREC" before 1.12.0). Every kit
+// marker starts with MK_, so the kit's autoexec blocks hide them all in the console with
+// con_filter_text_out MK_ (yaw.log still gets them).
 //   <id> <i>/<n> <text>        chunk i of n; joined in order they form one JSON object
 //   <id> end n=<n> chars=<c>   the last line of an attempt
 // The JSON object holds head fields, "cols" (names of the comma-separated row fields),
 // "rows" (rows joined by ';'), "events" and the end fields. FORMAT.md is the reference; keep it in step.
 
-const TAG = 'SRREC';
+const TAG = 'MK_SRREC';
 const FORMAT = 1;
 
 // TimerState from common/timer.ts (copied so this file has no imports)

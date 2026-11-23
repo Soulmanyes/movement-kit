@@ -12,11 +12,11 @@ This page is the reference for what the recorder sends and the collector saves. 
 
 ## Wire
 
-Every line in Momentum's console log (`yaw.log`) is `[panorama] SRREC <id> ...`:
+Every line in Momentum's console log (`yaw.log`) is `[panorama] MK_SRREC <id> ...` (`SRREC` without `MK_` before Strafe Review 1.12.0; readers take both):
 
 - `<id> <i>/<n> <text>`: chunk `i` of `n`, at most 900 characters. The chunks of one id, joined in order, are one JSON object (the attempt).
 - `<id> end n=<n> chars=<c>`: the last line. An attempt with missing chunks, or a joined length other than `c`, is dropped.
-- Other `SRREC` lines are recorder messages, not data.
+- Other `MK_SRREC` lines are recorder messages, not data.
 
 `collector/srrec.py` reads this.
 

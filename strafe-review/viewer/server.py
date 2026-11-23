@@ -509,11 +509,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(page).encode(), "application/json")
             body = json.dumps(attempts(self.store)).encode()
             return self.send(200, body, "application/json")
-        elif len(parts) == 4 and parts[:2] == ["api", "attempt"]:
-            if MAP.fullmatch(parts[2]) and ID.fullmatch(parts[3]):
-                path = self.store / parts[2] / f"{parts[3]}.json.gz"
-                if path.is_file():
-                    return self.send(200, path.read_bytes(), "application/json", {"Content-Encoding": "gzip"})
+        elif len(parts) == 4 and parts[:2] == ["api", "attempt"] and MAP.fullmatch(parts[2]) and ID.fullmatch(parts[3]):
+            path = self.store / parts[2] / f"{parts[3]}.json.gz"
+            if path.is_file():
+                return self.send(200, path.read_bytes(), "application/json", {"Content-Encoding": "gzip"})
         self.fail(404, "not found")
 
     def log_message(self, fmt, *args):
@@ -595,12 +594,12 @@ def stop_session():
         hosted = None
 
 
-def collect(log, store, on_saved=None):
+def collect(log, store, on_saved=None, trim_log=False):
     """Run the collector for good; an error is printed and the collector starts over, so the page never
     keeps showing while nothing is saved. Starting over is safe: attempts already on disk are skipped."""
     while True:
         try:
-            collector.run(log, store, once=False, on_saved=on_saved)
+            collector.run(log, store, once=False, on_saved=on_saved, trim_log=trim_log)
         except Exception as e:  # noqa: BLE001 - any error, the thread must live on
             global collect_error
             collect_error = {"time": time.time(), "text": f"{type(e).__name__}: {e}"}
@@ -632,7 +631,8 @@ def main(argv=None):
     except OSError as e:
         print(f"Strafe Review: could not empty old trash: {e}", file=sys.stderr)
     Handler.game_cfg = Path(args.game_cfg or os.path.join(args.game, "cfg", "config.cfg"))
-    if args.log is None and args.game:
+    own_log = args.log is None  # only the game's own yaw.log is ever emptied, never a --log file
+    if own_log and args.game:
         args.log = os.path.join(args.game, "yaw.log")
     global MOM_DIR
     MOM_DIR = Handler.game_cfg.parent.parent
@@ -644,7 +644,7 @@ def main(argv=None):
     if not args.no_collect:
         Handler.log = Path(args.log)
         host_session(args.log)  # after the port above, so a second copy never gets this far
-        threading.Thread(target=collect, args=(args.log, Handler.store, announce), daemon=True).start()
+        threading.Thread(target=collect, args=(args.log, Handler.store, announce, own_log), daemon=True).start()
     url = f"http://127.0.0.1:{args.port}/"
     print(f"Strafe Review {collector.VERSION} viewer on {url} (attempts from {args.store})", flush=True)
     if not args.no_browser:

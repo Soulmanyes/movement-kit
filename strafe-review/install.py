@@ -11,7 +11,9 @@ Usage: install.py [--game DIR] [--uninstall]
   Type panorama_reload in game after updating it.
 - Writes a block between "// movekit:strafe-review begin" and "end" into cfg/autoexec.cfg (replacing
   the older "// strafe-review begin" block where it stands): con_logfile yaw.log (the log the collector reads), and
-  engine_no_focus_sleep 0, so replays watched while tabbed out record every tick. The first install
+  engine_no_focus_sleep 0, so replays watched while tabbed out record every tick, and
+  con_filter_enable 1 / con_filter_text_out MK_, which keep the kit's MK_ markers (the recorder's
+  MK_SRREC lines among them) out of the console; yaw.log still gets them. The first install
   keeps the original as autoexec.cfg.bak-strafe-review. Restart the game after installing.
 - On Linux, registers collector/launch-hook.sh with movekit-run (movekit/launch.py) and links
   movekit-run and the old name strafe-review-run into ~/.local/bin for the Steam launch options.
@@ -43,7 +45,7 @@ from movekit import cfgblock, panorama, paths
 FOLDER = "0-strafe-review"  # in custom/: the recorder and its kit manifest (timer.xml is in 0-movekit)
 TOOL = "strafe-review"  # the autoexec block's name: // movekit:strafe-review begin ... end
 # yaw.log is the name Source Yaw's yaws.cfg uses too; only one con_logfile is active, so both tools share it
-BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0"]
+BODY = ["con_logfile yaw.log", "engine_no_focus_sleep 0", "con_filter_enable 1", "con_filter_text_out MK_"]
 OLD_MARKERS = ("// strafe-review begin", "// strafe-review end")  # before 2026-11-02; replaced in place
 LINK = paths.bin_dir() / "strafe-review-run"  # the launch option before movekit-run
 HOOK_ORDER = 20  # before Source Yaw's (50): the trainer then finds the server's session

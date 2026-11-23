@@ -39,23 +39,29 @@ def attempt(label, track_type, jump_ticks=(), length=400, map_name="surf_artois"
 
 
 BHOP = range(10, 400, 46)  # a jump every 0.7 s
+SHORT_BHOP = range(10, 240, 46)  # 5 of them, a restart
 SURF = (10, 200)  # two jumps 2.9 s apart
+BOOSTERS = range(10, 400, 20)  # a jump every 0.3 s
 
 CASES = [
-    ("own surf main run", attempt("own", 0, SURF), None),
-    ("own on a bonus without jumps", attempt("own", 2), None),
+    ("bhop map own run", attempt("own", 0, map_name="bhop_ambience"), None),
     ("bhop map replay", attempt("replay", 0, SURF, map_name="bhop_ambience"), None),
     ("bhop map spectate", attempt("spectate", 0, map_name="bhop_glacial"), None),
+    ("own surf main run", attempt("own", 0, SURF), "surf main track or stage"),
+    ("own surf main run that bhops", attempt("own", 0, BHOP), "surf main track or stage"),
+    ("own surf stage", attempt("own", 1, SURF), "surf main track or stage"),
     ("surf main replay", attempt("replay", 0, SURF), "surf main track or stage"),
-    ("surf main replay that bhops", attempt("replay", 0, BHOP), "surf main track or stage"),
     ("surf stage spectate", attempt("spectate", 1, SURF), "surf main track or stage"),
     ("SURF_ upper case", attempt("replay", 0, SURF, map_name="SURF_Mesa"), "surf main track or stage"),
+    ("own surf bonus that bhops", attempt("own", 2, BHOP), None),
+    ("own surf bonus without jumps", attempt("own", 2), "surf bonus without bhop"),
+    ("own surf bonus that surfs", attempt("own", 2, SURF), "surf bonus without bhop"),
+    ("own bhop bonus restart, 5 jumps", attempt("own", 2, SHORT_BHOP), "surf bonus without bhop"),
+    ("own surf bonus through boosters", attempt("own", 2, BOOSTERS), "surf bonus without bhop"),
     ("surf bonus replay that bhops", attempt("replay", 2, BHOP), None),
-    ("surf bonus replay that surfs", attempt("replay", 2, SURF), "surf bonus without bhop"),
     ("surf bonus replay fragment", attempt("replay", 2, length=27), "surf bonus without bhop"),
     ("surf bonus spectate that bhops", attempt("spectate", 2, BHOP), None),
 ]
-
 
 def main():
     bad = 0
@@ -64,7 +70,7 @@ def main():
         ok = got == want
         bad += not ok
         print(f"{'ok ' if ok else 'BAD'} {name}: {got!r}" + ("" if ok else f" (wanted {want!r})"))
-    for name, ticks, want in [("bhop", BHOP, len(BHOP)), ("surf", SURF, 1), ("none", (), 0), ("pair", (10, 60), 2)]:
+    for name, ticks, want in [("bhop", BHOP, len(BHOP)), ("surf", SURF, 1), ("none", (), 0), ("pair", (10, 60), 2), ("boosters", BOOSTERS, 1), ("too close", (10, 30), 1)]:
         got = jump_chain(attempt("replay", 2, ticks))
         ok = got == want
         bad += not ok

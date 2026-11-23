@@ -1,22 +1,26 @@
 """Reads SRREC wire format 1 (see FORMAT.md) from Momentum's console log.
 
-Every recorder line is `[panorama] SRREC <id> <i>/<n> <text>` (a chunk) or
-`[panorama] SRREC <id> end n=<n> chars=<c>` (the last line of an attempt).
-The chunks of one id, joined in order, are one JSON object.
+Every recorder line is `[panorama] MK_SRREC <id> <i>/<n> <text>` (a chunk) or
+`[panorama] MK_SRREC <id> end n=<n> chars=<c>` (the last line of an attempt).
+The chunks of one id, joined in order, are one JSON object. Recorders before 1.12.0
+wrote `SRREC` without the `MK_`; both are read.
 """
 import json
 import re
 import time
 
-TAG = "[panorama] SRREC "
+TAGS = ("[panorama] MK_SRREC ", "[panorama] SRREC ")  # new, then old (before 1.12.0)
 CHUNK = re.compile(r"(\S+) (\d+)/(\d+) (.*)$")
 END = re.compile(r"(\S+) end n=(\d+) chars=(\d+)$")
 
 
 def body(line):
     """The text after the SRREC tag, or None if the line is not from the recorder."""
-    i = line.find(TAG)
-    return None if i < 0 else line[i + len(TAG):].rstrip("\r\n")
+    for tag in TAGS:
+        i = line.find(tag)
+        if i >= 0:
+            return line[i + len(tag):].rstrip("\r\n")
+    return None
 
 
 class Assembler:

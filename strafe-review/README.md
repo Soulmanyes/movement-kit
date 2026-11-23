@@ -12,7 +12,7 @@ The review page has three parts:
 
 In game, the recorder can show a line after jump 1 lands: landing speed, gain % per strafe, what lost each strafe the most gain (wrong or no key, turning too slow, or too fast, with a tick count) and the biggest mistake (off by default, see below).
 
-Replays played to the end count as finishes (see [Replays](#replays)). Bonus tracks are recorded and listed per bonus ("surf_artois: b1"), and 66-tick bhop works next to 66-tick surf. Surfing itself is out of scope: on `surf_*` maps, replays and spectated runs of the main track or a stage are not saved, and those of a bonus only when they bhop (three or more quick jumps in a row). Your own runs are always saved.
+Replays played to the end count as finishes (see [Replays](#replays)). Bonus tracks are recorded and listed per bonus ("surf_artois: b1"), and 66-tick bhop works next to 66-tick surf. Surfing itself is out of scope: on `surf_*` maps, runs of the main track or a stage are not saved, your own included, and runs of a bonus only when they bhop (six or more jumps in a row, each 0.55 to 1 s after the last).
 
 Run stats, graphs and paths on `/` and `/compare` each have Copy and Save buttons: Copy puts a picture of that section on the clipboard, Save downloads it as a PNG.
 
@@ -61,7 +61,7 @@ Attempts are kept in `%LOCALAPPDATA%\strafe-review\attempts` on Windows and `~/.
 
 - `custom/0-strafe-review`: the recorder script, and `movekit-panorama.json`, the one line it adds to `timer.xml`.
 - `custom/0-movekit`: the kit's `timer.xml` that loads the recorder. It is a copy of the one the game would use otherwise (another HUD mod's in `custom/`, or the game's own) with that line added, made again on every start so other mods' updates carry over. Other kit tools' changes to the same file go in the same copy. Both folder names sort first because the game mounts `custom/` folders alphabetically and the first file found wins.
-- `cfg/autoexec.cfg`: a block between `// movekit:strafe-review begin` and `// movekit:strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to) and `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick). The first install keeps the original as `autoexec.cfg.bak-strafe-review`. A block from before 2026-11-02 (`// strafe-review begin`) is replaced where it stands.
+- `cfg/autoexec.cfg`: a block between `// movekit:strafe-review begin` and `// movekit:strafe-review end` with `con_logfile yaw.log` (the console log the recorder writes to), `engine_no_focus_sleep 0` (replays watched while tabbed out keep every tick) and `con_filter_enable 1` / `con_filter_text_out MK_` (the kit's `MK_` lines stay out of the console; `yaw.log` still gets them). Once `yaw.log` is past 64 MB and Strafe Review has read all of it, it empties the file while you're off any map. The first install keeps the original as `autoexec.cfg.bak-strafe-review`. A block from before 2026-11-02 (`// strafe-review begin`) is replaced where it stands.
 
 **Uninstall** on the card takes them out again (`python install.py --uninstall` from a clone). Your attempts stay unless you tick **Also delete saved data**. If no attempts show up, the main page shows a **Setup check** box that says where it stops.
 

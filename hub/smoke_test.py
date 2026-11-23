@@ -143,9 +143,9 @@ def write_attempt(path):
     with open(path, "ab", buffering=0) as f:
         f.write(b"[panorama] unrelated line\r\n")
         for i, part in enumerate(parts, 1):
-            f.write(f"[panorama] SRREC {SMOKE_ID} {i}/{n} {part}\r\n".encode())
+            f.write(f"[panorama] MK_SRREC {SMOKE_ID} {i}/{n} {part}\r\n".encode())
             time.sleep(0.6)
-        f.write(f"[panorama] SRREC {SMOKE_ID} end n={n} chars={len(data)}\r\n".encode())
+        f.write(f"[panorama] MK_SRREC {SMOKE_ID} end n={n} chars={len(data)}\r\n".encode())
         time.sleep(3)  # still open while the collector reads, like the game
 
 
@@ -325,7 +325,7 @@ def main():
         if (ours / "layout" / "hud" / "timer.xml").exists():
             fail("the recorder's folder has a timer.xml of its own; it belongs in 0-movekit")
         autoexec = (game / "cfg" / "autoexec.cfg").read_bytes()
-        want = b"exec something\r\n\r\n// movekit:strafe-review begin\r\ncon_logfile yaw.log\r\nengine_no_focus_sleep 0\r\n// movekit:strafe-review end\r\n"
+        want = b"exec something\r\n\r\n// movekit:strafe-review begin\r\ncon_logfile yaw.log\r\nengine_no_focus_sleep 0\r\ncon_filter_enable 1\r\ncon_filter_text_out MK_\r\n// movekit:strafe-review end\r\n"
         if autoexec != want:
             fail(f"autoexec.cfg is {autoexec!r}")
         if opened(tmp):
