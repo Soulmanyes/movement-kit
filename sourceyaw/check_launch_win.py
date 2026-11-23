@@ -134,7 +134,8 @@ def main():
         expect(len(at_exit), 1, "one exit step registered")
         at_exit[0]()  # what atexit runs when the exe exits after the game
         expect([t.is_alive() for t in threads], [False], "helpers stopped at exit")
-        expect((auto.read_text().strip(), [j.closed for j in joined]), ("", [True]), "cleaned up at exit")
+        expect(("sourceyaw_arm_" in auto.read_text(), [j.closed for j in joined]), (False, [True]),
+               "cleaned up at exit: no arm left")
 
         # a helper's error lands in run.log
         broken = launch_win._thread("broken", lambda: 1 / 0)
@@ -143,6 +144,15 @@ def main():
         expect(("broken: stopped by an error" in log, "ZeroDivisionError" in log, "Momentum Mod started with" in log),
                (True, True, True), "run.log")
         expect(launch_win.start([r"D:\Games\other.exe"]), [], "another game: nothing started")
+
+        # no auto mode and no profile maps at launch: the switcher starts all the same, so ones
+        # turned on while the game runs work after Apply
+        yawcore.save_settings({**data, "auto_mode": False}, "momentum")
+        at_exit.clear()
+        plain = launch_win.start([str(dirs["momentum"].parent / "momentum.exe")])
+        expect([t.name for t in plain], ["sourceyaw-mode"], "list switcher started without auto mode")
+        at_exit[0]()
+        yawcore.save_settings(data, "momentum")
         expect(mode_watch.session is session, True, "mode_watch shares the session module")
 
         # the real exit order: Python waits for non-daemon threads before atexit, so a helper that
@@ -169,7 +179,7 @@ def main():
             fail("the launcher didn't exit after the game: a helper thread keeps it alive")
         expect(done.returncode, 0, f"launcher exit code ({done.stderr[-300:]})")
         expect(time.monotonic() - started < 8, True, "launcher exits soon after the game")
-        expect(auto.read_text(), "", "auto cfg cleared at the real exit")
+        expect("sourceyaw_arm_" in auto.read_text(), False, "auto cfg: no arm left at the real exit")
         expect(launch_win.LOG.read_text().rstrip().endswith("sourceyaw: helpers stopped"), True,
                "run.log ends with the helpers stopped")
     print("check_launch_win: all passed")

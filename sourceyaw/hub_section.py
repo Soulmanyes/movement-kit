@@ -21,8 +21,9 @@ import io
 import math
 import re
 import threading
+import time
 
-from movekit import bindnames, launchopt
+from movekit import bindnames, launchopt, logtail
 from movekit.hub import local_import
 
 # the GTK window's spin buttons: (lowest, highest). Speeds keep 4 decimals, as the window saves them.
@@ -104,6 +105,32 @@ def key_notes(game, key, mode_key=""):
     return {"key": key_note(game, key), "mode": mode_key_note(game, key, mode_key)}
 
 
+MAP_LOG_TAIL = 1 << 20  # how much of yaw.log's end current_map reads
+
+
+def current_map(game):
+    """{"name", "mode"}: the map the game's yaw.log says is loaded (the one played last when the
+    game is closed), and its list by map_modes; name None when the log has none or the last map
+    was left."""
+    cstrike = _cstrike(game)
+    name = None
+    try:
+        with open(cstrike / "yaw.log", "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - MAP_LOG_TAIL))
+            text = f.read().decode("utf-8", "replace")
+    except (OSError, TypeError):  # no log, or no game folder (cstrike None)
+        text = ""
+    for line in reversed(text.splitlines()):
+        state = logtail.map_state(line)
+        if state is not None:
+            name = logtail.map_name(line) if state else None
+            break
+    core = _core()
+    mode = core.map_mode(core.load_settings(game) if core.has_profile(game) else {}, name)
+    return {"name": name, "mode": mode if mode in core.MODES else None}
+
+
 def launch_option(game):
     """The launch options to paste into Steam and the note under them (movekit.launchopt; Source
     Yaw's old wrapper names still count on Linux)."""
@@ -155,6 +182,14 @@ def _entries_form(entries):
     return [{"speed": float(e["speed"]), "color": e["color"], "sound": e.get("sound") or ""} for e in entries]
 
 
+def _profiles_form(lst, mode):
+    """A list's profiles for the page: the picked one's name and maps, the others whole."""
+    return {"name": lst.get("name") or mode, "maps": list(lst.get("maps") or []),
+            "sets": [{"name": s["name"], "entries": _entries_form(s["entries"]),
+                      "start": _core().start_index(s), "maps": list(s.get("maps") or [])}
+                     for s in lst.get("sets") or []]}
+
+
 def load(game=None):
     """Everything the page shows for `game` (None: the last one used, as the window opens)."""
     api, core = _api(), _core()
@@ -170,8 +205,12 @@ def load(game=None):
     sounds = core.available_sounds(cstrike, game) if cstrike else core.SOUNDS
     sound_choices = [("", "None")] + [(s, s) for s in sounds]
     entries = _entries_form(data["entries"])
-    surf = ({"entries": _entries_form(data["surf"]["entries"]), "start": data["surf"]["start"]}
+    surf = ({"entries": _entries_form(data["surf"]["entries"]), "start": data["surf"]["start"],
+             **_profiles_form(data["surf"], "surf")}
             if data.get("surf") else None)
+    single = data["single"]  # load_settings makes it
+    single = {"entries": _entries_form(single["entries"]), "start": single["start"],
+              **_profiles_form(single, core.SINGLE_NAME)}
     modes = ", ".join(f"{p}* {m}" for p, m in data["map_modes"].items())
     base_values = [v for v, _ in api.base_options(data["base"])]
     return {
@@ -196,9 +235,11 @@ def load(game=None):
         "base": data["base"], "base_options": [list(o) for o in api.base_options(data["base"])],
         # an unavailable choice (crosshair-maker gone) shows what is used instead
         "base_shown": data["base"] if data["base"] in base_values else "builtin",
-        "entries": entries,
-        "surf": surf, "separate": core.surf_on(data), "active": core.active_mode(data),
-        "mode_key": data["mode_key"], "auto_mode": data["auto_mode"],
+        "entries": entries, **_profiles_form(data, "bhop"), "profile_cmd": core.PROFILE_CMD,
+        "surf": surf, "single": single, "separate": core.surf_on(data), "active": core.active_mode(data),
+        # the list last played (the list switcher's here file): the page opens on its tab
+        "last_list": core.last_list(cstrike / "cfg" / f"{core.HERE_CFG}.cfg") if cstrike else None,
+        "mode_key": data["mode_key"], "auto_mode": data["auto_mode"], "profile_auto": data["profile_auto"],
         # Momentum runs a cfg per gamemode on map load, so it can switch then; CS:S on the next press
         "map_load": core.runs_mode_cfgs(game),
         "load_switch": data["load_switch"], "load_sound": data["load_sound"],
@@ -302,25 +343,61 @@ def play_sound(game, sound):
 
 def settings(game, form):
     """The settings dict Apply would save for the page's `form` (what Window.collect returns):
-    form = {key, crosshair, start, base, entries: [{speed, color, sound}],
-            surf: {entries, start} or null, separate, active, mode_key, auto_mode,
-            load_switch, load_sound, null_turns}.
+    form = {key, crosshair, start, base, entries: [{speed, color, sound}], name, maps, sets,
+            surf: {entries, start, name, maps, sets} or null, single: the same or null, separate,
+            active, mode_key, auto_mode, profile_auto, load_switch, load_sound, null_turns}.
+    single is the one list in game while separate is off (null: a copy of the active list).
+    name/maps/sets: the list's picked profile's name and map prefixes, and its other profiles
+    [{name, entries, start, maps}] (yawcore.PROFILE_CMD); left out, the list has none.
     The saved "trainer" dict (from before Phase 13) is kept as it was, for a roll back to 1.10."""
     data = _core().load_settings(game)
     entries, start = _list_value(form["entries"], form.get("start", 0))
     surf = None
     if form.get("surf"):
         surf_entries, surf_start = _list_value(form["surf"]["entries"], form["surf"].get("start", 0))
-        surf = {"entries": surf_entries, "start": surf_start}
+        surf = {"entries": surf_entries, "start": surf_start, **_profile_value(form["surf"], "surf")}
+    single = None
+    if form.get("single"):
+        one_entries, one_start = _list_value(form["single"]["entries"], form["single"].get("start", 0))
+        single = {"entries": one_entries, "start": one_start,
+                  **_profile_value(form["single"], _core().SINGLE_NAME)}
     return _api().collect(str(form["key"]), bool(form["crosshair"]), start, str(form["base"]),
                           data.get("original_color"), data.get("trainer"),
-                          entries, surf=surf, mode_key=str(form.get("mode_key") or ""),
+                          entries, surf=surf, single=single, mode_key=str(form.get("mode_key") or ""),
                           auto_mode=bool(form.get("auto_mode", True)), map_modes=data.get("map_modes"),
                           separate=bool(form.get("separate")) and surf is not None,
                           active=str(form.get("active") or "bhop"),
                           load_switch=bool(form.get("load_switch", True)),
                           load_sound=bool(form.get("load_sound", True)),
-                          null_turns=bool(form.get("null_turns", False)))
+                          null_turns=bool(form.get("null_turns", False)),
+                          profile=_profile_value(form, "bhop"),
+                          profile_auto=bool(form.get("profile_auto", True)))
+
+
+def _maps_value(maps):
+    """Map prefixes from the form: a list, or one text split on commas and spaces; lowercase, no repeats."""
+    if isinstance(maps, str):
+        maps = re.split(r"[,\s]+", maps)
+    if not isinstance(maps, list):
+        raise TypeError("maps must be a list of map names")
+    return list(dict.fromkeys(str(m).strip().lower() for m in maps if str(m).strip()))
+
+
+def _name_value(name, default):
+    return str(name or default).strip().lower()
+
+
+def _profile_value(form_list, mode):
+    """A list's {name, maps, sets} from the form (empty when the form has none of them)."""
+    if not any(k in form_list for k in ("name", "maps", "sets")):
+        return {}
+    sets = []
+    for s in form_list.get("sets") or []:
+        entries, start = _list_value(s["entries"], s.get("start", 0))
+        sets.append({"name": _name_value(s.get("name"), ""), "entries": entries, "start": start,
+                     "maps": _maps_value(s.get("maps") or [])})
+    return {"name": _name_value(form_list.get("name"), mode), "maps": _maps_value(form_list.get("maps") or []),
+            "sets": sets}
 
 
 def _list_value(form_entries, start):
@@ -332,6 +409,28 @@ def _list_value(form_entries, start):
     return entries, start
 
 
+WATCHER_WAIT = 1.5  # seconds; the watcher reads the settings every 0.5 s (mode_watch.run)
+
+
+def _wait_for_watcher(core, timeout=WATCHER_WAIT):
+    """Waits until mode_watch.py has read the settings just saved (yawcore.WATCH_READ); True if it
+    did in time. A game started before this watcher version never does: then after `timeout`."""
+    try:
+        want = str(core.SETTINGS.stat().st_mtime_ns)
+    except OSError:
+        return False
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if core.WATCH_READ.read_text().strip() == want:
+                return True
+        except OSError:
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
 def apply(game, form):
     """Validates and writes the game's files (Window.apply). saved False: `messages` says why."""
     core = _core()
@@ -340,16 +439,31 @@ def apply(game, form):
         return {"saved": False, "messages": [_api().setup_problem(game, cstrike)]}
     try:
         data = settings(game, form)
-    except (KeyError, ValueError) as e:
+    except (KeyError, ValueError, TypeError) as e:
         return {"saved": False, "messages": [str(e).strip("'")]}
-    problems = core.validate(data)
+    problems = core.validate(data, game)
     if problems:
         return {"saved": False, "messages": problems[:1]}
     try:
         notes = core.apply(data, cstrike, game=game)
     except OSError as e:
         return {"saved": False, "messages": [f"Not saved: {e.strerror}"]}
-    return {"saved": True, "messages": [*notes, "Saved. Game already open? Run: exec yaws"]}
+    # Momentum started through the kit: its net console runs it now (netcon.py), once the watcher
+    # has the here file on the new settings. Else, with the press through the auto cfg, its rerun
+    # guard runs yaws.cfg again (yawcore.LOADED_ALIAS)
+    netcon = local_import(__file__, "netcon")
+    sent = False
+    if netcon.is_open(game, core.CONFIG_DIR):
+        if core.here_on(data):
+            _wait_for_watcher(core)
+        sent = netcon.send(game, "exec yaws", core.CONFIG_DIR)
+    if sent:
+        done = "Saved and loaded in the open game"
+    elif core.watch_on(data):
+        done = "Saved. Game already open? Your next press of the cycle key picks it up"
+    else:
+        done = "Saved. Game already open? Run: exec yaws"
+    return {"saved": True, "messages": [*notes, done]}
 
 
 SECTION = {
@@ -362,7 +476,7 @@ SECTION = {
         "new_entry": new_entry, "previews": previews,
         "base_options": base_options, "pick_image": pick_image, "krosshair": krosshair,
         "install_krosshair": install_krosshair, "set_autoexec": set_autoexec, "play_sound": play_sound,
-        "launch_option": launch_option, "settings": settings, "apply": apply,
+        "launch_option": launch_option, "settings": settings, "apply": apply, "current_map": current_map,
     },
     "order": 30,
 }

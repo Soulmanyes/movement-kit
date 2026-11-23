@@ -12,11 +12,13 @@
 	let keyInfo = null;  // keys(): code map, mouse map, valid bind names
 	let entries = [];    // [{speed, color, sound}] in cycle order: the list on the open tab
 	let start = 0;       // index of the yawspeed that list starts on
-	// both lists; entries/start above are the open tab's, put back by keepTab()
-	let lists = { bhop: null, surf: null };
-	let tab = "bhop";
+	// the lists, each {profiles: [{name, maps, entries, start}], picked, open}: `picked` is the
+	// profile in game at start, `open` the one on the page; entries/start above are the open tab's
+	// open profile, put back by keepTab(). bhop and surf are in game with surfOn, single without.
+	let lists = { bhop: null, surf: null, single: null };
+	let tab = "bhop";    // the list on the page: "bhop" or "surf" with surfOn, else "single"
 	let surfOn = false;  // both lists in game
-	let active = "bhop"; // with one list in game, the one it uses
+	let active = "bhop"; // the saved "active": names the one list's mode in yaws.cfg, never changed here
 	let modeKey = "";    // switches between the bhop and surf lists, "" for none
 	let key = "";        // the cycle key
 	let base = "";       // the crosshair base: "crosshair-maker", "builtin" or a path
@@ -118,33 +120,138 @@
 
 	// ------------------------------------------------------------ bhop and surf lists
 
+	const openProfile = (mode = tab) => lists[mode].profiles[lists[mode].open];
+	const copyEntries = (list) => list.map((e) => ({ ...e }));
+
 	function keepTab() {
-		lists[tab] = { entries, start };
+		Object.assign(openProfile(), { entries, start });
 	}
 
-	// a first surf list starts as a copy of the bhop list
+	// a first surf list starts as a copy of the bhop list's profile in game
 	function ensureSurf() {
 		keepTab();
-		if (!lists.surf)
-			lists.surf = { entries: lists.bhop.entries.map((e) => ({ ...e })), start: lists.bhop.start };
+		if (lists.surf) return;
+		const p = lists.bhop.profiles[lists.bhop.picked];
+		lists.surf = { profiles: [{ name: "surf", maps: "", entries: copyEntries(p.entries), start: p.start }],
+			picked: 0, open: 0 };
 	}
 
 	function openTab(name) {
 		if (name === "surf") ensureSurf();
 		keepTab();
 		tab = name;
-		({ entries, start } = lists[tab]);
+		({ entries, start } = openProfile());
 		showLists();
 		drawEntries();
 		refreshPreviews();
 	}
 
-	const LIST_NAME = { bhop: "Bhop", surf: "Surf" };
-	const other = (mode) => (mode === "bhop" ? "surf" : "bhop");
+	// ------------------------------------------------------------ profiles (yawcore.PROFILE_CMD)
 
-	// the map-load switch rows: only for a game that runs gamemode cfgs (Momentum), with auto on
+	// the names of the profiles in game, which must differ
+	const allNames = () => (surfOn ? ["bhop", "surf"] : ["single"])
+		.flatMap((m) => (lists[m] ? lists[m].profiles.map((p) => p.name) : []));
+	// what the console command allows (yawcore.PROFILE_NAME)
+	const cleanName = (s) => s.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 24);
+
+	function showProfile() {
+		const l = lists[tab];
+		const sel = $("sy-prof");
+		sel.replaceChildren(...l.profiles.map((p, i) =>
+			el("option", { value: String(i) }, p.name + (i === l.picked ? " (in game)" : ""))));
+		sel.value = String(l.open);
+		const p = openProfile();
+		$("sy-prof-name").value = p.name;
+		$("sy-prof-maps").value = p.maps;
+		$("sy-prof-cmd").textContent = st.profile_cmd + p.name;
+		$("sy-prof-pick").disabled = l.open === l.picked;
+		// profile by map on: the map picks the profile, so no button to pick one by hand; off: the
+		// maps aren't used, so no maps field
+		const byMap = $("sy-prof-auto").checked;
+		$("sy-prof-pick").hidden = byMap;
+		$("sy-prof-map").hidden = !byMap;
+		$("sy-prof-maps-row").hidden = !byMap;
+		$("sy-prof-del").disabled = l.profiles.length < 2;
+		$("sy-prof-note").textContent = l.profiles.length < 2
+			? "Add a profile for another set of yawspeeds, picked by map or console"
+			: l.open === l.picked
+				? (byMap ? "In game on maps of no profile" : "In game when the game starts or this list is picked")
+				: (byMap ? "Switched to on its maps or by its console command" : "Switched to by its console command");
+	}
+
+	function openProfileAt(i) {
+		keepTab();
+		lists[tab].open = i;
+		({ entries, start } = openProfile());
+		showProfile();
+		drawEntries();
+		refreshPreviews();
+	}
+
+	$("sy-prof").onchange = () => openProfileAt(Number($("sy-prof").value));
+	// a copy of the open profile, under a name no profile has yet (stem, stem2, stem3, ...)
+	function newProfile(stem, maps, numbered) {
+		keepTab();
+		const names = allNames();
+		let n = 2;
+		let name = numbered ? stem + n : stem;
+		while (names.includes(name)) name = stem.slice(0, 22) + n++;
+		lists[tab].profiles.push({ name, maps, entries: copyEntries(entries), start });
+		openProfileAt(lists[tab].profiles.length - 1);
+		changed();
+	}
+
+	$("sy-prof-new").onclick = () =>
+		newProfile(openProfile().name.replace(/\d+$/, "").slice(0, 22) || "set", "", true);
+	$("sy-prof-map").onclick = async () => {
+		const got = await call("current_map", { game: st.game }, "Couldn't read the game's log");
+		if (!got) return;
+		if (!got.name) {
+			$("sy-prof-note").textContent = "No map in the game's log yet: load a map, then try again";
+			return;
+		}
+		// the map's own list when both are in game, so its gamemode cfg switches to it
+		if (surfOn && got.mode && got.mode !== tab) openTab(got.mode);
+		newProfile(cleanName(got.name), got.name, false);
+	};
+	$("sy-prof-del").onclick = () => {
+		const l = lists[tab];
+		if (l.profiles.length < 2) return;
+		l.profiles.splice(l.open, 1);
+		if (l.picked > l.open) l.picked--;
+		else if (l.picked === l.open) l.picked = 0;
+		l.open = Math.min(l.open, l.profiles.length - 1);
+		({ entries, start } = openProfile());
+		showProfile();
+		drawEntries();
+		refreshPreviews();
+		changed();
+	};
+	$("sy-prof-pick").onclick = () => {
+		lists[tab].picked = lists[tab].open;
+		showProfile();
+		changed();
+	};
+	$("sy-prof-name").oninput = () => {
+		const input = $("sy-prof-name");
+		const name = cleanName(input.value);
+		if (name !== input.value) input.value = name;
+		openProfile().name = name;
+		$("sy-prof-cmd").textContent = st.profile_cmd + name;
+		const sel = $("sy-prof");
+		sel.options[sel.selectedIndex].textContent = name + (lists[tab].open === lists[tab].picked ? " (in game)" : "");
+		changed();
+	};
+	$("sy-prof-maps").oninput = () => {
+		openProfile().maps = $("sy-prof-maps").value;
+		changed();
+	};
+
+
+	// the map-load switch rows: only for a game that runs gamemode cfgs (Momentum), with bhop or
+	// surf by map prefix on (two lists) or profile by map on
 	function showLoadRows() {
-		const load = surfOn && st.map_load && $("sy-auto").checked;
+		const load = st.map_load && ((surfOn && $("sy-auto").checked) || $("sy-prof-auto").checked);
 		$("sy-load-row").hidden = !load;
 		$("sy-load-sound-row").hidden = !load || !$("sy-load-switch").checked;
 	}
@@ -153,39 +260,24 @@
 		document.querySelectorAll("[data-surf]").forEach((n) => { n.hidden = !surfOn; });
 		showLoadRows();
 		document.querySelectorAll("#sy-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+		showProfile();
 		$("sy-surf-note").textContent = surfOn
-			? "Both lists in game; the mode key or the map picks one"
-			: "Off: only one list is used in game, the other stays saved";
-		$("sy-active-note").textContent = surfOn ? "" : `In game: the ${LIST_NAME[active].toLowerCase()} list`;
-		$("sy-swap").hidden = surfOn;
-		$("sy-swap").textContent = `Use ${LIST_NAME[other(active)].toLowerCase()} instead`;
-		const unused = !surfOn && tab !== active;
-		$("sy-entries").classList.toggle("sy-inactive", unused);
-		$("sy-entries-note").textContent = unused
-			? `Not used in game. Press "Use ${tab} instead" to use this list.`
-			: !surfOn
-				? "Cycled in this order. The ticked one is set when the game starts."
-				: tab === "bhop"
-					? "Bhop list, cycled in this order. The ticked one is set when the game starts or the list is picked."
-					: "Surf list, cycled in this order. The ticked one is set when the list is picked.";
+			? "A bhop list and a surf list; the mode key or the map picks one"
+			: "Off: one list for every map. The bhop and surf lists stay saved";
+		$("sy-entries-note").textContent = !surfOn
+			? "Cycled in this order. The ticked one is set when the game starts."
+			: `${tab === "bhop" ? "Bhop" : "Surf"} list, cycled in this order. The ticked one is set when the list is picked.`;
 	}
 
 	$("sy-surf-on").onchange = () => {
 		surfOn = $("sy-surf-on").checked;
 		if (surfOn) ensureSurf();
-		showLists();
-		changed();
-	};
-	$("sy-swap").onclick = () => {
-		active = other(active);
-		if (active === "surf") ensureSurf();
-		// show the list now in use
-		if (tab !== active) openTab(active);
-		else showLists();
+		openTab(surfOn ? (st.last_list === "surf" ? "surf" : "bhop") : "single");
 		changed();
 	};
 	document.querySelectorAll("#sy-tabs button").forEach((b) => { b.onclick = () => { if (b.dataset.tab !== tab) openTab(b.dataset.tab); }; });
 	$("sy-auto").onchange = () => { showLoadRows(); changed(); };
+	$("sy-prof-auto").onchange = () => { showLoadRows(); showProfile(); changed(); };
 	$("sy-load-switch").onchange = () => { showLoadRows(); changed(); };
 	$("sy-load-sound").onchange = changed;
 	$("sy-null-turns").onchange = changed;
@@ -316,11 +408,14 @@
 
 	function form() {
 		keepTab();
-		const copyList = (l) => ({ entries: l.entries.map((e) => ({ ...e })), start: l.start });
+		// the picked profile is the list itself, the others its "sets" (hub_section.settings)
+		const profile = (p) => ({ name: p.name, maps: p.maps, entries: copyEntries(p.entries), start: p.start });
+		const copyList = (l) => ({ ...profile(l.profiles[l.picked]),
+			sets: l.profiles.filter((_, i) => i !== l.picked).map(profile) });
 		const bhop = copyList(lists.bhop);
-		return { key, crosshair: $("sy-crosshair").checked, start: bhop.start, base, entries: bhop.entries,
-			surf: lists.surf ? copyList(lists.surf) : null, separate: surfOn, active,
-			mode_key: modeKey, auto_mode: $("sy-auto").checked,
+		return { key, crosshair: $("sy-crosshair").checked, ...bhop, base,
+			surf: lists.surf ? copyList(lists.surf) : null, single: copyList(lists.single), separate: surfOn, active,
+			mode_key: modeKey, auto_mode: $("sy-auto").checked, profile_auto: $("sy-prof-auto").checked,
 			load_switch: $("sy-load-switch").checked, load_sound: $("sy-load-sound").checked,
 			null_turns: $("sy-null-turns").checked };
 	}
@@ -340,17 +435,22 @@
 
 	function fill(data) {
 		st = data;
-		lists = {
-			bhop: { entries: st.entries.map((e) => ({ ...e })), start: st.start },
-			surf: st.surf ? { entries: st.surf.entries.map((e) => ({ ...e })), start: st.surf.start } : null,
-		};
+		// the list itself is the picked profile, its "sets" the others
+		const profile = (p, name) => ({ name: p.name || name, maps: (p.maps || []).join(", "),
+			entries: copyEntries(p.entries), start: p.start });
+		const toList = (d, name) => ({ profiles: [profile(d, name), ...(d.sets || []).map((s) => profile(s))],
+			picked: 0, open: 0 });
+		lists = { bhop: toList(st, "bhop"), surf: st.surf ? toList(st.surf, "surf") : null,
+			single: toList(st.single, "main") };  // yawcore.SINGLE_NAME
 		surfOn = st.separate;
 		active = st.active;
-		tab = surfOn ? "bhop" : active;
-		({ entries, start } = lists[tab]);
+		// both lists: open on the one last played in game
+		tab = surfOn ? (st.last_list === "surf" ? "surf" : "bhop") : "single";
+		({ entries, start } = openProfile());
 		modeKey = st.mode_key;
 		$("sy-surf-on").checked = surfOn;
 		$("sy-auto").checked = st.auto_mode;
+		$("sy-prof-auto").checked = st.profile_auto;
 		$("sy-load-switch").checked = st.load_switch;
 		$("sy-load-sound").checked = st.load_sound;
 		$("sy-null-turns").checked = st.null_turns;

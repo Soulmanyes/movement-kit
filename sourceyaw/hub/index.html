@@ -48,6 +48,17 @@
 		<section class="card">
 			<h2>Yaw cycle</h2>
 			<div class="mk-row">
+				<label class="mk-label" for="sy-surf-on">Bhop and surf lists<div id="sy-surf-note" class="muted"></div></label>
+				<input id="sy-surf-on" type="checkbox" class="mk-switch">
+			</div>
+			<div class="mk-row" data-surf>
+				<div class="mk-label">Editing</div>
+				<div id="sy-tabs" class="mk-seg">
+					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
+					<button id="sy-tab-surf" data-tab="surf">Surf</button>
+				</div>
+			</div>
+			<div class="mk-row">
 				<div class="mk-label">Cycle key<div id="sy-key-note" class="muted"></div></div>
 				<span id="sy-key" class="mk-key"></span>
 				<button id="sy-key-change">Change…</button>
@@ -59,26 +70,9 @@
 				<button id="sy-mode-clear" title="No mode key">Clear</button>
 			</div>
 			<div class="mk-row" data-surf>
-				<label class="mk-label" for="sy-auto">Auto by map prefix<div id="sy-auto-note" class="muted"></div></label>
+				<label class="mk-label" for="sy-auto">Bhop or surf by map prefix<div id="sy-auto-note" class="muted"></div></label>
 				<input id="sy-auto" type="checkbox" class="mk-switch">
 			</div>
-			<div class="sy-group-head sy-sub">
-				<div><h3>Yawspeeds</h3><div id="sy-entries-note" class="muted"></div></div>
-				<button id="sy-add" title="Add a yawspeed">+ Add</button>
-			</div>
-			<div class="mk-row">
-				<label class="mk-label" for="sy-surf-on">Separate surf yawspeeds<div id="sy-surf-note" class="muted"></div></label>
-				<input id="sy-surf-on" type="checkbox" class="mk-switch">
-			</div>
-			<div class="mk-row">
-				<div class="mk-label">Editing<div id="sy-active-note" class="muted"></div></div>
-				<button id="sy-swap" title="Use the other list in game"></button>
-				<div id="sy-tabs" class="mk-seg">
-					<button id="sy-tab-bhop" data-tab="bhop">Bhop</button>
-					<button id="sy-tab-surf" data-tab="surf">Surf</button>
-				</div>
-			</div>
-			<div id="sy-entries"></div>
 			<div class="mk-row" id="sy-load-row">
 				<label class="mk-label" for="sy-load-switch">Switch when the map loads<div class="muted">Off: the switch waits for your first press of the cycle key</div></label>
 				<input id="sy-load-switch" type="checkbox" class="mk-switch">
@@ -91,6 +85,36 @@
 				<label class="mk-label" for="sy-null-turns">Null turnbinds<div id="sy-null-note" class="muted"></div></label>
 				<input id="sy-null-turns" type="checkbox" class="mk-switch">
 			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="sy-prof-auto">Profile by map<div class="muted">On a profile's maps,
+					switch to that profile. Off: the profile picked with Use in game, or its console command</div></label>
+				<input id="sy-prof-auto" type="checkbox" class="mk-switch">
+			</div>
+			<div class="mk-row">
+				<div class="mk-label">Profile<div id="sy-prof-note" class="muted"></div></div>
+				<select id="sy-prof" title="The list's profile shown below"></select>
+				<button id="sy-prof-new" title="A copy of this profile">New</button>
+				<button id="sy-prof-map" title="A copy of this profile for the map you're on (or played last), in the map's list">New for this map</button>
+				<button id="sy-prof-del" title="Delete this profile">Delete</button>
+				<button id="sy-prof-pick" title="In game when the game starts or this list is picked">Use in game</button>
+			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="sy-prof-name">Profile name<div class="muted">Console command:
+					<code id="sy-prof-cmd"></code></div></label>
+				<input id="sy-prof-name" type="text" maxlength="24" spellcheck="false">
+			</div>
+			<div class="mk-row" id="sy-prof-maps-row">
+				<label class="mk-label" for="sy-prof-maps">Profile maps<div class="muted">Map names or prefixes,
+					comma separated: on such a map the first press of the cycle key switches to this profile
+					(Momentum Mod with Switch when the map loads on: the map load does).
+					The next other map goes back to the profile in game.</div></label>
+				<input id="sy-prof-maps" type="text" spellcheck="false" placeholder="bhop_kz_, kz_">
+			</div>
+			<div class="sy-group-head sy-sub">
+				<div><h3>Yawspeeds</h3><div id="sy-entries-note" class="muted"></div></div>
+				<button id="sy-add" title="Add a yawspeed">+ Add</button>
+			</div>
+			<div id="sy-entries"></div>
 		</section>
 
 		<!-- data-colors: hidden where the game has no crosshair colour (CS:S on Windows) -->

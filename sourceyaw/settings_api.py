@@ -78,17 +78,21 @@ def base_options(base_choice):
 # ---------------------------------------------------------------- saving
 
 def collect(key, crosshair, start, base, original_color, trainer, entries,
-            surf=None, mode_key="", auto_mode=True, map_modes=None, separate=False, active="bhop",
-            load_switch=True, load_sound=True, null_turns=False):
+            surf=None, single=None, mode_key="", auto_mode=True, map_modes=None, separate=False, active="bhop",
+            load_switch=True, load_sound=True, null_turns=False, profile=None, profile_auto=True):
     """The settings dict that yawcore.validate checks and yawcore.apply writes. `trainer` is the
     saved "trainer" dict, kept as it was (None: none): the Strafe Trainer has its own settings since
     Phase 13, and a Source Yaw rolled back to 1.10 still reads this one.
     `start` is the index of the yawspeed a game starts on, `entries` the yawspeeds in order (the
     bhop list). `surf` is the saved surf list {entries, start}, or None. With `separate` both lists
-    are in game; without it only the `active` one ("bhop" or "surf"), and the other stays saved.
+    are in game; without it `single`, and both stay saved ("active", "bhop" or "surf", names its mode).
     `load_switch`: with auto on, switch lists as a map loads where the game runs gamemode cfgs
     (Momentum), else on the next press; `load_sound`: play the start yawspeed's sound then.
-    `null_turns`: yaws.cfg nulls the +left/+right keys (yawcore.TURNS)."""
+    `null_turns`: yaws.cfg nulls the +left/+right keys (yawcore.TURNS).
+    `profile_auto`: profiles switch by their maps (off: the maps stay saved, unused).
+    `profile`: the bhop list's {name, maps, sets} (yawcore.PROFILE_CMD), or None for none; the
+    surf list carries its own in `surf`. `single`: the one list {entries, start, name, maps, sets}
+    in game while `separate` is off, or None (yawcore.single_list: a copy of the `active` one)."""
     data = {"key": key, "crosshair": crosshair, "start": start,
             "base": base,
             # Momentum: the user's own crosshair colour, put back when colours are off
@@ -96,10 +100,14 @@ def collect(key, crosshair, start, base, original_color, trainer, entries,
             "entries": entries,
             "mode_key": mode_key, "auto_mode": auto_mode,
             "load_switch": load_switch, "load_sound": load_sound, "null_turns": null_turns,
-            "separate": separate, "active": active if active in ("bhop", "surf") else "bhop",
+            "profile_auto": profile_auto, "separate": separate, "active": active if active in ("bhop", "surf") else "bhop",
             "map_modes": dict(map_modes or {"bhop_": "bhop", "surf_": "surf"})}
+    if profile:
+        data.update({k: profile[k] for k in ("name", "maps", "sets") if k in profile})
     if surf is not None:
         data["surf"] = surf
+    if single is not None:
+        data["single"] = single
     if trainer is not None:
         data["trainer"] = trainer
     return data

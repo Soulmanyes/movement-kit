@@ -82,7 +82,7 @@ class Console:
     def __init__(self, cfg_dir):
         self.cfg_dir = Path(cfg_dir)
         self.aliases, self.binds, self.cvars = {}, {}, {}
-        self.echoes, self.sounds = [], []
+        self.echoes, self.sounds, self.unknown = [], [], []
         # kbutton_t's two key slots per turn button (in_main.cpp KeyDown/KeyUp); 0 = free
         self.buttons = {"left": [0, 0], "right": [0, 0]}
         self.code = None  # the key code a bound key's +/- commands get (Momentum passes it on)
@@ -123,6 +123,10 @@ class Console:
                 if self.code is not None:
                     args = [str(self.code)]
                 self.button(name[1:], name[0] == "+", args[0] if args else "")
+            elif name == "sy_loaded" or name.startswith("sy_is_"):
+                # the rerun guard's check in a game whose yaws.cfg predates it: the engine prints
+                # "Unknown command" and goes on
+                self.unknown.append(name)
             else:
                 fail(f"console: unknown command {command!r}")
 
@@ -391,7 +395,9 @@ def check_files(core, tmp):
     data = base_data(surf={"entries": entries(30, 120), "start": 1}, mode_key="g")
     notes = core.apply(data, game_dir, game="momentum")
     expect(notes, ["'z' gets unbound next time yaws.cfg runs"], "apply notes: old press key unbound, mode key kept")
-    expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").read_text(), "", "apply empties the auto cfg")
+    gen = (game_dir / "cfg/yaws.cfg").read_text().split(f"alias {core.LOADED_ALIAS} sy_is_")[1].strip()
+    expect((game_dir / f"cfg/{core.AUTO_CFG}.cfg").read_text(), core.rerun_guard(gen),
+           "apply leaves the auto cfg with the rerun guard only, no arm")
     colors = sorted(p.name for p in (game_dir / "cfg" / core.COLOR_DIR).iterdir())
     expect(colors, ["b1.cfg", "b2.cfg", "b3.cfg", "s1.cfg", "s2.cfg"], "colour cfgs per list")
     expect("AUTO=1" in core.WATCH_ENV.read_text(), True, "watch.env AUTO on")
@@ -445,7 +451,7 @@ def check_files(core, tmp):
     css_dir = tmp / "files/cstrike"
     (css_dir / "cfg").mkdir(parents=True)
     core.apply(base_data(surf={"entries": entries(30), "start": 0}), css_dir, game="css")
-    expect(sorted(p.name for p in (css_dir / "cfg").iterdir()), [f"{core.AUTO_CFG}.cfg", "yaws.cfg"],
+    expect(sorted(p.name for p in (css_dir / "cfg").iterdir()), [f"{core.AUTO_CFG}.cfg", f"{core.HERE_CFG}.cfg", "yaws.cfg"],
            "CS:S: no gamemode cfgs")
     # CS:S: an image per token, the bhop start in current.png
     core.write_crosshairs(base_data(surf={"entries": entries(90, 500), "start": 0}), True)
@@ -597,7 +603,8 @@ def check_hub(tmp):
     (games["momentum"] / "cfg/config.cfg").write_text('cl_crosshair_color "0 255 0 255"\n')
     st = section.load("momentum")
     expect((st["surf"], st["mode_key"], st["auto_mode"]),
-           ({"entries": [{"speed": 30.0, "color": "#123456", "sound": ""}], "start": 0}, "g", False),
+           ({"entries": [{"speed": 30.0, "color": "#123456", "sound": ""}], "start": 0,
+             "name": "surf", "maps": [], "sets": []}, "g", False),
            "surf list, mode key and auto kept through apply and load")
     expect(st["notes"]["mode"]["warn"], False, "mode key note")
     expect(section.key_notes("momentum", "q", "q")["mode"]["warn"], True, "mode key = cycle key warns")
@@ -608,6 +615,28 @@ def check_hub(tmp):
     st = section.load("momentum")
     expect((st["separate"], st["active"], len(st["surf"]["entries"])), (False, "surf", 1),
            "separate off keeps the surf list, surf active")
+    # separate off: one list of its own (1.15.0), first a copy of the active one
+    expect(([e["speed"] for e in st["single"]["entries"]], st["single"]["name"]), ([30.0], "main"),
+           "the one list starts as the active list, named main")
+    one = {"entries": [{"speed": 77, "color": "#abcdef", "sound": ""}, {"speed": 155, "color": "#fedcba",
+                                                                        "sound": ""}],
+           "start": 1, "name": "all", "maps": [], "sets": []}
+    section.apply("momentum", dict(form, single=one))
+    st = section.load("momentum")
+    expect(([e["speed"] for e in st["single"]["entries"]], st["single"]["start"], st["single"]["name"],
+            [e["speed"] for e in st["surf"]["entries"]], [e["speed"] for e in st["entries"]]),
+           ([77.0, 155.0], 1, "all", [30.0], [e["speed"] for e in form["entries"]]),
+           "the one list saved on its own; bhop and surf lists untouched")
+    yaws = (games["momentum"] / "cfg/yaws.cfg").read_text()
+    expect(("cl_yawspeed 155" in yaws, "yawset_all" in yaws, "YAWSURF" in yaws), (True, False, False),
+           "yaws.cfg: the one list, no surf tokens")
+    section.apply("momentum", dict(form, single=st["single"], separate=True, active="surf"))
+    st = section.load("momentum")
+    expect((st["separate"], [e["speed"] for e in st["single"]["entries"]]), (True, [77.0, 155.0]),
+           "both lists on: the one list stays saved")
+    section.apply("momentum", dict(form, single=st["single"], separate=False, active="surf"))
+    expect([e["speed"] for e in section.load("momentum")["single"]["entries"]], [77.0, 155.0],
+           "and off again: back on it")
     form.update(surf=None, separate=True, active="bhop")
     section.apply("momentum", form)
     st = section.load("momentum")
@@ -646,7 +675,53 @@ MUTATIONS = [
     ("map load arms instead of switching", "yawcore.py",
      "alias {LOAD_ALIAS}{other} sy_load_{other}; ", "alias {LOAD_ALIAS}{other} sy_arm_{other}; "),
     ("map-load switch can't be turned off", "yawcore.py",
-     'if not auto_on(data) or not data.get("load_switch", True):', 'if not auto_on(data):'),
+     'if not data.get("load_switch", True):\n        return {}', 'if False:\n        return {}'),
+    # the fifth field: the check that catches it, when not this file
+    ("one list: no map-load block", "yawcore.py",
+     "if gamemode in wanted and (mode or mapload):", "if mode:", "check_profiles.py"),
+    ("one list: no here file", "yawcore.py",
+     "return watch_on(data) and (surf_on(data) or bool(map_rules(data)))",
+     "return watch_on(data) and surf_on(data)", "check_profiles.py"),
+    ("rerun guard's alias not reset", "yawcore.py",
+     "{LOADED_ALIAS}\\nalias sy_is_{gen} sy_none\\nsy_fresh", "{LOADED_ALIAS}\\nsy_fresh", "check_profiles.py"),
+    ("no rerun guard", "yawcore.py", "write_text_atomic(auto, rerun_guard(gen))",
+     'write_text_atomic(auto, "")', "check_profiles.py"),
+    ("watcher drops the rerun guard", "mode_watch.py",
+     "lines = [line for line in self._lines() if not line.startswith(ARM)]", "lines = []", "check_profiles.py"),
+    ("netcon: no pid check", "netcon.py", "if alive(pid) else None", "", "check_netcon.py"),
+    ("netcon: password not sent", "netcon.py", "PASS {password}", "PASS x", "check_netcon.py"),
+    ("netcon: rejected counts as sent", "netcon.py", "return done in reply and REJECTED not in reply",
+     "return True", "check_netcon.py"),
+    ("netcon: own -netconport doubled", "netcon.py", " or any(a.lower() == PORT_ARG for a in argv)", "",
+     "check_netcon.py"),
+    ("hook: netcon args not added", "launch-hook.sh", 'GAME_ARGS+=("${NETCON[@]}")', ":", "check_netcon.py"),
+    ("core: hook args not passed", "../movekit/movekit-run", '"$@" "${GAME_ARGS[@]}"', '"$@"',
+     "../movekit/check_launch.py"),
+    ("core win: returned args dropped", "../movekit/dispatch.py", "[*argv, *extra]", "list(argv)",
+     "../hub/check_core.py"),
+    ("watcher: no WATCH_READ after Apply", "mode_watch.py",
+     "                    _read(stamp)\n                    print(", "                    print(", "check_profiles.py"),
+    ("watcher: no WATCH_READ at start", "mode_watch.py", "    watcher.clear()\n    _read(stamp)\n",
+     "    watcher.clear()\n", "check_profiles.py"),
+    ("watcher: makes an auto cfg nobody uses", "mode_watch.py",
+     " or (arm is None and not self.path.exists())", "", "check_profiles.py"),
+    ("hub: sends before the watcher read", "hub_section.py", "            _wait_for_watcher(core)\n",
+     "            pass\n", "check_hub_section.py"),
+    ("windows: watcher only with watch_on", "launch_win.py",
+     '    threads = [_thread("mode",',
+     '    threads = [] if not yawcore.watch_on(yawcore.load_settings(game)) else [_thread("mode",',
+     "check_launch_win.py"),
+    ("profile by map: off ignored", "yawcore.py", ' or not data.get("profile_auto", True)', "",
+     "check_profiles.py"),
+    ("profile by map: always on for old settings", "yawcore.py",
+     'data.setdefault("profile_auto", any_profile_maps(data))', 'data.setdefault("profile_auto", True)',
+     "check_profiles.py"),
+    ("hub: profile by map not saved", "hub_section.py", 'profile_auto=bool(form.get("profile_auto", True))',
+     "profile_auto=True", "check_profiles.py"),
+    ("hub: no netcon send", "hub_section.py", 'send(game, "exec yaws", core.CONFIG_DIR)',
+     'send(game, "exec yaws", core.CONFIG_DIR) and False', "check_hub_section.py"),
+    ("one list: menu alias off a map", "mode_watch.py",
+     " if self.last and len(self.picked) > 1 else", " if self.last else", "check_profiles.py"),
     ("load sound setting ignored", "yawcore.py",
      'loud = bool(data.get("load_sound", True))', "loud = True"),
     ("hub drops the load sound", "hub_section.py",
@@ -666,7 +741,7 @@ MUTATIONS = [
     ("watcher ignores mode tokens", "mode_watch.py",
      'if kind == "token" and data.get("name") in TOKEN_MODES:', 'if False:'),
     ("hub drops the surf list", "hub_section.py",
-     "entries, surf=surf, mode_key", "entries, surf=None, mode_key"),
+     "entries, surf=surf, single=single, mode_key", "entries, surf=None, single=single, mode_key"),
     ("mode key unbound by apply", "yawcore.py",
      "ours = {data[\"key\"], mode_key_of(data)}", "ours = {data[\"key\"]}"),
     ("stale b/s colour cfgs kept", "yawcore.py", 'folder.glob("[bcs]*.cfg")', 'folder.glob("c*.cfg")'),
@@ -695,6 +770,10 @@ MUTATIONS = [
      "        if binds.resolve(command, wanted, alias_map):\n", "        if False:\n"),
     ("hub drops null turns", "hub_section.py",
      'null_turns=bool(form.get("null_turns", False))', "null_turns=False"),
+    ("hub drops the one list", "hub_section.py",
+     "entries, surf=surf, single=single, mode_key", "entries, surf=surf, single=None, mode_key"),
+    ("one list ignored", "yawcore.py",
+     "    if data.get(\"single\"):\n        return data[\"single\"]\n", ""),
     ("hub drops separate", "hub_section.py",
      'separate=bool(form.get("separate")) and surf is not None', 'separate=surf is not None'),
 ]
@@ -703,7 +782,7 @@ MUTATIONS = [
 def run_mutations():
     import shutil
     caught = 0
-    for name, file, old, new in MUTATIONS:
+    for name, file, old, new, *check in MUTATIONS:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "kit"
             shutil.copytree(KIT, copy, ignore=shutil.ignore_patterns(".git", "node_modules", "__pycache__"))
@@ -714,7 +793,7 @@ def run_mutations():
             target.write_text(text.replace(old, new))
             # the old yawcore comes from this repo's git, not the copy's
             env = dict(os.environ, GIT_DIR=str(KIT / ".git"))
-            res = subprocess.run([sys.executable, str(copy / "sourceyaw/check_modes.py")],
+            res = subprocess.run([sys.executable, str(copy / "sourceyaw" / (check or ["check_modes.py"])[0])],
                                  capture_output=True, text=True, env=env, check=False)
             if res.returncode == 0:
                 fail(f"mutation not caught: {name}")

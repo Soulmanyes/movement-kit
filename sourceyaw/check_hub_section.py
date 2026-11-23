@@ -17,12 +17,14 @@ Everything runs in a temp folder: HOME and the XDG folders point there, the game
 """
 import base64
 import hashlib
+import importlib.util
 import io
 import json
 import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import types
 from pathlib import Path
@@ -231,7 +233,9 @@ def main():
 
             got = call("apply", game=game, form=f)
             expect(got["saved"], True, f"{game}: apply")
-            expect(got["messages"][-1], "Saved. Game already open? Run: exec yaws", f"{game}: last message")
+            expect(got["messages"][-1], "Saved. Game already open? Your next press of the cycle key picks it up"
+                   if core.watch_on(core.load_settings(game)) else "Saved. Game already open? Run: exec yaws",
+                   f"{game}: last message")
             ours = tree_hashes(config, cfg_dir)
             for src, snap in snaps.items():
                 restore(snap, src)
@@ -250,6 +254,70 @@ def main():
             expect(call("load", game=game)["entries"][2]["speed"], 293.9535, f"{game}: saved speed")
             expect(core.load_settings(game)["trainer"], {"enabled": True, "offset_key": "k", "x": 0.33},
                    f"{game}: saved trainer dict kept")
+
+        # ------------------------------------------------------------ Apply with the game open (netcon.py)
+        spec = importlib.util.spec_from_file_location("check_netcon_fake", HERE / "check_netcon.py")
+        fakes = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fakes)
+        fake = fakes.FakeNetcon("pw")
+        state = core.CONFIG_DIR / "netcon-momentum.json"
+        state.write_text(json.dumps({"port": fake.port, "password": "pw", "pid": os.getpid()}))
+        f = form_of(call("load", game="momentum"))
+        got = call("apply", game="momentum", form=f)
+        expect(got["messages"][-1], "Saved and loaded in the open game", "momentum: Apply runs exec yaws in the game")
+        expect(fake.commands[0], "exec yaws", "momentum: the game got exec yaws")
+        # with the here file in use, it waits for the watcher to read the new settings (WATCH_READ)
+        real_here_on, core.here_on = core.here_on, lambda data: True
+        wrote = []
+
+        def watcher():
+            before = core.SETTINGS.stat().st_mtime_ns
+            while core.SETTINGS.stat().st_mtime_ns == before:
+                time.sleep(0.01)
+            time.sleep(0.3)
+            wrote.append(time.monotonic())
+            core.WATCH_READ.write_text(f"{core.SETTINGS.stat().st_mtime_ns}\n")
+
+        fake.commands.clear()
+        fake.times.clear()
+        writer = threading.Thread(target=watcher)
+        writer.start()
+        got = call("apply", game="momentum", form=f)
+        writer.join(5)
+        expect(got["messages"][-1], "Saved and loaded in the open game", "momentum: sent after the watcher")
+        expect(fake.times[0] >= wrote[0], True, "momentum: exec yaws only once the watcher read the settings")
+        start = time.monotonic()
+        got = call("apply", game="momentum", form=f)  # no watcher (a game from before): sent after the wait
+        expect((got["messages"][-1], 1 <= time.monotonic() - start < 4), ("Saved and loaded in the open game", True),
+               "momentum: no watcher, sent after the wait")
+        core.here_on = real_here_on
+        fake.close()
+        got = call("apply", game="momentum", form=f)
+        expect(got["messages"][-1].startswith("Saved. Game already open?"), True, "momentum: game closed, the old message")
+        state.unlink()
+
+        # ------------------------------------------------------------ current map (New for this map)
+        log = games["momentum"] / "yaw.log"
+        expect(call("current_map", game="momentum"), {"name": None, "mode": None}, "no log: no map")
+        log.write_bytes(b"Host_NewGame on map bhop_arcane\nYAW_90\n[engine] Host_NewGame on map Surf_Tequila\r\n"
+                        b"YAWSURF_120\n")
+        expect(call("current_map", game="momentum"), {"name": "surf_tequila", "mode": "surf"},
+               "last map in the log, lower case, its list")
+        log.write_bytes(log.read_bytes() + b"Host_ShutdownServer\n")
+        expect(call("current_map", game="momentum")["name"], None, "map left: none")
+        log.write_bytes(b"Host_NewGame on map kz_bhop\n")
+        expect(call("current_map", game="momentum"), {"name": "kz_bhop", "mode": None}, "a map of no list")
+        log.unlink()
+
+        # ------------------------------------------------------------ last list played (the tab it opens on)
+        here = games["momentum"] / "cfg" / f"{core.HERE_CFG}.cfg"
+        here.parent.mkdir(exist_ok=True)
+        here.write_text("sy_pstate_sp1; sy_lif_surf; sourceyaw_load_surf\n")
+        expect(call("load", game="momentum")["last_list"], "surf", "here file on surf: surf")
+        here.write_text("")
+        expect(call("load", game="momentum")["last_list"], None, "empty here file: none")
+        here.unlink()
+        expect(call("load", game="momentum")["last_list"], None, "no here file: none")
 
         expect([m for m in BARE if m in sys.modules], [], "bare modules at the end")
         check_windows(call, core, games)

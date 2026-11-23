@@ -4,7 +4,7 @@
 # settings. For CS:S it also swaps the crosshair colour while the game runs: it turns KROSSHAIR
 # on for the game and points it at our own image, so crosshair-maker's files are never
 # touched. Momentum Mod sets its crosshair colour itself, so it only needs the apply.
-local CFG OLD_CFG RUNLOG LOG COLORS AUTO
+local CFG OLD_CFG RUNLOG LOG COLORS NETCON
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}/sourceyaw"
 OLD_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/css-yaw"
 # settings from before the rename (done here because mkdir below would block it)
@@ -24,10 +24,18 @@ if [ "$GAME" = css ] && [ "${COLORS:-0}" = 1 ] && [ -n "${LOG:-}" ] && [ -f "$CF
     python3 "$HOOK_DIR/crosshair_watch.py" "$LOG" >> "$RUNLOG" 2>&1 &
     HELPERS="$HELPERS $!"
 fi
-# bhop/surf list switcher: writes an arm alias into cfg/sourceyaw_auto.cfg when a map loads
-if [ "${AUTO:-0}" = 1 ] && [ -n "${LOG:-}" ]; then
+# bhop/surf list and profile switcher: writes an arm alias into cfg/sourceyaw_auto.cfg when a map
+# loads. Started whatever the settings (watch.env's AUTO is for older hooks): a profile with maps
+# or auto made while the game runs works at once after Apply.
+if [ -n "${LOG:-}" ]; then
     python3 "$HOOK_DIR/mode_watch.py" "$LOG" "$GAME" >> "$RUNLOG" 2>&1 &
     HELPERS="$HELPERS $!"
+fi
+# Momentum's net console, so Apply in the hub runs exec yaws in the open game (netcon.py). $$ is
+# movekit-run, which lives as long as the game. A core without GAME_ARGS gets nothing.
+if declare -p GAME_ARGS > /dev/null 2>&1; then
+    mapfile -t NETCON < <(python3 "$HOOK_DIR/netcon.py" --launch "$GAME" "$$" "${GAME_CMD[@]}" 2>> "$RUNLOG")
+    GAME_ARGS+=("${NETCON[@]}")
 fi
 # the strafe trainer is its own module since Phase 13 (strafe-trainer/launch-hook.sh)
 return 0

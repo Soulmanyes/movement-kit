@@ -90,7 +90,7 @@ def main():
         expect("trainer" in api.collect("f", True, 1, "builtin", None, None, entries), False,
                "no trainer key without a saved one")
         expect(sorted(data), ["active", "auto_mode", "base", "crosshair", "entries", "key", "load_sound",
-                              "load_switch", "map_modes", "mode_key", "null_turns", "original_color", "separate",
+                              "load_switch", "map_modes", "mode_key", "null_turns", "original_color", "profile_auto", "separate",
                               "start", "trainer"], "collect keys")
         expect(core.validate(data), [], "collected settings validate")
         surf = {"entries": [{"speed": 60, "color": "#00ff00", "sound": None}], "start": 0}

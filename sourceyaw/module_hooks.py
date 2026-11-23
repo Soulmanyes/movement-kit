@@ -10,12 +10,14 @@ the uninstall asked to delete saved data (module.json "data").
 launch: nothing here; movekit-run sources launch-hook.sh, which install.sh registered.
 
 Windows (Phase 12): the module folder itself is the install, so install does nothing.
-uninstall: the game side only. launch: launch_win.start, in the core's launch process.
+uninstall: the game side only. launch: launch_win.start, in the core's launch process; returns the
+net console's arguments for the game (netcon.py), which the core adds to its command line.
 
 split_out (Phase 13): the strafe trainer left Source Yaw for its own module. After an update the
 manager installs it when the trainer was on for any game in Source Yaw's saved settings.
 """
 import json
+import os
 import sys
 
 
@@ -39,8 +41,12 @@ def launch(ctx, argv):
     if str(ctx.folder) not in sys.path:
         sys.path.insert(0, str(ctx.folder))
     import launch_win
+    import netcon
 
     launch_win.start(list(argv))
+    game = launch_win.game_of(argv)
+    # this process lives as long as the game
+    return netcon.launch_args(game, argv, os.getpid()) if game else []
 
 
 def split_out(ctx):

@@ -51,7 +51,7 @@ from movekit import (
 from movekit import games as kit_games
 from movekit import keys as kit_keys
 
-VERSION = "1.14.0"
+VERSION = "1.15.0"
 
 HOME = Path.home()
 # where the app is installed (or the source checkout it runs from)
@@ -68,6 +68,9 @@ CROSSHAIRS = CONFIG_DIR / "crosshairs"
 CURRENT = CONFIG_DIR / "current.png"
 BUILTIN = CONFIG_DIR / "plain-cross.png"
 WATCH_ENV = CONFIG_DIR / "watch.env"
+# mode_watch.py writes the settings stamp (SETTINGS' st_mtime_ns) it has read and put the here file
+# on: Apply waits for it before it runs exec yaws in the game (netcon.py)
+WATCH_READ = CONFIG_DIR / "watch.read"
 # the launch option: movekit-run (movekit/launch.py), which install.sh links into ~/.local/bin
 RUNNER = "movekit-run"
 # names from before movekit-run that run Source Yaw too (install.sh keeps them as links, so old
@@ -125,7 +128,22 @@ SURF_PREFIX = "YAWSURF_"
 MODE_ALIAS = "sourceyaw_mode"
 PRESS_ALIAS = "sourceyaw_press"
 AUTO_CFG = "sourceyaw_auto"
+# a profile with maps where the game runs gamemode cfgs (1.15.0): the gamemode block execs MAPLOAD_CFG
+# before LOAD_ALIAS + mode, and mode_watch.py writes it on each map load (it sees the map before the
+# gamemode cfg runs): that map's profile, `sy_pstate_<id>; sy_lif_<mode>`, or nothing. sy_lif_<mode>
+# restarts the list in place when the game is on it; else the load alias that follows starts it.
+MAPLOAD_CFG = "sourceyaw_mapload"
+# the press runs AUTO_CFG before cycling (PRESS_ALIAS). Apply ends yaws.cfg with `alias sy_loaded
+# sy_is_<hash of yaws.cfg>` and starts AUTO_CFG with rerun_guard(hash): while the game still has a
+# yaws.cfg from before that Apply, the next press runs `exec yaws` once, then cycles. Each guard sets
+# its sy_is_ back to sy_none after the check, so an older guard's alias can't pass for the new one.
+LOADED_ALIAS = "sy_loaded"
+# with both lists and the watcher on, yaws.cfg ends with `exec HERE_CFG`: mode_watch.py keeps it on the
+# loaded map's list and profile, so running yaws.cfg on a surf map doesn't leave you on the bhop list
+HERE_CFG = "sourceyaw_here"
 LOAD_ALIAS = "sourceyaw_load_"
+# off a map the here file runs MENU_ALIAS + the last list played: its start yawspeed, never a sound
+MENU_ALIAS = "sy_menu_"
 CFG_TOOL = "sourceyaw"  # its cfgblock name in autoexec.cfg and the gamemode cfgs
 DEFAULT_MAP_MODES = {"bhop_": "bhop", "surf_": "surf"}
 # commands Source Yaw binds keys to; a key bound to one of them in config.cfg is ours
@@ -189,18 +207,33 @@ def active_mode(data):
 
 
 def saved_lists(data):
-    """Every saved {entries, start}: the bhop list (the profile's own entries), then the surf list."""
-    return [data] + ([data["surf"]] if data.get("surf") else [])
+    """Every saved {entries, start}: the bhop list (the profile's own entries), the surf list, then
+    the one list."""
+    return [data] + [data[k] for k in ("surf", "single") if data.get(k)]
+
+
+# the list in game while "separate" is off: one of its own ("single", 1.15.0), the bhop and surf
+# lists stay as they are. Settings from before it start it as a copy of the list in game then.
+SINGLE_KEYS = ("entries", "start", "maps", "sets")  # not "name": the one list has its own
+SINGLE_NAME = "main"  # the one list's profile name (PROFILE_CMD + it) when it has none
+
+
+def single_list(data):
+    """The one list: data["single"], else a copy of the list "active" picks (settings before 1.15.0)."""
+    if data.get("single"):
+        return data["single"]
+    old = data if active_mode(data) == "bhop" else data["surf"]
+    return json.loads(json.dumps({k: old[k] for k in SINGLE_KEYS if k in old}))
 
 
 def mode_lists(data):
     """[(mode, letter, {entries, start}, surf_tokens)] of the lists in game. Both: the bhop list,
     then the surf list; letter names their aliases and colour cfgs (yaw_b1, b1.cfg). One: the
-    active list, as 1.8.0 wrote it (c1.cfg, YAW_ tokens)."""
+    one list (single_list), as 1.8.0 wrote it (c1.cfg, YAW_ tokens)."""
     if surf_on(data):
         return [("bhop", "b", data, False), ("surf", "s", data["surf"], True)]
-    mode = active_mode(data)
-    return [(mode, "c", data if mode == "bhop" else data["surf"], False)]
+    # the mode stays the saved "active" one, so yaws.cfg is as before 1.15.0 for the same yawspeeds
+    return [(active_mode(data), "c", single_list(data), False)]
 
 
 def auto_on(data):
@@ -218,6 +251,113 @@ def mode_key_of(data):
 def map_mode(data, name):
     """"bhop" or "surf" for map `name` by its prefix, or None."""
     return prefix_value(name, data.get("map_modes") or DEFAULT_MAP_MODES)
+
+
+# ---------------------------------------------------------------- yawspeed profiles (1.15.0)
+# A list can hold more than one profile: a named set of yawspeeds. The profile picked in the hub
+# stays in place as the list's own entries/start, with its "name" and "maps"; the others are in
+# the list's "sets" as {name, entries, start, maps}. With no "sets" yaws.cfg is as before.
+# With any list in game holding sets, every profile is in game: its yawspeeds get aliases of
+# their own, the console command PROFILE_CMD + name switches to it, and each mode keeps
+# pointers to its current profile (sy_<mode>_start, sy_<mode>_quiet, sy_<mode>_mine), so the
+# mode key, arms and map-load switches land on that profile. "maps" are map name prefixes: on a
+# matching map mode_watch.py writes the profile's arm (sourceyaw_arm_set_<id>) into AUTO_CFG, so
+# the next press starts it; where the map-load switch runs, it switches as the map loads (MAPLOAD_CFG).
+# A profile's own arm is sy_noop while it is the current one.
+PROFILE_CMD = "yawset_"
+PROFILE_NAME = re.compile(r"^[a-z0-9_]{1,24}$")
+SET_ARM = "sourceyaw_arm_set_"
+
+
+def list_name(lst, mode):
+    return lst.get("name") or mode
+
+
+def has_sets(data):
+    """Whether a list in game holds more than one profile."""
+    return any(lst.get("sets") for _, _, lst, _ in mode_lists(data))
+
+
+def profiles(data):
+    """[{mode, id, alias, color, name, list, surf, picked}] of every profile in game, picked one of
+    each list first. id names its state aliases; yawspeed i is alias yaw_<alias><i>, colour cfg
+    <color><i>. The picked one keeps the names yaws.cfg gave its list before (yaw_set/c with one
+    list, yaw_b/b and yaw_s/s with two)."""
+    out = []
+    for mode, letter, lst, surf in mode_lists(data):
+        alias = "set" if letter == "c" else letter
+        out.append({"mode": mode, "id": letter, "alias": alias, "color": letter,
+                    "name": list_name(lst, SINGLE_NAME if letter == "c" else mode), "list": lst,
+                    "surf": surf, "picked": True})
+        for k, other in enumerate(lst.get("sets") or [], 1):
+            pid = f"{letter}p{k}"
+            out.append({"mode": mode, "id": pid, "alias": pid + "_", "color": pid + "_",
+                        "name": other["name"], "list": other, "surf": surf, "picked": False})
+    return out
+
+
+def any_profile_maps(data):
+    """Whether a profile of any saved list, in game or not, has map prefixes."""
+    for lst in (data, data.get("surf"), data.get("single")):
+        if lst and (lst.get("maps") or any(s.get("maps") for s in lst.get("sets") or [])):
+            return True
+    return False
+
+
+def map_rules(data):
+    """[(map prefix, profile id, mode)] of the profiles in game, longest prefix first; none while
+    no list in game has a second profile (no arm aliases then), or with "profile by map"
+    (profile_auto) off: the maps stay saved, unused."""
+    if not has_sets(data) or not data.get("profile_auto", True):
+        return []
+    rules = [(prefix.lower(), p["id"], p["mode"]) for p in profiles(data)
+             for prefix in p["list"].get("maps") or [] if prefix]
+    return sorted(rules, key=lambda r: -len(r[0]))
+
+
+def rerun_guard(gen):
+    """AUTO_CFG's first lines after an Apply that wrote yaws.cfg `gen` (see LOADED_ALIAS)."""
+    return ('alias sy_none ""\nalias sy_fresh "exec yaws"\n'
+            f'alias sy_is_{gen} "alias sy_fresh sy_none"\n{LOADED_ALIAS}\nalias sy_is_{gen} sy_none\nsy_fresh\n')
+
+
+def watch_on(data):
+    """Whether the cycle key goes through AUTO_CFG and mode_watch.py runs: auto by map prefix,
+    or a profile with maps."""
+    return auto_on(data) or bool(map_rules(data))
+
+
+def mapload_on(data, game):
+    """Whether profiles switch as a map loads (MAPLOAD_CFG): profile maps, and gamemode cfgs that
+    run the map-load switch."""
+    return bool(map_rules(data)) and bool(mode_cfg_lists(data, game))
+
+
+def watch_plan(data, game=None):
+    """What mode_watch.py needs: map_modes (empty unless auto by prefix is on), the profile rules,
+    each mode's picked profile id, and whether it writes MAPLOAD_CFG (needs `game`)."""
+    return {"map_modes": (data.get("map_modes") or dict(DEFAULT_MAP_MODES)) if auto_on(data) else {},
+            "rules": map_rules(data),
+            "picked": {p["mode"]: p["id"] for p in profiles(data) if p["picked"]},
+            "mapload": bool(game) and mapload_on(data, game),
+            "here": here_on(data)}
+
+
+def here_on(data):
+    """Whether yaws.cfg runs `exec HERE_CFG`: the watcher on, with both lists in game or with
+    profile maps (one list)."""
+    return watch_on(data) and (surf_on(data) or bool(map_rules(data)))
+
+
+def last_list(path):
+    """The list the here file at `path` puts the game on ("bhop" or "surf"), or None. Off a map
+    that is the list of the last map played, so the menu and the next start stay on it."""
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        return None
+    found = re.search(rf"(?:{LOAD_ALIAS}|{MENU_ALIAS})(\w+)\s*$", text)
+    return found[1] if found and found[1] in MODES else None
 
 
 # ---------------------------------------------------------------- locations
@@ -438,12 +578,16 @@ def load_settings(game="css"):
     data["start"] = start_index(data)
     data.setdefault("mode_key", "")
     data.setdefault("auto_mode", True)
+    # profile by map: on for settings from before the switch (1.15.0) that have profile maps
+    data.setdefault("profile_auto", any_profile_maps(data))
     data.setdefault("load_switch", True)
     data.setdefault("load_sound", True)
     data.setdefault("null_turns", False)
     data.setdefault("map_modes", dict(DEFAULT_MAP_MODES))
     if data.get("surf"):
         data["surf"]["start"] = start_index(data["surf"])
+    data["single"] = single_list(data)
+    data["single"]["start"] = start_index(data["single"])
     for lst in saved_lists(data):
         for entry in lst["entries"]:
             if not entry.get("color"):
@@ -472,8 +616,9 @@ def start_index(data):
     return start if isinstance(start, int) and 0 <= start < len(data["entries"]) else 0
 
 
-def validate(data):
-    """List of problems that block Apply; empty when fine."""
+def validate(data, game=None):
+    """List of problems that block Apply; empty when fine. `game` (None: not known) adds the
+    game's own rules (CS:S crosshair images for profiles)."""
     problems = []
     if data["key"] not in VALID_KEYS:
         problems.append(f"'{data['key']}' is not a key name CS:S knows")
@@ -484,6 +629,8 @@ def validate(data):
         tokens = [token(e["speed"]) for e in lst["entries"]]
         if len(set(tokens)) != len(tokens):
             problems.append(f"Each{what} yawspeed must be different")
+    if has_sets(data):
+        problems += _profile_problems(data, game)
     if surf_on(data):
         key = data.get("mode_key") or ""
         if key:
@@ -491,6 +638,34 @@ def validate(data):
                 problems.append(f"'{key}' is not a key name the game knows")
             elif key.lower() == data["key"].lower():
                 problems.append("The mode key must differ from the yaw key")
+    return problems
+
+
+def _profile_problems(data, game):
+    """validate() for the profiles in game: names, yawspeeds, maps; on CS:S, one colour per speed
+    token, since its crosshair images go by the token alone."""
+    problems, names, colors = [], set(), {}
+    images = game in GAMES and GAMES[game]["colors"] == "krosshair"
+    for p in profiles(data):
+        name, lst = p["name"], p["list"]
+        if not PROFILE_NAME.match(name):
+            problems.append(f"Profile name '{name}': use 1-24 lowercase letters, digits or _")
+        elif name in names:
+            problems.append(f"Two profiles are called '{name}'")
+        names.add(name)
+        if not lst["entries"]:
+            problems.append(f"Profile '{name}' needs at least one yawspeed")
+        tokens = [token(e["speed"], p["surf"]) for e in lst["entries"]]
+        if len(set(tokens)) != len(tokens):
+            problems.append(f"Each yawspeed in profile '{name}' must be different")
+        for prefix in lst.get("maps") or []:
+            if not re.fullmatch(r"[A-Za-z0-9_\-.]+", prefix):
+                problems.append(f"Profile '{name}': '{prefix}' isn't a map name or prefix")
+        if images and data.get("crosshair"):
+            for tok, entry in zip(tokens, lst["entries"]):
+                if colors.setdefault(tok, (entry["color"].lower(), name))[0] != entry["color"].lower():
+                    problems.append(f"Yawspeed {fmt_speed(entry['speed'])} needs the same colour in profiles "
+                                    f"'{colors[tok][1]}' and '{name}' (CS:S crosshairs go by speed)")
     return problems
 
 
@@ -531,11 +706,13 @@ def write_crosshairs(data, reset_current):
     CROSSHAIRS.mkdir(parents=True, exist_ok=True)
     for old in CROSSHAIRS.glob("*.png"):
         old.unlink()
-    for n, (_, _, lst, surf_tokens) in enumerate(mode_lists(data)):
+    # every profile in game; validate() keeps one colour per token
+    for n, p in enumerate(profiles(data)):
+        lst = p["list"]
         for i, entry in enumerate(lst["entries"]):
             im = recolor(base, entry["color"])
-            im.save(CROSSHAIRS / f"{token(entry['speed'], surf_tokens)}.png")
-            # the game starts on the first list (bhop, or the one list in game)
+            im.save(CROSSHAIRS / f"{token(entry['speed'], p['surf'])}.png")
+            # the game starts on the first list's picked profile (bhop, or the one list in game)
             if n == 0 and i == start_index(lst) and (reset_current or not CURRENT.exists()):
                 tmp = CURRENT.with_name(CURRENT.name + ".tmp.png")
                 im.save(tmp)
@@ -659,6 +836,53 @@ def _key_lines(data, unbind, cycle_command, turns=None):
     return lines + _turn_lines(data, turns)
 
 
+def _profile_lines(data, signed, cvar_colors, one_list):
+    """yaws.cfg's profiles block (see PROFILE_CMD): the other profiles' yawspeeds, each profile's
+    state, arm and console aliases, then every mode put on its picked profile. Lines stay short:
+    the console cuts a command past 512 characters."""
+    # the quiet starts: for a silent map-load switch, and for MENU_ALIAS
+    quiet = not data.get("load_sound", True) or (not one_list and here_on(data))
+    found = profiles(data)
+    lines = ["", f"// yawspeed profiles: {PROFILE_CMD}<name> in the console switches to one.",
+             "// sy_<mode>_start and sy_<mode>_mine point at the mode's current profile; a profile's",
+             "// own arm is sy_noop while it is the current one."]
+    if one_list:
+        lines.append('alias sy_noop ""')
+    for p in found:
+        lst, a, pid, mode = p["list"], p["alias"], p["id"], p["mode"]
+        entries, start = lst["entries"], start_index(lst)
+        nxt = f"yaw_{a}{(start + 1) % len(entries) + 1}"
+        color = f"{p['color']}{start + 1}" if cvar_colors else None
+        lines.append(f"// profile {p['name']} ({mode})")
+        if not p["picked"]:
+            for i, entry in enumerate(entries):
+                lines.append(_set_alias(f"yaw_{a}{i + 1}", entry, f"yaw_{a}{(i + 1) % len(entries) + 1}",
+                                        p["surf"], f"{p['color']}{i + 1}" if cvar_colors else None, signed))
+        first = f"yaw_{a}{start + 1}"
+        state = f"alias sy_{mode}_start {first}; alias sy_{mode}_mine sy_mine_{pid}"
+        if quiet:
+            lines.append(_set_alias(f"{first}_quiet", dict(entries[start], sound=None), nxt, p["surf"],
+                                    color, signed))
+            state += f"; alias sy_{mode}_quiet {first}_quiet"
+        lines += [f'alias sy_mine_{pid} "alias {SET_ARM}{pid} sy_noop"',
+                  f'alias sy_reset_{pid} "alias {SET_ARM}{pid} sy_parm_{pid}"',
+                  f'alias sy_pstate_{pid} "{state}"',
+                  f'alias sy_parm_{pid} "sy_pstate_{pid}; sy_{mode}_state; alias yaw_cycle {first}"',
+                  f'alias {PROFILE_CMD}{p["name"]} "sy_pstate_{pid}; sy_{mode}_state; {first}"']
+    lines.append('alias sy_arms_reset "' + "; ".join(f"sy_reset_{p['id']}" for p in found) + '"')
+    if one_list:
+        mode = found[0]["mode"]
+        lines.append(f'alias sy_{mode}_state "sy_arms_reset; sy_{mode}_mine"')
+    lines += [f"sy_pstate_{p['id']}" for p in found if p["picked"]]
+    if one_list:  # with two lists the start section runs sy_bhop_state
+        lines.append(f"sy_{mode}_state")
+        if map_rules(data):  # the map-load switch and the here file (see MAPLOAD_CFG)
+            start = f"sy_{mode}_start" if data.get("load_sound", True) else f"sy_{mode}_quiet"
+            lines += [f'alias sy_load_{mode} "sy_{mode}_state; {start}"',
+                      f"alias sy_lif_{mode} sy_load_{mode}", f"alias {LOAD_ALIAS}{mode} sy_noop"]
+    return lines
+
+
 def _yaws_cfg_modes(data, unbind, game, turns=None):
     """yaws.cfg with a bhop and a surf list (see MODE_ALIAS)."""
     cvar_colors = GAMES[game]["colors"] == "cvar" and data["crosshair"]
@@ -670,14 +894,15 @@ def _yaws_cfg_modes(data, unbind, game, turns=None):
     else:
         lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
                      if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
-        if auto_on(data):
+        if watch_on(data):
             lines += ["// the list switcher reads map loads from yaw.log",
                       "con_logfile yaw.log"]
     signed = _signed(data, turns)
+    sets = has_sets(data)
     starts = {}
     for mode, letter, lst, _ in mode_lists(data):
         entries = lst["entries"]
-        starts[mode] = f"yaw_{letter}{start_index(lst) + 1}"
+        starts[mode] = f"sy_{mode}_start" if sets else f"yaw_{letter}{start_index(lst) + 1}"
         lines += ["", f"// {mode} yawspeeds"]
         for i, entry in enumerate(entries):
             lines.append(_set_alias(f"yaw_{letter}{i + 1}", entry,
@@ -695,25 +920,33 @@ def _yaws_cfg_modes(data, unbind, game, turns=None):
         lines.append(f'alias sy_{mode}_state "alias {MODE_ALIAS} sourceyaw_{other}; '
                      f'alias sourceyaw_arm_{mode} sy_noop; alias sourceyaw_arm_{other} sy_arm_{other}; '
                      f'alias {LOAD_ALIAS}{mode} sy_noop; alias {LOAD_ALIAS}{other} sy_load_{other}; '
-                     f'echo {MODE_TOKENS[mode]}"')
+                     + (f"alias sy_lif_{mode} sy_load_{mode}; alias sy_lif_{other} sy_noop; "
+                        f"sy_arms_reset; sy_{mode}_mine; " if sets else "")
+                     + f'echo {MODE_TOKENS[mode]}"')
     for mode in MODES:
         lines.append(f'alias sourceyaw_{mode} "sy_{mode}_state; {starts[mode]}"')
     for mode in MODES:
         lines.append(f'alias sy_arm_{mode} "sy_{mode}_state; alias yaw_cycle {starts[mode]}"')
     # a map-load switch (the gamemode cfgs run LOAD_ALIAS + mode): the start yawspeed, silent unless load_sound
+    # MENU_ALIAS + mode (the here file off a map): the same, always silent
     loud = bool(data.get("load_sound", True))
     for mode, letter, lst, _ in mode_lists(data):
-        if loud:
-            lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {starts[mode]}"')
-            continue
-        start, entries = start_index(lst), lst["entries"]
-        quiet = f"yaw_{letter}{start + 1}_quiet"
-        lines.append(_set_alias(quiet, dict(entries[start], sound=None),
-                                f"yaw_{letter}{(start + 1) % len(entries) + 1}", mode == "surf",
-                                f"{letter}{start + 1}" if cvar_colors else None, signed))
-        lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {quiet}"')
-    if auto_on(data):
+        quiet = None
+        if sets:  # the quiet start of each profile is in the profiles block
+            quiet = f"sy_{mode}_quiet"
+        elif not loud or here_on(data):
+            start, entries = start_index(lst), lst["entries"]
+            quiet = f"yaw_{letter}{start + 1}_quiet"
+            lines.append(_set_alias(quiet, dict(entries[start], sound=None),
+                                    f"yaw_{letter}{(start + 1) % len(entries) + 1}", mode == "surf",
+                                    f"{letter}{start + 1}" if cvar_colors else None, signed))
+        lines.append(f'alias sy_load_{mode} "sy_{mode}_state; {starts[mode] if loud else quiet}"')
+        if here_on(data):
+            lines.append(f'alias {MENU_ALIAS}{mode} "sy_{mode}_state; {quiet}"')
+    if watch_on(data):
         lines.append(f'alias {PRESS_ALIAS} "exec {AUTO_CFG}; yaw_cycle"')
+    if sets:
+        lines += _profile_lines(data, signed, cvar_colors, one_list=False)
     start = start_index(data)
     entries = data["entries"]
     first = fmt_speed(entries[start]["speed"])
@@ -725,8 +958,12 @@ def _yaws_cfg_modes(data, unbind, game, turns=None):
     ]
     if cvar_colors:
         lines.append(f"exec {COLOR_DIR}/b{start + 1}")
-    lines += [f"alias yaw_cycle yaw_b{(start + 1) % len(entries) + 1}", "sy_bhop_state", ""]
-    lines += _key_lines(data, unbind, PRESS_ALIAS if auto_on(data) else "yaw_cycle", turns)
+    lines += [f"alias yaw_cycle yaw_b{(start + 1) % len(entries) + 1}", "sy_bhop_state"]
+    if here_on(data):
+        lines += [f"// on a map, its list and profile (the list switcher writes {HERE_CFG}.cfg)",
+                  f"exec {HERE_CFG}"]
+    lines.append("")
+    lines += _key_lines(data, unbind, PRESS_ALIAS if watch_on(data) else "yaw_cycle", turns)
     return "\n".join(lines) + "\n"
 
 
@@ -747,10 +984,16 @@ def yaws_cfg(data, unbind=(), game="css", turns=None):
     else:
         lines.append("// play is a local-only sound cue; the yaws_colors cfgs set the crosshair colour."
                      if GAMES[game]["colors"] == "cvar" else "// play is a local-only sound cue.")
+        if watch_on(data):
+            lines += ["// the profile switcher reads map loads from yaw.log", "con_logfile yaw.log"]
     lines.append("")
     for i, entry in enumerate(entries):
         lines.append(_set_alias(f"yaw_set{i + 1}", entry, f"yaw_set{(i + 1) % len(entries) + 1}", False,
                                 f"c{i + 1}" if cvar_colors else None, _signed(data, turns)))
+    if has_sets(data):
+        lines += _profile_lines(data, _signed(data, turns), cvar_colors, one_list=True)
+    if watch_on(data):
+        lines.append(f'alias {PRESS_ALIAS} "exec {AUTO_CFG}; yaw_cycle"')
     start = start_index(lst)
     first = fmt_speed(entries[start]["speed"])
     lines += [
@@ -761,11 +1004,12 @@ def yaws_cfg(data, unbind=(), game="css", turns=None):
     ]
     if cvar_colors:
         lines.append(f"exec {COLOR_DIR}/c{start + 1}")
-    lines += [
-        f'alias yaw_cycle "yaw_set{(start + 1) % len(entries) + 1}"',
-        "",
-    ]
-    lines += _key_lines(data, unbind, "yaw_cycle", turns)
+    lines.append(f'alias yaw_cycle "yaw_set{(start + 1) % len(entries) + 1}"')
+    if here_on(data):
+        lines += [f"// on a map with a profile, that profile (the profile switcher writes {HERE_CFG}.cfg)",
+                  f"exec {HERE_CFG}"]
+    lines.append("")
+    lines += _key_lines(data, unbind, PRESS_ALIAS if watch_on(data) else "yaw_cycle", turns)
     return "\n".join(lines) + "\n"
 
 
@@ -850,10 +1094,11 @@ def write_color_cfgs(data, game_dir):
     folder.mkdir(exist_ok=True)
     original = data.get("original_color") or "0 255 0 255"
     alpha = original.split()[3] if len(original.split()) > 3 else "255"
-    # c<i> with one list; b<i> and s<i> with a bhop and a surf list
-    for _, letter, lst, _ in mode_lists(data):
-        for i, entry in enumerate(lst["entries"]):
-            write_text_atomic(folder / f"{letter}{i + 1}.cfg",
+    # c<i> with one list; b<i> and s<i> with a bhop and a surf list; bp1_<i> and so on for the
+    # other profiles
+    for p in profiles(data):
+        for i, entry in enumerate(p["list"]["entries"]):
+            write_text_atomic(folder / f"{p['color']}{i + 1}.cfg",
                               f'cl_crosshair_color "{hex_to_rgba(entry["color"], alpha)}"\n')
 
 
@@ -873,8 +1118,13 @@ def restore_crosshair_color(data, game_dir, game):
 
 def mode_cfg_lists(data, game):
     """{gamemode: "bhop"|"surf"} for the gamemode cfgs `game` runs on map load, by map_modes
-    (gamemode surf matches the surf_ prefix). Empty when auto isn't on or the game runs none."""
-    if not auto_on(data) or not data.get("load_switch", True):
+    (gamemode surf matches the surf_ prefix). Empty when auto isn't on or the game runs none.
+    With one list and profile maps: {gamemode: ""} for every one (the block only execs MAPLOAD_CFG)."""
+    if not data.get("load_switch", True):
+        return {}
+    if not surf_on(data):
+        return dict.fromkeys(getattr(kit_games.GAMES.get(game), "mode_cfgs", ()), "") if map_rules(data) else {}
+    if not auto_on(data):
         return {}
     table = data.get("map_modes") or DEFAULT_MAP_MODES
     found = {}
@@ -890,14 +1140,16 @@ def runs_mode_cfgs(game):
     return bool(getattr(kit_games.GAMES.get(game), "mode_cfgs", ()))
 
 
-def set_mode_cfgs(game_dir, wanted, game):
+def set_mode_cfgs(game_dir, wanted, game, mapload=False):
     """Puts the load alias block into each wanted gamemode cfg and takes it out of the others;
-    a cfg left with nothing but blank lines once our block is out is deleted (the game ships none)."""
+    a cfg left with nothing but blank lines once our block is out is deleted (the game ships none).
+    `mapload`: the block execs MAPLOAD_CFG first."""
     for gamemode in getattr(kit_games.GAMES.get(game), "mode_cfgs", ()):
         path = game_dir / "cfg" / f"{gamemode}.cfg"
         mode = wanted.get(gamemode)
-        if mode:
-            cfgblock.set_block(path, CFG_TOOL, [f"{LOAD_ALIAS}{mode}"], True, BACKUPS)
+        if gamemode in wanted and (mode or mapload):  # mode "": one list, the map-load switch only
+            cfgblock.set_block(path, CFG_TOOL, ([f"exec {MAPLOAD_CFG}"] if mapload else [])
+                               + ([f"{LOAD_ALIAS}{mode}"] if mode else []), True, BACKUPS)
             continue
         had_block = bool(cfgblock.spans(cfgblock.read_cfg(path)[0], *cfgblock.markers(CFG_TOOL)))
         if had_block:
@@ -950,19 +1202,35 @@ def apply(data, cstrike, reset_current=False, game="css"):
         # someone's own yaws.cfg: keep it rather than silently replace it
         shutil.copyfile(target, backup)
         notes.append(f"Your old yaws.cfg was saved as {backup.name}")
-    write_text_atomic(target, yaws_cfg(data, unbind, game, turns))
-    # empty, so no arm left from the last game (a crash, a launch without the hook) fires
+    text = yaws_cfg(data, unbind, game, turns)
+    gen = hashlib.sha256(text.encode()).hexdigest()[:10]
+    if watch_on(data):
+        text += f"\n// the next press reruns this file if the game has an older one (see LOADED_ALIAS)\n" \
+                f"alias {LOADED_ALIAS} sy_is_{gen}\n"
+    write_text_atomic(target, text)
+    # no arm left from the last game (a crash, a launch without the hook) fires; the guard only
     auto = cstrike / "cfg" / f"{AUTO_CFG}.cfg"
-    if auto_on(data):
-        write_text_atomic(auto, "")
+    if watch_on(data):
+        write_text_atomic(auto, rerun_guard(gen))
     else:
         auto.unlink(missing_ok=True)
-    set_mode_cfgs(cstrike, mode_cfg_lists(data, game), game)
+    mapload = cstrike / "cfg" / f"{MAPLOAD_CFG}.cfg"
+    if mapload_on(data, game):
+        write_text_atomic(mapload, "")
+    else:
+        mapload.unlink(missing_ok=True)
+    set_mode_cfgs(cstrike, mode_cfg_lists(data, game), game, mapload_on(data, game))
+    here = cstrike / "cfg" / f"{HERE_CFG}.cfg"
+    if here_on(data):
+        if not here.exists():  # a running watcher's file stays: yaws.cfg is run again on that map
+            write_text_atomic(here, "")
+    else:
+        here.unlink(missing_ok=True)
     krosshair = GAMES[game]["colors"] == "krosshair"
     # read by launch-hook.sh (shell), so quote the path: it has spaces
     write_text_atomic(WATCH_ENV, f"LOG={shlex.quote(str(cstrike / 'yaw.log'))}\n"
                                  f"COLORS={1 if krosshair and data['crosshair'] else 0}\n"
-                                 f"AUTO={1 if auto_on(data) else 0}\n")
+                                 f"AUTO={1 if watch_on(data) else 0}\n")
     if krosshair:
         write_crosshairs(data, reset_current)
     elif GAMES[game]["colors"] == "cvar":
@@ -993,6 +1261,8 @@ def remove_from_game(cstrike, game="css"):
     set_autoexec(cstrike, False)
     unnull_config(cstrike)
     (cstrike / "cfg" / f"{AUTO_CFG}.cfg").unlink(missing_ok=True)
+    (cstrike / "cfg" / f"{MAPLOAD_CFG}.cfg").unlink(missing_ok=True)
+    (cstrike / "cfg" / f"{HERE_CFG}.cfg").unlink(missing_ok=True)
     set_mode_cfgs(cstrike, {}, game)
     if GAMES[game]["colors"] == "cvar":
         shutil.rmtree(cstrike / "cfg" / COLOR_DIR, ignore_errors=True)
@@ -1064,7 +1334,7 @@ def apply_at_launch(game):
         print(f"{GAMES[game]['name']} not found in your Steam libraries")
         return False
     settings = load_settings(game)
-    problems = validate(settings)
+    problems = validate(settings, game)
     if problems:
         print(f"{GAMES[game]['name']}: " + "; ".join(problems))
         return False

@@ -4,7 +4,7 @@ module_hooks.launch calls start() inside the hub exe's launch process (movekit/d
 launch hooks, then the game, then the process exits with it), so the helpers here are threads of
 that process and live exactly as long as the game:
   - yaws.cfg rewritten from the saved settings (yawcore.apply_at_launch),
-  - the list switcher (mode_watch.run) when auto mode is on.
+  - the list switcher (mode_watch.run) when auto mode is on or a profile has maps.
 The strafe trainer is its own module since Phase 13 (strafe-trainer/launch_win.py).
 Crosshair colours on Windows are Momentum's only, from yaws.cfg (none for CS:S). Everything prints
 to %APPDATA%\\sourceyaw\\run.log, the only place a windowed exe's output and a thread's traceback
@@ -57,13 +57,12 @@ def start(argv):
         return []
     if not yawcore.set_up(game) or not yawcore.apply_at_launch(game):
         return []
-    data = yawcore.load_settings(game)
     log = yawcore.find_game(game) / "yaw.log"
     stop = threading.Event()
-    threads = []
-    if yawcore.auto_on(data):
-        import mode_watch
-        threads.append(_thread("mode", mode_watch.run, str(log), game, mode_watch.session.PORT, stop))
+    # the list and profile switcher, whatever the settings: profile maps or auto turned on while
+    # the game runs work after Apply
+    import mode_watch
+    threads = [_thread("mode", mode_watch.run, str(log), game, mode_watch.session.PORT, stop)]
 
     def finish():
         # at the exe's exit, after the game closed: let each helper close its own things

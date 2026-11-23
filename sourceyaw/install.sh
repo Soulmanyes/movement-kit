@@ -130,7 +130,7 @@ rm -rf "$APPS/$OLD_APP_ID.desktop" "$APPS/$OLD_NAME.desktop" "$ICONS/$OLD_APP_ID
 say "Installing the app to $DEST"
 mkdir -p "$DEST" "$APPS" "$BIN" "$ICONS"
 install -m 644 "$SRC/yawcore.py" "$SRC/settings_api.py" "$SRC/crosshair_watch.py" "$SRC/mode_watch.py" \
-    "$SRC/launch-hook.sh" "$DEST/"
+    "$SRC/netcon.py" "$SRC/launch-hook.sh" "$DEST/"
 # the strafe trainer moved to its own module, Strafe Trainer, in Phase 13 (1.11.0): drop its files.
 # trainer.py must go: Strafe Trainer stays off while it is here (the rollback guard).
 rm -rf "$DEST/trainer.py" "$DEST/trainer_linux.py" "$DEST/trainer_win.py" "$DEST/inputd" "$DEST/overlay"
