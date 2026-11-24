@@ -42,6 +42,11 @@
 //   horizontal speed (a teleport zeroes it). Recorded 3 times on surf_tequila (owner, 2026-11-24):
 //   -1183, -1163, -1156 to 0, horizontal 1122 -> 1128, then 1-4 ticks of ground friction. Plays a wall
 //   hit with the fall speed lost as its strength. Sliding gently off a slope onto the floor stays quiet.
+//   Without a ramp ride before it (a long free fall onto a spine, owner on surf_fiellu, 2026-11-24:
+//   -1421 to 0, horizontal 2382, two ticks of ground, then off at -6), the landing only counts once you
+//   drop off again within LAND_S, still falling, not jumping (t.landed): a floor landing stays on the
+//   ground or jumps. The hit then plays that much later. Below LAND_SPEED horizontal it is stepping off
+//   a ledge (surf_tequila's stored runs: -310 at 345 u/s, the same spot again and again), no hit.
 // - Sliding along a curved wall while falling loses a little more speed each tick, at a right angle to
 //   the velocity, until it passes WALL_MIN (a leaderboard replay on surf_tequila, 2026-11-24: losses
 //   1, 5, 14, 27, 46, 73, 99, 125 per tick at cos +0.01 to +0.02, the velocity turning 5-15 degrees a
@@ -108,6 +113,8 @@ const SLIDE_MIN = 2; // u/s lost at a right angle in one sample: already sliding
 const TOUCH_MIN = 0.5; // u/s lost at a right angle in one sample: touching a wall (a slide needs two)
 const SLIDE_HIT = 300; // u/s lost: the least wall hit while sliding
 const SLAM_MIN = 300; // u/s falling onto a flat top from a ramp ride: a spine hit
+const LAND_S = 0.05; // s on a flat top after a free fall before dropping off: a spine hit too
+const LAND_SPEED = 600; // u/s horizontal, at least, for that (slower is stepping off a ledge)
 const CEIL_MIN = 5; // u/s of upward speed a ceiling takes beyond free fall for a head hit
 const BONK_HARD = 400; // u/s rising into the ceiling: a hard head hit (slower: a light one)
 const THROW_VZ = -300; // u/s: a head hit that costs speed and throws you down this fast or faster is on purpose
@@ -134,6 +141,7 @@ type Tracker = {
 	hit: Hit; // the last sample's hit
 	hitAt: Record<string, number>; // game time of the last wall and ceiling hit
 	touched: boolean; // the last sample lost TOUCH_MIN or more at a right angle
+	landed: { fall: number; at: number } | null; // a free fall's landing on a flat top that may be a spine
 	sliding: boolean; // that, SLIDE_MIN or more, after a sample that touched too (along a wall)
 	hold: number; // contact samples after a head hit that don't start the sound yet
 	run: number; // contact samples in a row (of kind runKind), or free fall samples in a row when negative
@@ -143,7 +151,7 @@ type Tracker = {
 };
 
 function newTracker(): Tracker {
-	return { has: false, lastVx: 0, lastVy: 0, lastVz: 0, lastTime: 0, hit: null, hitAt: {}, touched: false, sliding: false, hold: 0, run: 0, runKind: null, sounding: null, watchTicks: 0 };
+	return { has: false, lastVx: 0, lastVy: 0, lastVz: 0, lastTime: 0, hit: null, hitAt: {}, touched: false, landed: null, sliding: false, hold: 0, run: 0, runKind: null, sounding: null, watchTicks: 0 };
 }
 
 // How many free fall steps a z change is: a whole number of at least 1, or 0 when it isn't free fall
@@ -204,9 +212,30 @@ function hitOf(t: Tracker, s: Sample, step: number, tick: number): Hit {
 	}
 	const lost = Math.hypot(t.lastVx, t.lastVy) - Math.hypot(s.vx, s.vy);
 	if (s.vz === 0 && t.sounding === 'ramp' && -t.lastVz >= SLAM_MIN && lost <= Math.hypot(t.lastVx, t.lastVy) / 2)
-		return -t.lastVz >= WALL_LEVELS[1] ? 'wall3' : 'wall2';
+		return slam(-t.lastVz);
 	if ((lost >= WALL_MIN || glancing(t, s, lost)) && (lost >= SLIDE_HIT || !t.sliding) && s.vz !== 0 && fallSteps(dz, step) === ticks)
 		return wallHit(lost);
+	return null;
+}
+
+function slam(fall: number): Hit {
+	return fall >= WALL_LEVELS[1] ? 'wall3' : 'wall2';
+}
+
+/** A spine after a free fall (see the top): the landing is noted, the hit plays on dropping off. */
+function landing(t: Tracker, s: Sample, had: boolean): Hit {
+	const l = t.landed;
+	if (l) {
+		if (!s.play || s.vz > 0 || s.time - l.at > LAND_S) t.landed = null;
+		else if (s.vz < 0) {
+			t.landed = null;
+			return slam(l.fall);
+		}
+		return null;
+	}
+	if (had && s.play && s.vz === 0 && t.sounding !== 'ramp' && -t.lastVz >= SLAM_MIN
+		&& Math.hypot(s.vx, s.vy) >= Math.max(LAND_SPEED, Math.hypot(t.lastVx, t.lastVy) / 2))
+		t.landed = { fall: -t.lastVz, at: s.time };
 	return null;
 }
 
@@ -221,6 +250,7 @@ function wallHit(lost: number): Hit {
 function track(t: Tracker, s: Sample, step: number, tick: number): Kind {
 	const had = t.has && s.time - t.lastTime <= GAP_S;
 	let hit = had && s.play ? hitOf(t, s, step, tick) : null;
+	hit = landing(t, s, had) ?? hit;
 	const gapKey = hit === 'bonk' || hit === 'graze' ? 'ceiling' : 'wall';
 	if (hit && s.time - (t.hitAt[gapKey] ?? -Infinity) < HIT_GAP_MS / 1000) {
 		t.hitAt[gapKey] = s.time;
