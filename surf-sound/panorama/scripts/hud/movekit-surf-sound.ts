@@ -47,6 +47,9 @@
 //   drop off again within LAND_S, still falling, not jumping (t.landed): a floor landing stays on the
 //   ground or jumps. The hit then plays that much later. Below LAND_SPEED horizontal it is stepping off
 //   a ledge (surf_tequila's stored runs: -310 at 345 u/s, the same spot again and again), no hit.
+//   On and off the top within one tick shows no 0 at all: the fall goes straight to half a tick of
+//   gravity (-6 at 66 ticks/s), what leaving the ground reads (owner on surf_fiellu, 2026-11-24:
+//   -1231 to -6, horizontal 1907). That is the hit at once, ramp ride or not.
 // - Sliding along a curved wall while falling loses a little more speed each tick, at a right angle to
 //   the velocity, until it passes WALL_MIN (a leaderboard replay on surf_tequila, 2026-11-24: losses
 //   1, 5, 14, 27, 46, 73, 99, 125 per tick at cos +0.01 to +0.02, the velocity turning 5-15 degrees a
@@ -115,6 +118,7 @@ const SLIDE_HIT = 300; // u/s lost: the least wall hit while sliding
 const SLAM_MIN = 300; // u/s falling onto a flat top from a ramp ride: a spine hit
 const LAND_S = 0.05; // s on a flat top after a free fall before dropping off: a spine hit too
 const LAND_SPEED = 600; // u/s horizontal, at least, for that (slower is stepping off a ledge)
+const SKIP_EPS = 0.01; // u/s: z speed this close to half a tick of gravity is leaving the ground
 const CEIL_MIN = 5; // u/s of upward speed a ceiling takes beyond free fall for a head hit
 const BONK_HARD = 400; // u/s rising into the ceiling: a hard head hit (slower: a light one)
 const THROW_VZ = -300; // u/s: a head hit that costs speed and throws you down this fast or faster is on purpose
@@ -223,7 +227,7 @@ function slam(fall: number): Hit {
 }
 
 /** A spine after a free fall (see the top): the landing is noted, the hit plays on dropping off. */
-function landing(t: Tracker, s: Sample, had: boolean): Hit {
+function landing(t: Tracker, s: Sample, had: boolean, step: number): Hit {
 	const l = t.landed;
 	if (l) {
 		if (!s.play || s.vz > 0 || s.time - l.at > LAND_S) t.landed = null;
@@ -233,9 +237,11 @@ function landing(t: Tracker, s: Sample, had: boolean): Hit {
 		}
 		return null;
 	}
-	if (had && s.play && s.vz === 0 && t.sounding !== 'ramp' && -t.lastVz >= SLAM_MIN
-		&& Math.hypot(s.vx, s.vy) >= Math.max(LAND_SPEED, Math.hypot(t.lastVx, t.lastVy) / 2))
-		t.landed = { fall: -t.lastVz, at: s.time };
+	if (!(had && s.play && -t.lastVz >= SLAM_MIN
+		&& Math.hypot(s.vx, s.vy) >= Math.max(LAND_SPEED, Math.hypot(t.lastVx, t.lastVy) / 2))) return null;
+	// on and off the top in one tick: no tick at 0, straight to half a tick of gravity
+	if (Math.abs(s.vz - step / 2) < SKIP_EPS) return slam(-t.lastVz);
+	if (s.vz === 0 && t.sounding !== 'ramp') t.landed = { fall: -t.lastVz, at: s.time };
 	return null;
 }
 
@@ -250,7 +256,7 @@ function wallHit(lost: number): Hit {
 function track(t: Tracker, s: Sample, step: number, tick: number): Kind {
 	const had = t.has && s.time - t.lastTime <= GAP_S;
 	let hit = had && s.play ? hitOf(t, s, step, tick) : null;
-	hit = landing(t, s, had) ?? hit;
+	hit = landing(t, s, had, step) ?? hit;
 	const gapKey = hit === 'bonk' || hit === 'graze' ? 'ceiling' : 'wall';
 	if (hit && s.time - (t.hitAt[gapKey] ?? -Infinity) < HIT_GAP_MS / 1000) {
 		t.hitAt[gapKey] = s.time;

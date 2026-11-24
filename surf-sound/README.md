@@ -77,7 +77,8 @@ a ceiling pressing down makes it fall faster.
   while you slide (two updates in a row losing speed that way), a wall hit needs 300 u/s or more lost. Riding a ramp onto the flat top of a spine at 300 u/s or more falling
   (z speed exactly 0, horizontal speed kept) is a wall hit too. So is falling straight onto a spine
   top from free fall at 600 u/s or more across, when you drop off it within 50 ms; that hit plays as
-  you drop off, about 30 ms late. Staying on top longer, or jumping off it, is a landing. A head hit is losing at least half your upward speed to a ceiling in one tick.
+  you drop off, about 30 ms late. Staying on top longer, or jumping off it, is a landing. Landing
+  on a spine top and dropping off within the same tick plays at once, with or without a ramp ride. A head hit is losing at least half your upward speed to a ceiling in one tick.
   A light one also has to leave your z speed at -30 u/s or above: a sloped ceiling that throws you
   down near the top of a jump is a headsurf starting, and plays the ceiling sound instead, unless
   it cost 100 u/s or more of your whole speed: a head hit after all, a bonk if it throws you down at
