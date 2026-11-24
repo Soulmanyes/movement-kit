@@ -58,15 +58,16 @@ def fake_game(root):
 def check_settings(sett, hub, noise):
     expect(tuple(noise.SOUNDS), sett.SOUND_NAMES, "settings' sound names = noise.SOUNDS")
     expect(sett.DEFAULTS["sound"], next(iter(noise.SOUNDS)), "the default sound is the first")
-    for bad in ({"volume": "9"}, {"volume": True}, {"volume": float("nan")}, {"on": 1}, {"ramp": None},
+    for bad in ({"on": 1}, {"ramp": None},
                 {"sound": "beep"}, []):
         try:
             sett.check(bad)
             fail(f"settings.check took {bad!r}")
         except ValueError:
             pass
-    expect(sett.check({"volume": 250})["volume"], 100, "volume clamped high")
-    expect(sett.check({"volume": -5})["volume"], 0, "volume clamped low")
+    expect(sett.check({"volume": 5})["levels"], dict.fromkeys(sett.SLOTS, 80),
+           "a volume saved before 1.2.0 is dropped: every sound at 80")
+    expect("volume" in sett.check({"volume": 50}), False, "no main volume saved")
     expect(sett.load(), sett.DEFAULTS, "no saved file: defaults")
     sett.file().parent.mkdir(parents=True, exist_ok=True)
     sett.file().write_text("{broken")
@@ -75,7 +76,8 @@ def check_settings(sett, hub, noise):
     for bad in ({"custom": []}, {"custom": {"door": {"file": "wall-0123456789ab.wav", "name": "x"}}},
                 {"custom": {"wall": {"file": "../../evil.wav", "name": "x"}}},
                 {"custom": {"wall": {"file": "bonk-0123456789ab.wav", "name": "x"}}},
-                {"custom": {"wall": {"file": "wall-0123456789ab.wav"}}}, {"graze": "yes"}):
+                {"custom": {"wall": {"file": "wall-0123456789ab.wav"}}}, {"graze": "yes"}, {"levels": []},
+                {"levels": {"door": 50}}, {"levels": {"wall": "50"}}, {"levels": {"bonk": True}}):
         try:
             sett.check(bad)
             fail(f"settings.check took {bad!r}")
@@ -84,8 +86,13 @@ def check_settings(sett, hub, noise):
     expect([sett.check({"bonk": False})["graze"], sett.check({"bonk": False, "graze": True})["graze"],
             sett.check({})["graze"]], [False, True, True],
            "light head hits: saved before their own switch, they follow head hits; their own switch wins")
-    want = {"on": True, "sound": "grind", "volume": 35, "ramp": True, "ceiling": False, "wall": False, "graze": True,
-            "bonk": True, "watch": False, "custom": {}}
+    expect(sett.check({"levels": {"wall": 250, "bonk": -5, "ramp": 42.4}})["levels"],
+           {"ramp": 42, "ceiling": 80, "wall": 100, "graze": 80, "bonk": 0},
+           "levels: each sound's own volume, clamped, the rest 80")
+    expect(sett.levels(sett.check({"levels": {"graze": 50}}))["graze"], 0.5, "levels() as 0-1")
+    want = {"on": True, "sound": "grind", "ramp": True, "ceiling": False, "wall": False, "graze": True,
+            "bonk": True, "watch": False, "custom": {},
+            "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40}}
     data = section.apply(want)
     expect(data["sound"], want, "apply returns the saved settings")
     expect([k for k, _ in data["sounds"]], list(sett.SOUND_NAMES), "load lists the sounds")
@@ -97,7 +104,7 @@ def check_settings(sett, hub, noise):
         pass
     expect(sett.load(), want, "a refused apply keeps the saved settings")
     try:
-        section.preview("wind", 30, "floor")
+        section.preview("wind", "floor")
         fail("preview took a bad kind")
     except ValueError:
         pass
@@ -191,6 +198,21 @@ def check_synth(noise):
         s.hit(name)
         walls.append(max(abs(x) for _ in range(20) for x in samples(s.next(None))))
     expect(walls == sorted(walls) and walls[0] < walls[2] * 0.6, True, f"wall strengths get louder: {walls}")
+    # levels: each sound scaled on its own, the product capped at full volume
+    base = noise.NoiseSynth(0.4, {"ramp": "wind", "ceiling": "wind"})
+    lv = noise.NoiseSynth(0.4, {"ramp": "wind", "ceiling": "wind"},
+                          levels={"ramp": 0.5, "ceiling": 1.0, "wall": 2.0, "graze": 1.0, "bonk": 0.0})
+    peak = lambda xs: max(map(abs, xs))
+    expect([round(peak(lv.loops["ramp"]) / peak(base.loops["ramp"]), 3),
+            round(peak(lv.loops["ceiling"]) / peak(base.loops["ceiling"]), 3),
+            round(peak(lv.hit_sounds["wall3"]) / peak(base.hit_sounds["wall3"]), 3),
+            round(peak(lv.hit_sounds["wall1"]) / peak(base.hit_sounds["wall1"]), 3),
+            peak(lv.hit_sounds["bonk"]), lv.hit_sounds["graze"] == base.hit_sounds["graze"]],
+           [0.5, 1.0, 2.0, 2.0, 0.0, True], "levels scale each loop and hit on their own")
+    capped = noise.NoiseSynth(0.8, {"ramp": "wind"}, levels={"ramp": 2.0, "wall": 2.0})
+    full = noise.NoiseSynth(1.0, {"ramp": "wind"})
+    expect([capped.loops["ramp"] == full.loops["ramp"], capped.hit_sounds["wall3"] == full.hit_sounds["wall3"]],
+           [True, True], "a level past full volume plays at full volume")
     # at full volume a hit on a loud loop (and two hits at once) stays under LIMIT: no samples cut flat
     top = int(noise.LIMIT * 32767) + 1
     for snd in noise.SOUNDS:
@@ -247,8 +269,8 @@ class FakePlayer:
 
 
 class FakeSynth:
-    def __init__(self, volume, sounds, custom=None):
-        self.volume, self.sounds, self.custom, self.hits = volume, sounds, custom, []
+    def __init__(self, volume, sounds, custom=None, levels=None):
+        self.volume, self.sounds, self.custom, self.levels, self.hits = volume, sounds, custom, levels, []
 
     def hit(self, name):
         self.hits.append(name)
@@ -257,13 +279,14 @@ class FakeSynth:
 def check_runner(sett, hub, tmp):
     sr = hub.local_import(HERE / "sound_run.py", "sound_run")
     clock = [100.0]
-    sett.save({"on": True, "sound": "wind", "volume": 50, "ramp": True, "ceiling": True})
+    sett.save({"on": True, "sound": "wind", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
     FakePlayer.made = []
     r = sr.Runner(sett, FakePlayer, FakeSynth, clock=lambda: clock[0])
     r.reload()
     p = FakePlayer.made[-1]
-    expect([p.started, p.mode, p.synth.sounds, p.synth.volume], [True, None, {"ramp": "wind", "ceiling": "wind"}, 0.5],
+    expect([p.started, p.mode, p.synth.sounds, p.synth.volume], [True, None, {"ramp": "wind", "ceiling": "wind"}, 1.0],
            "player made from the settings, silent")
+    expect(p.synth.levels, {**dict.fromkeys(sett.SLOTS, 0.8), "wall": 0.5}, "each sound's volume reaches the synth")
 
     def token(name):
         return {"type": "token", "data": {"name": name}}
@@ -290,7 +313,7 @@ def check_runner(sett, hub, tmp):
     r.tick()
     expect(p.mode, None, "silent after QUIET without a marker")
     # ceilings off: the player only has the ramp, CEIL is silent
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": True, "ceiling": False})
+    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p2 = FakePlayer.made[-1]
@@ -309,7 +332,7 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_OFF"))
     r.handle(token("MK_SURFSND_WALL2"))
     expect([p2.synth.hits[-1], p2.mode], ["wall2", None], "a hit plays with no constant sound")
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": False, "ceiling": False, "wall": False, "bonk": True})
+    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False, "bonk": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p3 = FakePlayer.made[-1]
@@ -318,7 +341,7 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_GRAZE"))
     r.handle(token("MK_SURFSND_BONK"))
     expect(p3.synth.hits, ["graze", "bonk"], "wall hits off: only head hits play (a light one too)")
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": False, "ceiling": False, "wall": False,
+    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": True,
                "custom": {"bonk": {"file": "bonk-0123456789ab.wav", "name": "mine.wav"}}})
     clock[0] += sr.SETTINGS_EVERY
@@ -328,20 +351,20 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_BONK"))
     expect([p3.synth.hits, p3.synth.custom], [["bonk"], {"bonk": sett.sounds_dir() / "bonk-0123456789ab.wav"}],
            "light head hits off: only hard ones; the custom sound reaches the synth")
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": False, "ceiling": False, "wall": False,
+    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     expect(r.sound, None, "every sound off: no player")
     # watching: the W markers play like the plain ones with "watch" on, and are muted with it off
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": True, "ceiling": True})
+    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p4 = FakePlayer.made[-1]
     r.handle(token("MK_SURFSND_CEILW"))
     r.handle(token("MK_SURFSND_BONKW"))
     expect([p4.mode, p4.synth.hits], ["ceiling", ["bonk"]], "watching, watch on: CEILW and BONKW play")
-    sett.save({"on": True, "sound": "hiss", "volume": 50, "ramp": True, "ceiling": True, "watch": False})
+    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": True, "watch": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p5 = FakePlayer.made[-1]
@@ -354,11 +377,11 @@ def check_runner(sett, hub, tmp):
     expect([p5.mode, p5.synth.hits], ["ramp", ["wall3"]], "watch off: own play still plays")
     r.handle(token("MK_SURFSND_RAMP"))  # surfing again, for the checks below
     # a settings change mid-surf keeps sounding
-    sett.save({"on": True, "sound": "rumble", "volume": 50, "ramp": True, "ceiling": False})
+    sett.save({"on": True, "sound": "rumble", "ramp": True, "ceiling": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     expect(FakePlayer.made[-1].mode, "ramp", "a new sound mid-surf is on at once")
-    sett.save({"on": False, "sound": "rumble", "volume": 50, "ramp": True, "ceiling": True})
+    sett.save({"on": False, "sound": "rumble", "ramp": True, "ceiling": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     expect([FakePlayer.made[-1].closed, r.sound], [True, None], "switched off: the player closed")
@@ -367,7 +390,7 @@ def check_runner(sett, hub, tmp):
     r.close()
 
     # run() on a log: markers as the game writes them, in a thread
-    sett.save({"on": True, "sound": "wind", "volume": 50, "ramp": True, "ceiling": True})
+    sett.save({"on": True, "sound": "wind", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
     log = tmp / "yaw.log"
     log.write_text("old line MK_SURFSND_RAMP\n")  # an earlier game run: skipped
     FakePlayer.made = []

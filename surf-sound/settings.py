@@ -5,6 +5,9 @@ game) reads the file again every half second, so a change applies to a running g
 
 Custom sounds (custom.py makes them) live in <config>/movekit/surf-sound-sounds/, one WAV per pick,
 named <slot>-<hash>.wav; "custom" maps a slot to {"file": that name, "name": the picked file's name}.
+
+"levels" gives each sound (SLOTS) its own volume in %, VOLUME[0] to VOLUME[1]. There is no main volume:
+settings saved before 1.2.0 had one ("volume"), which is dropped, so every sound starts at the default.
 """
 import json
 import math
@@ -14,10 +17,11 @@ import re
 from movekit import paths
 
 SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone")  # noise.SOUNDS' keys (check_surf_sound.py compares)
-DEFAULTS = {"on": True, "sound": "wind", "volume": 30, "ramp": True, "ceiling": True, "wall": True, "graze": True,
-            "bonk": True, "watch": True, "custom": {}}
-VOLUME = (0, 100)  # %
-SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk")  # the sounds a custom file can replace
+DEFAULTS = {"on": True, "sound": "wind", "ramp": True, "ceiling": True, "wall": True, "graze": True,
+            "bonk": True, "watch": True, "custom": {}, "levels": {}}
+VOLUME = (0, 100)  # %, per sound
+SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk")  # the sounds a custom file or a volume can change
+DEFAULTS["levels"] = dict.fromkeys(SLOTS, 80)
 FILE_RE = re.compile(r"(ramp|ceiling|wall|graze|bonk)-[0-9a-f]{12}\.wav")
 NAME_MAX = 200
 
@@ -31,13 +35,24 @@ def custom_files(cfg):
     return {slot: sounds_dir() / c["file"] for slot, c in cfg["custom"].items()}
 
 
+def levels(cfg):
+    """{slot: volume 0-1} of cfg."""
+    return {slot: v / 100 for slot, v in cfg["levels"].items()}
+
+
+def _number(v, what, low, high):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or math.isnan(v):
+        raise ValueError(f"{what} needs a number")
+    return round(min(max(v, low), high))
+
+
 def file():
     return paths.config_dir("movekit") / "surf-sound.json"
 
 
 def check(cfg):
     """The settings with every value checked; ValueError on a bad one."""
-    out = dict(DEFAULTS, custom={})
+    out = dict(DEFAULTS, custom={}, levels=dict(DEFAULTS["levels"]))
     if not isinstance(cfg, dict):
         raise ValueError("settings must be an object")  # noqa: TRY004 (the hub reports ValueError)
     for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "watch"):
@@ -57,15 +72,18 @@ def check(cfg):
                 and c["file"].startswith(slot + "-") and isinstance(c.get("name"), str)):
             raise ValueError(f"custom {slot} sound: a bad file entry")
         out["custom"][slot] = {"file": c["file"], "name": c["name"][:NAME_MAX]}
+    levels = cfg.get("levels", {})  # an old "volume" (before 1.2.0) is ignored (owner 2026-11-24)
+    if not isinstance(levels, dict):
+        raise ValueError("levels must be an object")  # noqa: TRY004 (the hub reports ValueError)
+    for slot, v in levels.items():
+        if slot not in SLOTS:
+            raise ValueError(f"volume for {slot!r}: there is no such sound")
+        out["levels"][slot] = _number(v, f"the {slot} volume", *VOLUME)
     if "sound" in cfg:
         if cfg["sound"] not in SOUND_NAMES:
             raise ValueError(f"sound must be one of {', '.join(SOUND_NAMES)}")
         out["sound"] = cfg["sound"]
-    if "volume" in cfg:
-        v = cfg["volume"]
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or math.isnan(v):
-            raise ValueError("volume needs a number")
-        out["volume"] = round(min(max(v, VOLUME[0]), VOLUME[1]))
+
     return out
 
 

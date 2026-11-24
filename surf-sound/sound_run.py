@@ -12,7 +12,7 @@ watch a replay or spectate, every marker but OFF ends in W; the "watch" setting 
 A surf can last many seconds, so there is no cap on how long a sound plays. Instead the script writes
 the sounding marker again every half second, and the sound stops after QUIET seconds without one (a
 crash or a dead script can't leave it on), and on a map unload. The settings file is read again every
-half second: on/off, sound, volume and the ramp/ceiling switches apply at once.
+half second: on/off, sound, each sound's volume and the switches apply at once.
 
 Linux: launch-hook.sh runs `python3 sound_run.py` in the background while Momentum runs. Windows:
 module_hooks.launch calls start() inside the core's launch process, which exits with the game.
@@ -63,7 +63,8 @@ class Runner:
         self.sound = self.voice = None
         kinds = [k for k in ("ramp", "ceiling") if cfg[k]]
         if cfg["on"] and (kinds or cfg["wall"] or cfg["graze"] or cfg["bonk"]):
-            voice = self.synth(cfg["volume"] / 100, {k: cfg["sound"] for k in kinds}, self.settings.custom_files(cfg))
+            voice = self.synth(1.0, {k: cfg["sound"] for k in kinds}, self.settings.custom_files(cfg),
+                               self.settings.levels(cfg))  # each sound's own volume
             if old:
                 old.close()
                 old = None

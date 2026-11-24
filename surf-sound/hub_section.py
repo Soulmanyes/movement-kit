@@ -53,18 +53,19 @@ def apply(sound):
     return load()
 
 
-def preview(sound, volume, kind="ramp", custom=None):
+def preview(sound, kind="ramp", custom=None, levels=None):
     """Play the sound (its ramp or ceiling variant) for a moment on the desktop, or a hit (kind wall1-3,
-    graze or bonk). custom: the page's custom sounds, saved or not ({slot: {"file", "name"}})."""
+    graze or bonk). custom: the page's custom sounds, saved or not ({slot: {"file", "name"}}); levels: the
+    page's volume per sound ({slot: %})."""
     s = _settings()
-    cfg = s.check({"sound": sound, "volume": volume, "custom": custom or {}})
-    files = s.custom_files(cfg)
+    cfg = s.check({"sound": sound, "custom": custom or {}, "levels": levels or {}})
+    files, lv = s.custom_files(cfg), s.levels(cfg)
     noise = local_import(__file__, "noise")
     if kind in noise.HITS:
-        return noise.play_hit(cfg["volume"] / 100, kind, files)
+        return noise.play_hit(1.0, kind, files, lv)
     if kind not in ("ramp", "ceiling"):
         raise ValueError("kind must be ramp, ceiling, wall1-3, graze or bonk")
-    return noise.play(cfg["volume"] / 100, cfg["sound"], kind, custom=files)
+    return noise.play(1.0, cfg["sound"], kind, custom=files, levels=lv)
 
 
 def pick_sound(slot):

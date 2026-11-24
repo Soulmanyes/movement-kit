@@ -17,11 +17,15 @@
 
 	function form() {
 		return {
-			on: $("ss-on").checked, sound: $("ss-sound").value, volume: parseFloat($("ss-volume").dataset.last),
+			on: $("ss-on").checked, sound: $("ss-sound").value,
 			ramp: $("ss-ramp").checked, ceiling: $("ss-ceiling").checked,
 			wall: $("ss-wall").checked, graze: $("ss-graze").checked, bonk: $("ss-bonk").checked,
-			watch: $("ss-watch").checked, custom
+			watch: $("ss-watch").checked, custom, levels: levels()
 		};
+	}
+
+	function levels() {
+		return Object.fromEntries(SLOTS.map((slot) => [slot, parseFloat($("ss-level-" + slot).dataset.last)]));
 	}
 
 	function showCustom() {
@@ -58,7 +62,7 @@
 		custom = { ...data.sound.custom };
 		showCustom();
 		$("ss-watch").checked = data.sound.watch;
-		numberBox($("ss-volume"), data.sound.volume, data.volume, () => setDirty(true));
+		for (const slot of SLOTS) numberBox($("ss-level-" + slot), data.sound.levels[slot], data.volume, () => setDirty(true));
 		$("ss-loading").hidden = true;
 		$("ss-form").hidden = false;
 		setDirty(false);
@@ -90,7 +94,7 @@
 	}
 	async function play(kind) {
 		const f = form();
-		const ok = await call("preview", { sound: f.sound, volume: f.volume, kind, custom }, "Can't play");
+		const ok = await call("preview", { sound: f.sound, kind, custom, levels: f.levels }, "Can't play");
 		if (!ok) toast("Couldn't play the sound here", true);
 	}
 	$("ss-play").onclick = () => play("ramp");

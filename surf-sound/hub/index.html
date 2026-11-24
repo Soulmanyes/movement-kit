@@ -5,6 +5,7 @@
 <title>Surf Sound</title>
 <link rel="stylesheet" href="/web/hub.css">
 <link rel="stylesheet" href="/web/form.css">
+<style>.ss-level { width: 5em; }</style>
 <script src="/web/hub.js"></script>
 <script src="/web/section.js"></script>
 </head>
@@ -32,12 +33,11 @@
 				<label class="mk-label" for="ss-on">Play the sound</label>
 				<input id="ss-on" type="checkbox" class="mk-switch">
 			</div>
+
 			<div class="mk-row">
 				<label class="mk-label">Sound<div class="muted">▶ plays the ramp and the ceiling version here</div></label>
 				<label class="mk-field">Sound
 					<select id="ss-sound"></select></label>
-				<label class="mk-field">Volume %
-					<input id="ss-volume" type="number" step="5"></label>
 				<button id="ss-play" title="Ramp">▶</button>
 				<button id="ss-play-ceil" title="Ceiling">▶ ceiling</button>
 			</div>
@@ -46,6 +46,8 @@
 				<span id="ss-file-ramp" class="muted"></span>
 				<button id="ss-pick-ramp" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-clear-ramp" title="Back to the built-in sound">×</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-ramp" type="number" step="5" class="ss-level"></label>
 				<input id="ss-ramp" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
@@ -53,6 +55,8 @@
 				<span id="ss-file-ceiling" class="muted"></span>
 				<button id="ss-pick-ceiling" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-clear-ceiling" title="Back to the built-in sound">×</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-ceiling" type="number" step="5" class="ss-level"></label>
 				<input id="ss-ceiling" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
@@ -61,6 +65,8 @@
 				<button id="ss-pick-wall" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-clear-wall" title="Back to the built-in sound">×</button>
 				<button id="ss-play-wall" title="Wall hit">▶</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-wall" type="number" step="5" class="ss-level"></label>
 				<input id="ss-wall" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
@@ -69,6 +75,8 @@
 				<button id="ss-pick-graze" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-clear-graze" title="Back to the built-in sound">×</button>
 				<button id="ss-play-graze" title="Light head hit">▶</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-graze" type="number" step="5" class="ss-level"></label>
 				<input id="ss-graze" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
@@ -77,9 +85,11 @@
 				<button id="ss-pick-bonk" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-clear-bonk" title="Back to the built-in sound">×</button>
 				<button id="ss-play-bonk" title="Hard head hit">▶</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-bonk" type="number" step="5" class="ss-level"></label>
 				<input id="ss-bonk" type="checkbox" class="mk-switch">
 			</div>
-			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). It applies with Apply.</div>
+			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). It applies with Apply. Each sound has its own Volume %.</div>
 			<div class="mk-row">
 				<label class="mk-label" for="ss-watch">Also when watching<div class="muted">replays and spectating play the sounds too (spectating in steps of about 50 ms)</div></label>
 				<input id="ss-watch" type="checkbox" class="mk-switch">

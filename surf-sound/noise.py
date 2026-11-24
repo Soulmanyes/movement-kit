@@ -160,7 +160,7 @@ HIT_SOUNDS = {
 def _hit_file(name, custom):
     """The file a hit plays: its custom sound (custom: {slot: path}), else the built-in one. A light
     head hit with no sound of its own follows the wall's."""
-    slot = "wall" if name.startswith("wall") else name
+    slot = _slot(name)
     if custom.get(slot):
         return str(custom[slot])
     if name == "graze" and custom.get("wall"):
@@ -168,10 +168,17 @@ def _hit_file(name, custom):
     return str(SOUND_DIR / HIT_SOUNDS[name][0])
 
 
-def render_hits(scale=1.0, custom=None):
-    """Each hit's samples ready to mix, by hit name: peaking at HIT_PEAK x its gain x scale. A custom file
-    that can't be read falls back to the built-in sound, with a log line."""
+def _slot(name):
+    """The settings slot of a hit name (wall1-3 are "wall")."""
+    return "wall" if name.startswith("wall") else name
+
+
+def render_hits(scale=1.0, custom=None, scales=None):
+    """Each hit's samples ready to mix, by hit name: peaking at HIT_PEAK x its gain x scale, or x
+    scales[its slot] when given. A custom file that can't be read falls back to the built-in sound, with a
+    log line."""
     custom = custom or {}
+    scales = scales or {}
     out, peaks, files = {}, {}, {}
     for name, (builtin, gain) in HIT_SOUNDS.items():
         path = _hit_file(name, custom)
@@ -186,7 +193,7 @@ def render_hits(scale=1.0, custom=None):
         files[path] = xs
         if path not in peaks:
             peaks[path] = max(map(abs, xs)) or 1
-        k = HIT_PEAK * gain * scale / peaks[path]
+        k = HIT_PEAK * gain * scales.get(_slot(name), scale) / peaks[path]
         out[name] = [x * k for x in xs]
     return out
 
@@ -243,14 +250,17 @@ class NoiseSynth:
     "ramp", "ceiling" or None (silence). sounds: {mode: sound name}; custom: {slot: path of a custom
     sound (custom.py)}, slots "ramp", "ceiling", "wall", "graze" and "bonk", each replacing that built-in
     sound. A custom file that doesn't load falls back to the built-in sound (a log line), so a bad file
-    never stops the sound."""
+    never stops the sound. levels: {slot: factor} on volume per sound (settings "levels"), the product
+    capped at 1."""
     RATE = RATE
     CHUNK = CHUNK
 
-    def __init__(self, volume, sounds, custom=None):
+    def __init__(self, volume, sounds, custom=None, levels=None):
         custom = custom or {}
+        levels = levels or {}
         vol = max(0.0, min(1.0, volume)) * 32767
-        self.loops = {mode: [x * vol for x in self._loop(mode, name, custom.get(mode))]
+        scales = {slot: min(vol * max(0.0, level), 32767.0) for slot, level in levels.items()}
+        self.loops = {mode: [x * scales.get(mode, vol) for x in self._loop(mode, name, custom.get(mode))]
                       for mode, name in sounds.items()}
         # the steady sound ready to write; only fades are computed on the fly
         self.loop_bytes = {mode: array.array("h", (max(-32768, min(32767, int(x))) for x in loop)).tobytes()
@@ -263,7 +273,7 @@ class NoiseSynth:
         self.down = CHUNK / (RATE * FADE_OUT_S)
         self.silence = bytes(2 * CHUNK)
         self.vol = vol
-        self.hit_sounds = render_hits(vol, custom)  # scaled once here: the audio thread only adds them
+        self.hit_sounds = render_hits(vol, custom, scales)  # scaled once here: the audio thread only adds them
         self.queued = collections.deque()  # hit names from hit(), any thread
         self.playing = []  # [samples, position] of the hits sounding
         self.limit_gain = 1.0  # the limiter's gain (LIMIT)
@@ -356,10 +366,10 @@ def player_class():
     return tone.WindowsTone if sys.platform == "win32" else LinuxNoise
 
 
-def play(volume, sound, kind="ramp", seconds=1.2, custom=None):
+def play(volume, sound, kind="ramp", seconds=1.2, custom=None, levels=None):
     """A burst of `sound` (its `kind` variant, or custom's file for kind) for `seconds`, volume 0-1;
     returns at once."""
-    player = player_class()(NoiseSynth(volume, {kind: sound}, custom))
+    player = player_class()(NoiseSynth(volume, {kind: sound}, custom, levels))
     player.start()
     player.mode = kind
     for delay, step in ((seconds, lambda: setattr(player, "mode", None)), (seconds + 0.4, player.close)):
@@ -367,9 +377,9 @@ def play(volume, sound, kind="ramp", seconds=1.2, custom=None):
     return True
 
 
-def play_hit(volume, name, custom=None):
+def play_hit(volume, name, custom=None, levels=None):
     """One hit (HITS, custom's file for its slot if any) at volume 0-1; returns at once."""
-    synth = NoiseSynth(volume, {}, custom)
+    synth = NoiseSynth(volume, {}, custom, levels)
     synth.hit(name)
     player = player_class()(synth)
     player.start()

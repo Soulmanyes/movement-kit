@@ -18,9 +18,10 @@ The sound is shaped noise or a recorded loop, not a tone. Pick one of five on th
 | Grind | A board on a rail: mid noise with a fast flutter |
 | Stone | Stone dragged over stone, a recording (`sounds/stone-dragging.wav`) |
 
-▶ plays each one there. The page also has the volume, a switch each for ramps and ceilings, and
-"Also when watching" for replays and spectating. A change
-applies at once, also while the game runs.
+▶ plays each one there. The page also has a switch and a Volume % for each sound (ramps, ceilings,
+wall hits, light and hard head hits), and "Also when watching" for replays and spectating. A change
+applies at once, also while the game runs. Each sound starts at 80 %; settings from before 1.2.0 had one
+volume for all, which is dropped, so they start there too.
 
 Hits play once, on top of the constant sound, each with its own switch and ▶:
 
