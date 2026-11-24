@@ -1,0 +1,13 @@
+{
+  "key": "surf-sound",
+  "title": "Surf Sound",
+  "summary": "In Momentum Mod: a constant sound on the desktop while you ride a ramp (surf, slide) or a sloped ceiling (headsurf), a noise like wind or grind rather than a tone, plus a bonk on wall and head hits. Each has its own switch and can play your own sound file.",
+  "games": ["momentum"],
+  "os": ["linux", "win32"],
+  "tag_prefix": "surf-sound-v",
+  "version_from": "install.py",
+  "needs_core": "1.11.0",
+  "needs": [],
+  "data": [],
+  "group": "tool"
+}
