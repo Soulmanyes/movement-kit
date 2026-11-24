@@ -80,13 +80,14 @@ expect(api.classify(290, TICK, STEP, TICK), 'ramp', 'a jump-sized change is stil
 expect(api.classify(-900, TICK, STEP, TICK), null, 'a teleport tells nothing');
 
 // ---- the tracker ----
-// samples: [air, vz, ticks = 1, vx = 900]; air false: on the ground (z speed 0) or out of play
+// samples: [air, vz, ticks = 1, vx = 900, vy = 0, ground = false]; air false: on the ground (z speed 0)
+// or out of play; ground: own play on the ground (moveStatus), as live
 let clock = 1;
 function run(t, samples, hits) {
 	const out = [];
-	for (const [air, vz, ticks = 1, vx = 900, vy = 0] of samples) {
+	for (const [air, vz, ticks = 1, vx = 900, vy = 0, ground = false] of samples) {
 		clock += ticks * TICK;
-		out.push(api.track(t, { play: air, fast: true, vx, vy, vz: air ? vz : 0, time: clock }, STEP, TICK));
+		out.push(api.track(t, { play: air, ground, fast: true, vx, vy, vz: air ? vz : 0, time: clock }, STEP, TICK));
 		if (hits) hits.push(t.hit);
 	}
 	return out;
@@ -210,12 +211,20 @@ hits = [];
 t = api.newTracker();
 run(t, [[true, -1100, 1, 1100], [true, -1112, 1, 1100], [true, -1124, 1, 1100], [true, 0, 1, 1100]], hits);
 expect(hits.filter(Boolean), [], 'free fall onto the ground (no ramp ride) is no hit');
-// a free fall onto a spine top, no ramp ride before it: plays on dropping off (recorded, surf_fiellu)
+// a free fall onto a spine top, no ramp ride before it: the next sample still on it or off it plays it
 const drop = (h, after) => [[true, -1397, 1, h], [true, -1409, 1, h], [true, -1421, 1, h], [true, 0, 1, h], ...after];
 hits = [];
 t = api.newTracker();
 run(t, drop(2382, [[true, 0, 1, 2239], [true, -6, 1, 2105]]), hits);
-expect(hits, [null, null, null, null, null, 'wall3'], 'free fall onto a spine top (-1421 -> 0, recorded), then off it: wall3');
+expect(hits, [null, null, null, null, 'wall3', null], 'free fall onto a spine top (-1421 -> 0, recorded): wall3 on its second tick');
+hits = [];
+t = api.newTracker();
+run(t, drop(2382, [[false, 0, 1, 2239, 0, true], [true, -6, 1, 2105]]).map((r, i) => i === 3 ? [false, 0, 1, 2382, 0, true] : r), hits);
+expect(hits, [null, null, null, null, 'wall3', null], 'the same live: own play on the ground is out of play, s.ground set');
+hits = [];
+t = api.newTracker();
+run(t, [[true, -1171, 1, 1776], [true, -1183, 1, 1776], [true, -1195, 1, 1776], [false, 0, 1, 1776, 0, true], [false, 0, 1, 1670, 0, true], [false, 0, 1, 1570, 0, true], [true, -6, 1, 1227]], hits);
+expect(hits.filter(Boolean), ['wall3'], 'free fall onto a spine top, 6 ticks of friction, off it (recorded live, -1195 at 1776): wall3');
 hits = [];
 t = api.newTracker();
 run(t, [[true, -300, 1, 1800], [true, -312, 1, 1800], [true, -324, 1, 1800], [true, 0, 1, 1800], [true, -6, 1, 1750]], hits);
@@ -223,11 +232,19 @@ expect(hits, [null, null, null, null, 'wall2'], 'free fall onto a spine top at -
 hits = [];
 t = api.newTracker();
 run(t, drop(2382, [[true, 0, 1, 2300], [true, 0, 1, 2250], [true, 0, 1, 2200], [true, 0, 1, 2150], [true, -6, 1, 2100]]), hits);
-expect(hits.filter(Boolean), [], 'staying on a flat top for 75 ms before dropping off is no hit');
+expect(hits.filter(Boolean), ['wall3'], 'staying on a flat top (or a floor) after a hard landing: wall3');
 hits = [];
 t = api.newTracker();
-run(t, drop(2382, [[false, 0, 1, 2300], [true, -12, 1, 2300]]), hits);
-expect(hits.filter(Boolean), [], 'landing on the ground (not airborne) is no hit');
+run(t, drop(2382, [[false, 0, 1, 2300], [true, -12, 1, 2300]]).map((r, i) => i === 3 ? [false, 0, 1, 2382] : r), hits);
+expect(hits.filter(Boolean), [], 'a landing out of play (noclip, not on the ground) is no hit');
+hits = [];
+t = api.newTracker();
+run(t, drop(2382, [[false, 0, 1, 0, 0, true]]), hits);
+expect(hits.filter(Boolean), [], 'a reset right after a landing (speed zeroed) is no hit');
+hits = [];
+t = api.newTracker();
+run(t, [[true, -970, 1, 1000], [true, -982, 1, 1000], [true, -994, 1, 1000], [false, 0, 1, 1000, 0, true], [true, 989.99, 1, 1000]], hits);
+expect(hits.filter(Boolean), [], 'a bhop out of a hard landing (jumps on the first ground tick) is no hit');
 hits = [];
 t = api.newTracker();
 run(t, drop(2382, [[true, 290, 1, 2300], [true, 278, 1, 2300]]), hits);

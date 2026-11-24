@@ -43,10 +43,15 @@
 //   -1183, -1163, -1156 to 0, horizontal 1122 -> 1128, then 1-4 ticks of ground friction. Plays a wall
 //   hit with the fall speed lost as its strength. Sliding gently off a slope onto the floor stays quiet.
 //   Without a ramp ride before it (a long free fall onto a spine, owner on surf_fiellu, 2026-11-24:
-//   -1421 to 0, horizontal 2382, two ticks of ground, then off at -6), the landing only counts once you
-//   drop off again within LAND_S, still falling, not jumping (t.landed): a floor landing stays on the
-//   ground or jumps. The hit then plays that much later. Below LAND_SPEED horizontal it is stepping off
-//   a ledge (surf_tequila's stored runs: -310 at 345 u/s, the same spot again and again), no hit.
+//   -1421 to 0, horizontal 2382, two ticks of ground, then off at -6), the landing is noted (t.landed)
+//   and the next sample decides: a bhop has jumped by then (103 of 104 jumps out of such landings in the
+//   stored runs, on the first ground tick), while a spine top keeps you on it or drops you off (30 drops
+//   after 1 to 21 ticks: owner on surf_fiellu, 2026-11-24, -1195 to 0 at 1776, 6 ticks of friction,
+//   off at -6). So still on the ground or falling again is the hit, one sample (15 ms) late. A hard
+//   landing on the floor that you don't jump out of plays it too. Below LAND_SPEED horizontal it is
+//   stepping off a ledge (surf_tequila's stored runs: -310 at 345 u/s, the same spot again), no hit.
+//   Own play on the ground is out of play (s.play is airborne only), so landings use s.ground too:
+//   without it no landing ever counted live, only in replays and the stored runs.
 //   On and off the top within one tick shows no 0 at all: the fall goes straight to half a tick of
 //   gravity (-6 at 66 ticks/s), what leaving the ground reads (owner on surf_fiellu, 2026-11-24:
 //   -1231 to -6, horizontal 1907). That is the hit at once, ramp ride or not.
@@ -116,7 +121,7 @@ const SLIDE_MIN = 2; // u/s lost at a right angle in one sample: already sliding
 const TOUCH_MIN = 0.5; // u/s lost at a right angle in one sample: touching a wall (a slide needs two)
 const SLIDE_HIT = 300; // u/s lost: the least wall hit while sliding
 const SLAM_MIN = 300; // u/s falling onto a flat top from a ramp ride: a spine hit
-const LAND_S = 0.05; // s on a flat top after a free fall before dropping off: a spine hit too
+const LAND_S = 0.1; // s, at most, from a free fall's landing to the sample that decides it (spectating: 5 ticks)
 const LAND_SPEED = 600; // u/s horizontal, at least, for that (slower is stepping off a ledge)
 const SKIP_EPS = 0.01; // u/s: z speed this close to half a tick of gravity is leaving the ground
 const CEIL_MIN = 5; // u/s of upward speed a ceiling takes beyond free fall for a head hit
@@ -135,7 +140,8 @@ const REPLAY_PAUSED = 2; // as Strafe Review's recorder; its rescan seeks a paus
 type Kind = 'ramp' | 'ceiling' | null;
 type Hit = 'wall1' | 'wall2' | 'wall3' | 'graze' | 'bonk' | null;
 // spectate: the velocity comes from a spectated player, in updates of several of their ticks (see Watching)
-type Sample = { play: boolean; fast: boolean; vx: number; vy: number; vz: number; time: number; spectate?: boolean };
+// ground: own play on the ground under normal movement (moveStatus), which play leaves out
+type Sample = { play: boolean; fast: boolean; vx: number; vy: number; vz: number; time: number; spectate?: boolean; ground?: boolean };
 type Tracker = {
 	has: boolean; // lastVx, lastVy, lastVz and lastTime are a sample
 	lastVx: number;
@@ -228,16 +234,15 @@ function slam(fall: number): Hit {
 
 /** A spine after a free fall (see the top): the landing is noted, the hit plays on dropping off. */
 function landing(t: Tracker, s: Sample, had: boolean, step: number): Hit {
+	const live = s.play || !!s.ground;
 	const l = t.landed;
 	if (l) {
-		if (!s.play || s.vz > 0 || s.time - l.at > LAND_S) t.landed = null;
-		else if (s.vz < 0) {
-			t.landed = null;
-			return slam(l.fall);
-		}
-		return null;
+		// the sample after the landing: a bhop has jumped, a teleport zeroed the speed
+		t.landed = null;
+		if (!live || s.vz > 0 || s.time - l.at > LAND_S || (s.vx === 0 && s.vy === 0 && s.vz === 0)) return null;
+		return slam(l.fall);
 	}
-	if (!(had && s.play && -t.lastVz >= SLAM_MIN
+	if (!(had && live && -t.lastVz >= SLAM_MIN
 		&& Math.hypot(s.vx, s.vy) >= Math.max(LAND_SPEED, Math.hypot(t.lastVx, t.lastVy) / 2))) return null;
 	// on and off the top in one tick: no tick at 0, straight to half a tick of gravity
 	if (Math.abs(s.vz - step / 2) < SKIP_EPS) return slam(-t.lastVz);
@@ -250,12 +255,13 @@ function wallHit(lost: number): Hit {
 }
 
 // One new sample into the tracker. s.play: own play under normal movement, airborne as far as the game
-// tells (moveStatus); s.fast: at MIN_SPEED or more. Off the ground, fast and in play is "air"; otherwise the
+// tells (moveStatus); s.ground: own play on the ground, for hits only (landings); s.fast: at MIN_SPEED
+// or more. Off the ground, fast and in play is "air"; otherwise the
 // sound stops at once and the history is dropped. Returns the kind sounding after it; t.hit is the
 // sample's hit.
 function track(t: Tracker, s: Sample, step: number, tick: number): Kind {
 	const had = t.has && s.time - t.lastTime <= GAP_S;
-	let hit = had && s.play ? hitOf(t, s, step, tick) : null;
+	let hit = had && (s.play || s.ground) ? hitOf(t, s, step, tick) : null;
 	hit = landing(t, s, had, step) ?? hit;
 	const gapKey = hit === 'bonk' || hit === 'graze' ? 'ceiling' : 'wall';
 	if (hit && s.time - (t.hitAt[gapKey] ?? -Infinity) < HIT_GAP_MS / 1000) {
@@ -368,12 +374,13 @@ function watching(replay: number): string {
 	return MomentumMovementAPI.GetMoveType() === MOVETYPE_OBSERVER ? 'spectate' : 'own';
 }
 
-function airborne(): boolean {
-	if (MomentumMovementAPI.GetMoveType() !== MOVETYPE_WALK) return false;
+// Own play under normal movement: in the air or on the ground, as the game tells; null otherwise
+function moveStatus(): 'air' | 'ground' | null {
+	if (MomentumMovementAPI.GetMoveType() !== MOVETYPE_WALK) return null;
 	try {
-		return MomentumMovementAPI.GetMoveHudData().moveStatus === MOVESTATUS_AIR;
+		return MomentumMovementAPI.GetMoveHudData().moveStatus === MOVESTATUS_AIR ? 'air' : 'ground';
 	} catch {
-		return false;
+		return null;
 	}
 }
 
@@ -406,8 +413,9 @@ function sample() {
 	lastKey = key;
 	lastChange = now;
 	const fast = Math.hypot(vel.x, vel.y, vel.z) >= MIN_SPEED;
-	const play = !editing && (mode === 'own' ? airborne() : replay !== REPLAY_PAUSED);
-	const s = { play, fast, vx: vel.x, vy: vel.y, vz: vel.z, time, spectate: mode === 'spectate' };
+	const status = mode === 'own' && !editing ? moveStatus() : null;
+	const play = !editing && (mode === 'own' ? status === 'air' : replay !== REPLAY_PAUSED);
+	const s = { play, ground: status === 'ground', fast, vx: vel.x, vy: vel.y, vz: vel.z, time, spectate: mode === 'spectate' };
 	const kind = track(tracker, s, fallStep(), tick);
 	const w = mode === 'own' ? '' : 'W';
 	if (tracker.hit) $.Msg(HIT_MARKERS[tracker.hit] + w); // a one-shot, outside send()'s state
