@@ -46,7 +46,10 @@
 //   the velocity, until it passes WALL_MIN (a leaderboard replay on surf_tequila, 2026-11-24: losses
 //   1, 5, 14, 27, 46, 73, 99, 125 per tick at cos +0.01 to +0.02, the velocity turning 5-15 degrees a
 //   tick; and one ride ending on a flat wall, 1515 -> 1374, three false bonks). So right after a sample
-//   that already lost SLIDE_MIN or more at a right angle (t.sliding), a wall hit needs SLIDE_HIT lost.
+//   that already lost SLIDE_MIN or more at a right angle, after one before it that lost at a right angle
+//   too (t.sliding), a wall hit needs SLIDE_HIT lost. One such sample alone is no slide: glancing off a
+//   pillar while spectating (surf_fiellu, 2026-11-24, 3-tick updates) lost 34 then 46, a hit split over
+//   two updates.
 //   Real slams out of such a slide lose far more: 427 to 2319 in 25 recorded on surf_tequila.
 // - A head hit: rising, then at least half the upward speed gone, CEIL_MIN or more of it beyond free fall.
 //   Rising at BONK_HARD or more (raised from 200 by the owner, 2026-11-24) is a hard hit ("bonk": hitting the ceiling on purpose to drop faster;
@@ -102,6 +105,7 @@ const GLANCE_MIN = 40; // u/s of horizontal speed lost by a glancing wall hit
 
 const GLANCE_COS = 0.15; // at most this |cos| between that change and the new velocity
 const SLIDE_MIN = 2; // u/s lost at a right angle in one sample: already sliding along a wall
+const TOUCH_MIN = 0.5; // u/s lost at a right angle in one sample: touching a wall (a slide needs two)
 const SLIDE_HIT = 300; // u/s lost: the least wall hit while sliding
 const SLAM_MIN = 300; // u/s falling onto a flat top from a ramp ride: a spine hit
 const CEIL_MIN = 5; // u/s of upward speed a ceiling takes beyond free fall for a head hit
@@ -129,7 +133,8 @@ type Tracker = {
 	lastTime: number;
 	hit: Hit; // the last sample's hit
 	hitAt: Record<string, number>; // game time of the last wall and ceiling hit
-	sliding: boolean; // the last sample lost SLIDE_MIN or more at a right angle (along a wall)
+	touched: boolean; // the last sample lost TOUCH_MIN or more at a right angle
+	sliding: boolean; // that, SLIDE_MIN or more, after a sample that touched too (along a wall)
 	hold: number; // contact samples after a head hit that don't start the sound yet
 	run: number; // contact samples in a row (of kind runKind), or free fall samples in a row when negative
 	runKind: Kind;
@@ -138,7 +143,7 @@ type Tracker = {
 };
 
 function newTracker(): Tracker {
-	return { has: false, lastVx: 0, lastVy: 0, lastVz: 0, lastTime: 0, hit: null, hitAt: {}, sliding: false, hold: 0, run: 0, runKind: null, sounding: null, watchTicks: 0 };
+	return { has: false, lastVx: 0, lastVy: 0, lastVz: 0, lastTime: 0, hit: null, hitAt: {}, touched: false, sliding: false, hold: 0, run: 0, runKind: null, sounding: null, watchTicks: 0 };
 }
 
 // How many free fall steps a z change is: a whole number of at least 1, or 0 when it isn't free fall
@@ -187,6 +192,9 @@ function hitOf(t: Tracker, s: Sample, step: number, tick: number): Hit {
 	const dz = s.vz - t.lastVz;
 	const ticks = sampleTicks(t, s, dz, step, tick);
 	const taken = ticks * step - dz; // upward speed taken beyond free fall
+	// a reset to the start or a teleport zeroes the whole velocity; any hit keeps some (spectating
+	// surf_fiellu, 2026-11-24: a reset while rising at 582 played a head hit)
+	if (s.vx === 0 && s.vy === 0 && s.vz === 0) return null;
 	if (t.lastVz > 0 && s.vz <= t.lastVz / 2 && taken >= CEIL_MIN && (s.vz !== 0 || t.lastVz > NON_JUMP_VZ)) {
 		if (t.lastVz >= BONK_HARD) return 'bonk';
 		if (s.vz >= GRAZE_VZ) return 'graze';
@@ -228,7 +236,10 @@ function track(t: Tracker, s: Sample, step: number, tick: number): Kind {
 	const dz = vz - t.lastVz;
 	const dt = had ? sampleTicks(t, s, dz, step, tick) * tick : 0;
 	t.has = air;
-	t.sliding = had && Math.hypot(t.lastVx, t.lastVy) - Math.hypot(s.vx, s.vy) >= SLIDE_MIN && square(t, s);
+	const lostH = had ? Math.hypot(t.lastVx, t.lastVy) - Math.hypot(s.vx, s.vy) : 0;
+	const touching = lostH >= TOUCH_MIN && square(t, s);
+	t.sliding = touching && t.touched && lostH >= SLIDE_MIN;
+	t.touched = touching;
 	t.lastVx = s.vx;
 	t.lastVy = s.vy;
 	t.lastVz = vz;

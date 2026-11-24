@@ -73,13 +73,14 @@ a ceiling pressing down makes it fall faster.
   `sv_airaccelerate` 150). A glancing hit counts from 40 u/s lost: a wall removes the part of your
   velocity along its normal, so the change is at a right angle to your new velocity, while a strafe
   that slows you pushes against it. Sliding along a curved wall loses a little more speed each tick, so
-  while you slide, a wall hit needs 300 u/s or more lost. Riding a ramp onto the flat top of a spine at 300 u/s or more falling
+  while you slide (two updates in a row losing speed that way), a wall hit needs 300 u/s or more lost. Riding a ramp onto the flat top of a spine at 300 u/s or more falling
   (z speed exactly 0, horizontal speed kept) is a wall hit too. A head hit is losing at least half your upward speed to a ceiling in one tick.
   A light one also has to leave your z speed at -30 u/s or above: a sloped ceiling that throws you
   down near the top of a jump is a headsurf starting, and plays the ceiling sound instead, unless
   it cost 100 u/s or more of your whole speed: a head hit after all, a bonk if it throws you down at
   300 u/s or faster, else a light one. Each hit
-  waits 250 ms before it can play again, so scraping along a wall bonks once.
+  waits 250 ms before it can play again, so scraping along a wall bonks once. A reset or teleport,
+  which sets all your speed to 0 at once, is never a hit.
 - Known gaps: trigger pushes and gravity zones can sound like a ramp for a moment. Hitting a wall
   (not a spine top) while you ride a ramp plays no thud, since the ramp changes your z speed too.
 
