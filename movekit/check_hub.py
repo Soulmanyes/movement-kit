@@ -163,8 +163,24 @@ def main():
               "relaunch: python with this script's full path and the same arguments")
         check(hub.relaunch_command(["C:/kit/movement-kit.exe", "--x"], "C:/kit/movement-kit.exe", frozen=True)
               == ["C:/kit/movement-kit.exe", "--x"], "relaunch: the exe itself in the Windows build")
-        check(sorted(public) == ["call", "modules", "notes_seen", "release_notes", "restart", "sections", "whats_new"],
-              f"only call(), sections(), modules(), whats_new(), notes_seen(), release_notes() and restart() are public: {public}")
+        check(sorted(public) == ["call", "modules", "notes_seen", "release_notes", "restart", "sections",
+                                 "set_order", "whats_new"],
+              f"only call(), sections(), set_order(), modules(), whats_new(), notes_seen(), release_notes()"
+              f" and restart() are public: {public}")
+        order_file = root / "cfg" / "sidebar.json"
+        ob = hub.Bridge(sections, problems, order_file=order_file)
+        keys = lambda b: [s["key"] for s in b.sections()["sections"]]
+        check(ob.set_order(["gain", "gone", "yaw"]) == {"ok": True} and keys(ob) == ["gain", "yaw", "alpha"],
+              f"set_order reorders the sidebar, unnamed sections after: {keys(ob)}")
+        ob = hub.Bridge(sections, problems, order_file=order_file)
+        check(keys(ob) == ["gain", "yaw", "alpha"], f"the order is saved for the next start: {keys(ob)}")
+        ob.set_order(["alpha", "yaw", "gain"])
+        check(json.loads(order_file.read_text())["order"] == ["alpha", "yaw", "gain", "gone"],
+              "a hidden section's key keeps its place in the file")
+        check(not ob.set_order("gain")["ok"] and not ob.set_order([1])["ok"], "set_order refuses what isn't a key list")
+        order_file.write_text("not json")
+        check(keys(hub.Bridge(sections, problems, order_file=order_file)) == ["yaw", "alpha", "gain"],
+              "an unreadable order file gives the default order")
         r = bridge.modules("cards")
         check(r == {"ok": False, "error": "no module manager"}, f"modules() with no manager: {r}")
 

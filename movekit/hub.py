@@ -203,18 +203,23 @@ def kit_sections(manager, root=KIT, platform=sys.platform):
 
 
 class Bridge:
-    """What pages reach as pywebview.api: call(), sections(), modules(), whats_new(), notes_seen(),
-    release_notes() and restart() are public;
+    """What pages reach as pywebview.api: call(), sections(), set_order(), modules(), whats_new(),
+    notes_seen(), release_notes() and restart() are public;
     pywebview exposes every public attribute, so everything else here starts with an underscore.
 
     With a manager (movekit/modules.py), the sections follow what is installed: an install,
-    uninstall, update or roll back rediscovers them, and the page server sees the change."""
+    uninstall, update or roll back rediscovers them, and the page server sees the change.
+
+    order_file keeps the sidebar order the user dragged (set_order); without one it lasts until
+    the window closes."""
 
     _MODULE_CALLS = ("cards", "check", "install", "update", "update_all", "rollback", "uninstall",
                     "set_auto", "dismiss_split")
 
-    def __init__(self, sections, problems=(), manager=None, root=KIT, served=None):
+    def __init__(self, sections, problems=(), manager=None, root=KIT, served=None, order_file=None):
         self._manager = manager
+        self._order_file = Path(order_file) if order_file else None
+        self._saved_order = self._load_order()
         self._root = root
         self._served = served if served is not None else {}  # key -> Section, read by the page server
         self._mlock = threading.Lock()
@@ -224,9 +229,22 @@ class Bridge:
         self._window = None  # the pywebview window, set by run(); restart() closes it
         self._set(sections, problems)
 
+    def _load_order(self):
+        try:
+            keys = json.loads(self._order_file.read_text(encoding="utf-8"))["order"]
+        except (AttributeError, OSError, ValueError, KeyError, TypeError):
+            return []  # no file yet, or one this version can't read: the default order
+        return [k for k in keys if isinstance(k, str)] if isinstance(keys, list) else []
+
+    def _sorted(self, sections):
+        """The dragged order first, then sections it doesn't name (a new install) in their own
+        order (discover()), after the dragged ones."""
+        rank = {k: i for i, k in enumerate(self._saved_order)}
+        return sorted(sections, key=lambda s: rank.get(s.key, len(rank)))  # sort is stable
+
     def _set(self, sections, problems):
         self._sections = {s.key: s for s in sections}
-        self._order = list(sections)
+        self._order = self._sorted(sections)
         self._problems = list(problems)
         self._served.clear()
         self._served.update(self._sections)
@@ -350,6 +368,24 @@ class Bridge:
             return self._cards()
         except Exception:  # noqa: BLE001 - the error reply is what matters
             return None
+
+    def set_order(self, keys):
+        """The sidebar was dragged into this order of section keys: keep it, saved to order_file.
+        Keys of sections not shown now (an uninstalled module) keep their place for a reinstall."""
+        if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+            return {"ok": False, "error": "keys must be a list of section keys"}
+        shown = set(keys)
+        self._saved_order = list(dict.fromkeys(keys)) + [k for k in self._saved_order if k not in shown]
+        self._order = self._sorted(self._order)
+        if self._order_file is not None:
+            try:
+                self._order_file.parent.mkdir(parents=True, exist_ok=True)
+                tmp = self._order_file.with_suffix(f".{os.getpid()}.tmp")
+                tmp.write_text(json.dumps({"order": self._saved_order}) + "\n", encoding="utf-8")
+                tmp.replace(self._order_file)
+            except OSError as e:
+                return {"ok": False, "error": f"couldn't save the sidebar order: {e}"}
+        return {"ok": True}
 
     def sections(self):
         return {"title": TITLE, "sections": [s.info() for s in self._order],
@@ -563,7 +599,7 @@ def run(root=KIT, app_class=None, debug=False, first=None, manager=None):
                  " `pip install pywebview` elsewhere.")
     manager = manager or make_manager(root)
     served = {}
-    bridge = Bridge([], (), manager, root, served)
+    bridge = Bridge([], (), manager, root, served, order_file=manager.data / "sidebar.json")
     bridge._refresh()
     for folder, error in bridge._problems:
         print(f"hub: skipped {folder}: {error}", file=sys.stderr)

@@ -57,13 +57,20 @@ const hub = (() => {
 		const line = document.createElement("div");
 		line.className = "hub-sep";
 		side.append(line);
+		const list = document.createElement("div");
+		list.className = "hub-sections";
 		for (const s of info.sections) {
 			const a = document.createElement("a");
 			a.href = s.url;
 			a.textContent = s.title;
+			a.dataset.key = s.key;
+			a.draggable = false;
+			a.title = "Drag to reorder";
 			if (s.key === key) a.className = "active";
-			side.append(a);
+			list.append(a);
 		}
+		dragOrder(list);
+		side.append(list);
 		if (info.problems.length) {
 			const p = document.createElement("div");
 			p.className = "hub-problems";
@@ -72,6 +79,77 @@ const hub = (() => {
 			side.append(p);
 		}
 		return info;
+	}
+
+	// The section links can be dragged into another order; a drop saves it (Bridge.set_order).
+	// Pointer events, not HTML5 drag and drop, which didn't work in the hub's WebKitGTK window.
+	// A press becomes a drag once it moves a few pixels, so a plain click still opens the page;
+	// the dragged link moves as the pointer passes the others' middles. Escape puts it back.
+	function dragOrder(list) {
+		let link = null;      // the link pressed
+		let startY = 0;
+		let dragging = false;
+		let before = "";
+		let eatClick = false; // the click a drag's release makes must not open the page
+		const order = () => [...list.children].map((a) => a.dataset.key);
+
+		const stop = (save) => {
+			if (!link) return;
+			const was = dragging;
+			link.classList.remove("dragging");
+			list.classList.remove("hub-dragging");
+			link = null;
+			dragging = false;
+			if (!was) return;
+			eatClick = true;
+			setTimeout(() => { eatClick = false; }, 0);
+			if (!save) return drawSide(); // put it back
+			const keys = order();
+			if (keys.join(" ") === before) return;
+			ready.then((api) => api.set_order(keys)).then((reply) => {
+				if (!reply.ok) {
+					console.error(reply.error);
+					drawSide(); // back to the order the hub has
+				}
+			});
+		};
+
+		list.addEventListener("dragstart", (e) => e.preventDefault()); // no native link drag
+		list.addEventListener("pointerdown", (e) => {
+			const a = e.target.closest("a");
+			if (!a || e.button !== 0) return;
+			link = a;
+			startY = e.clientY;
+		});
+		list.addEventListener("pointermove", (e) => {
+			if (!link) return;
+			if (!dragging) {
+				if (Math.abs(e.clientY - startY) < 5) return;
+				dragging = true;
+				before = order().join(" ");
+				link.setPointerCapture(e.pointerId);
+				link.classList.add("dragging");
+				list.classList.add("hub-dragging");
+			}
+			e.preventDefault();
+			for (const other of list.children) {
+				if (other === link) continue;
+				const box = other.getBoundingClientRect();
+				if (e.clientY < box.top || e.clientY > box.bottom) continue;
+				other[e.clientY < box.top + box.height / 2 ? "before" : "after"](link);
+				break;
+			}
+		});
+		list.addEventListener("pointerup", () => stop(true));
+		list.addEventListener("pointercancel", () => stop(false));
+		window.addEventListener("keydown", (e) => { if (e.key === "Escape" && dragging) stop(false); });
+		// capture on window runs before section.js's leave guard on #hub-side
+		window.addEventListener("click", (e) => {
+			if (!eatClick) return;
+			e.preventDefault();
+			e.stopPropagation();
+			eatClick = false;
+		}, true);
 	}
 
 	// Release notes (GitHub Markdown) as elements: headings and **bold** in bold, `code` as code,
