@@ -344,8 +344,11 @@ class NoiseSynth:
 
 class LinuxNoise(tone.LinuxTone):
     """The kit's pw-cat player with less queued ahead: 5 ms instead of 15 (owner, 2026-11-24: the sound
-    felt late). PipeWire's own buffer still covers a late write; the core's tone keeps 15 ms."""
+    felt late). PipeWire's own buffer still covers a late write; the core's tone keeps 15 ms. Its stream is
+    named Surf Sound (owner, 2026-11-24: to pick it in OBS's Application Audio Capture); a core older than
+    hub 1.17.0 ignores NAME and the stream stays pw-cat."""
     LEAD = 0.005
+    NAME = "Surf Sound"
 
 
 def player_class():

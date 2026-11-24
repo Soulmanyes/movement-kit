@@ -89,7 +89,8 @@ half second while a sound plays. Hits write `MK_SURFSND_WALL1`/`2`/`3`, `MK_SURF
 (`MK_SURFSND_RAMPW`), so the runner can mute them. The autoexec block logs the console to `yaw.log` and hides `MK_` lines
 from the console. The sound runner (`sound_run.py`) reads them and plays the sound
 (`noise.py`, through the kit's `movekit/tone.py` players). It stops a sound after 1.5 s without a marker.
-On Windows the player keeps the kit's fix for crackle (a ring of 10 ms buffers, refilled as each one
+On Linux its PipeWire stream is named "Surf Sound", so OBS's Application Audio Capture (PipeWire) can
+record it on its own. On Windows the player keeps the kit's fix for crackle (a ring of 10 ms buffers, refilled as each one
 finishes). A hit on top of a loud sound goes through a limiter, so it never clips at any volume.
 
 ## Checks
