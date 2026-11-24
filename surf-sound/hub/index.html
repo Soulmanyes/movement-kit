@@ -84,6 +84,15 @@
 				<label class="mk-label" for="ss-watch">Also when watching<div class="muted">replays and spectating play the sounds too (spectating in steps of about 50 ms)</div></label>
 				<input id="ss-watch" type="checkbox" class="mk-switch">
 			</div>
+			<div class="mk-row">
+				<div class="mk-label">Steam launch options<div id="ss-steam-note" class="muted"></div></div>
+				<button id="ss-launch-refresh" title="Read the launch options from Steam again">Refresh</button>
+			</div>
+			<div class="mk-row">
+				<code id="ss-launch" class="mk-launch"></code>
+				<button id="ss-launch-copy">Copy</button>
+			</div>
+			<div id="ss-launch-note" class="muted" style="margin-top: 2px"></div>
 		</section>
 	</div>
 </main>

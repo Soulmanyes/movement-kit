@@ -4,7 +4,7 @@
 "use strict";
 
 (() => {
-	const { $, toast, call, numberBox } = mk;
+	const { $, toast, call, copy, numberBox } = mk;
 	const SLOTS = ["ramp", "ceiling", "wall", "graze", "bonk"];
 	let dirty = false;
 	let custom = {}; // the page's custom sounds, {slot: {file, name}}: saved by Apply
@@ -33,8 +33,17 @@
 		}
 	}
 
+	function showLaunch(l) {
+		$("ss-launch").textContent = l.text;
+		$("ss-launch-note").textContent = l.note;
+	}
+	$("ss-launch-refresh").onclick = async () => showLaunch(await call("launch_option", {}));
+	$("ss-launch-copy").onclick = () => copy($("ss-launch").textContent);
+
 	function show(data) {
 		$("ss-sub").textContent = "Version " + data.version;
+		$("ss-steam-note").textContent = data.steam_note;
+		showLaunch(data.launch);
 		$("ss-problem").hidden = !data.problem;
 		$("ss-problem").textContent = data.problem || "";
 		const sel = $("ss-sound");

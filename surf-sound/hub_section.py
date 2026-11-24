@@ -7,9 +7,13 @@ change at once.
 hub.discover() loads this file on every OS before it looks at "os", so the top imports only the
 standard library and movekit; the siblings load on the first call through hub.local_import.
 """
+import sys
+
+from movekit import launchopt
 from movekit.hub import local_import
 
 TOOL = "surf-sound"
+WINDOWS = sys.platform == "win32"
 
 
 def _settings():
@@ -29,7 +33,17 @@ def load():
         "sound": s.load(), "sounds": [[k, label] for k, (label, *_) in sounds.items()],
         "volume": list(s.VOLUME), "version": _install().VERSION,
         "problem": None if game else "Momentum Mod not found in your Steam libraries",
+        "steam_note": ("Momentum Mod Properties → Launch Options. movement-kit.exe plays the sound while the "
+                       "game is open." if WINDOWS
+                       else "Momentum Mod Properties → Launch Options. movekit-run plays the sound while the "
+                            "game is open."),
+        "launch": launch_option(),
     }
+
+
+def launch_option():
+    """The launch options to paste into Steam and the note under them (movekit.launchopt)."""
+    return launchopt.offer("momentum")
 
 
 def apply(sound):
@@ -72,6 +86,7 @@ SECTION = {
     "title": "Surf Sound",
     "os": ["linux", "win32"],
     "page": "hub/index.html",
-    "api": {"load": load, "apply": apply, "preview": preview, "pick_sound": pick_sound},
+    "api": {"load": load, "apply": apply, "preview": preview, "pick_sound": pick_sound,
+            "launch_option": launch_option},
     "order": 85,
 }
