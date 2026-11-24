@@ -89,8 +89,12 @@ class LinuxTone:
 
     Audio is written in 5 ms chunks paced by the clock, keeping only LEAD
     seconds queued, so switching it on or off is heard within ~20 ms (a plain
-    pipe would buffer most of a second)."""
+    pipe would buffer most of a second).
+
+    NAME, when a subclass sets it, names the stream in PipeWire (application.name, media.name and
+    node.description), so mixers and OBS's Application Audio Capture list it by that instead of pw-cat."""
     LEAD = 0.015
+    NAME = None
 
     def __init__(self, synth):
         self.mode = None
@@ -99,9 +103,13 @@ class LinuxTone:
         player = shutil.which("pw-cat")
         if not player:
             return
+        props = []
+        if self.NAME:
+            name = self.NAME.replace("\\", "").replace('"', "")
+            props = ["-P", f'{{ application.name = "{name}", media.name = "{name}", node.description = "{name}" }}']
         self.proc = subprocess.Popen(
             [player, "--playback", "--raw", "--rate", str(self.synth.RATE), "--channels", "1",
-             "--format", "s16", "--latency", "10ms", "-"],
+             "--format", "s16", "--latency", "10ms", *props, "-"],
             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             fcntl.fcntl(self.proc.stdin, 1031, 4096)  # F_SETPIPE_SZ: the smallest pipe
