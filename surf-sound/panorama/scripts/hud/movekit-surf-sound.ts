@@ -55,6 +55,14 @@
 //   On and off the top within one tick shows no 0 at all: the fall goes straight to half a tick of
 //   gravity (-6 at 66 ticks/s), what leaving the ground reads (owner on surf_fiellu, 2026-11-24:
 //   -1231 to -6, horizontal 1907). That is the hit at once, ramp ride or not.
+// - A slope that faces up, hit nearly head-on (owner on surf_fiellu, 2026-11-24: rising at 342 with
+//   1898 across, then 593 across and 940 up, 817 of the whole speed lost) changes the z speed too, so
+//   the wall rule misses it. A surface clips the velocity: the change (gravity taken out) is along its
+//   normal, at a right angle to the new velocity; its z part tells walls (0), slopes and floors (1)
+//   apart. Losing SLOPE_MIN or more of the whole speed that way is a crash, wall3. Plain ramp landings
+//   lose far less (surf_tequila's: about 330 at a normal's z of 0.70), and surf_imaginarium's route
+//   drops you onto a steep slope (0.49) every run for 311 to 767; real crashes in the stored runs lost
+//   817 to 1508.
 // - Sliding along a curved wall while falling loses a little more speed each tick, at a right angle to
 //   the velocity, until it passes WALL_MIN (a leaderboard replay on surf_tequila, 2026-11-24: losses
 //   1, 5, 14, 27, 46, 73, 99, 125 per tick at cos +0.01 to +0.02, the velocity turning 5-15 degrees a
@@ -122,6 +130,8 @@ const TOUCH_MIN = 0.5; // u/s lost at a right angle in one sample: touching a wa
 const SLIDE_HIT = 300; // u/s lost: the least wall hit while sliding
 const SLAM_MIN = 300; // u/s falling onto a flat top from a ramp ride: a spine hit
 const LAND_S = 0.1; // s, at most, from a free fall's landing to the sample that decides it (spectating: 5 ticks)
+const SLOPE_MIN = 800; // u/s of the whole speed lost to a slope in one tick: a crash (wall3)
+const SLOPE_NZ = [0.05, 0.95]; // the slope's normal's z, between a wall's (0) and a floor's (1)
 const LAND_SPEED = 600; // u/s horizontal, at least, for that (slower is stepping off a ledge)
 const SKIP_EPS = 0.01; // u/s: z speed this close to half a tick of gravity is leaving the ground
 const CEIL_MIN = 5; // u/s of upward speed a ceiling takes beyond free fall for a head hit
@@ -225,7 +235,21 @@ function hitOf(t: Tracker, s: Sample, step: number, tick: number): Hit {
 		return slam(-t.lastVz);
 	if ((lost >= WALL_MIN || glancing(t, s, lost)) && (lost >= SLIDE_HIT || !t.sliding) && s.vz !== 0 && fallSteps(dz, step) === ticks)
 		return wallHit(lost);
+	if (s.vz !== 0 && ticks === 1 && !s.spectate && slopeHit(t, s, step)) return 'wall3';
 	return null;
+}
+
+/** Crashing into a slope that faces up (see the top): in one tick, SLOPE_MIN or more of the whole speed
+ * lost to a surface below you, the change (gravity taken out) at a right angle to the new velocity. */
+function slopeHit(t: Tracker, s: Sample, step: number): boolean {
+	const dx = s.vx - t.lastVx;
+	const dy = s.vy - t.lastVy;
+	const dz = s.vz - t.lastVz - step;
+	const d = Math.hypot(dx, dy, dz);
+	const v = Math.hypot(s.vx, s.vy, s.vz);
+	if (Math.hypot(t.lastVx, t.lastVy, t.lastVz) - v < SLOPE_MIN) return false;
+	const nz = dz / d; // the surface's normal: a clip changes the velocity along it
+	return nz > SLOPE_NZ[0] && nz < SLOPE_NZ[1] && Math.abs(dx * s.vx + dy * s.vy + dz * s.vz) <= GLANCE_COS * d * v;
 }
 
 function slam(fall: number): Hit {

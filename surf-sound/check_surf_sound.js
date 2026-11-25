@@ -257,6 +257,23 @@ hits = [];
 t = api.newTracker();
 run(t, [[true, -1397, 1, 2382], [true, -1409, 1, 2382], [true, 0, 1, 0], [true, -12, 1, 0]], hits);
 expect(hits.filter(Boolean), [], 'a teleport out of a free fall is no hit');
+// crashing into a slope that faces up: the change (gravity out) along its normal, at a right angle
+hits = [];
+t = api.newTracker();
+run(t, [[true, 366, 1, 1898], [true, 354, 1, 1898], [true, 342, 1, 1898], [true, 940, 1, 593]], hits);
+expect(hits, [null, null, null, 'wall3'], 'rising into a steep slope, 1898 across -> 593 across and 940 up (recorded): wall3');
+hits = [];
+t = api.newTracker();
+run(t, [[true, -598, 1, 805], [true, -610, 1, 805], [true, -622, 1, 805], [true, -175, 1, 425]], hits);
+expect(hits.filter(Boolean), [], 'surf_imaginarium\'s steep slope on its route (-622 -> -175, 805 -> 425 across, 563 lost) is no hit');
+hits = [];
+t = api.newTracker();
+run(t, [[true, -1414, 1, 437], [true, -1426, 1, 437], [true, -1438, 1, 437], [true, -776, 1, 849]], hits);
+expect(hits.filter(Boolean), [], 'a plain ramp landing (surf_tequila, -1438 -> -776, 437 -> 849 across) is no hit');
+hits = [];
+t = api.newTracker();
+run(t, [[true, 1200, 1, 1500], [true, 1188, 1, 1500], [true, 1176, 1, 1500], [true, 2400, 1, 0]], hits);
+expect(hits.filter(Boolean), [], 'a push up (a booster adds speed) is no hit');
 // on and off a spine top within one tick: no 0, the fall goes straight to half a tick of gravity
 hits = [];
 t = api.newTracker();

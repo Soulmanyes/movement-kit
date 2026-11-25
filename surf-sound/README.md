@@ -86,6 +86,9 @@ a ceiling pressing down makes it fall faster.
   300 u/s or faster, else a light one. Each hit
   waits 250 ms before it can play again, so scraping along a wall bonks once. A reset or teleport,
   which sets all your speed to 0 at once, is never a hit.
+- Crashing nearly head-on into a slope that faces up, which changes your z speed too, is a hard wall
+  hit when it costs 800 u/s or more of your whole speed in one tick. Ordinary ramp landings, even
+  steep ones on a map's route, lose far less.
 - Known gaps: trigger pushes and gravity zones can sound like a ramp for a moment. Hitting a wall
   (not a spine top) while you ride a ramp plays no thud, since the ramp changes your z speed too.
 
