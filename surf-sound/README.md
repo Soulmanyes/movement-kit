@@ -70,8 +70,9 @@ a ceiling pressing down makes it fall faster.
   counts its own ticks, so it works at any playback speed. A spectated player's speed arrives every
   3 or 5 of their ticks, so there the sound and hits come in steps of about 50 ms.
 - A wall hit is a horizontal speed drop of 100 u/s or more in one tick while your z speed stays plain
-  free fall. A wrong-way air strafe loses less than that (67.5 u/s per tick at surf's
-  `sv_airaccelerate` 150). A glancing hit counts from 40 u/s lost: a wall removes the part of your
+  free fall. A key against your motion in the air (S while going forward, A right after
+  D) can lose far more, but it leaves exactly 30 u/s of your new speed along the change, where a wall
+  leaves none, so it never bonks. A glancing hit counts from 40 u/s lost: a wall removes the part of your
   velocity along its normal, so the change is at a right angle to your new velocity, while a strafe
   that slows you pushes against it. Sliding along a curved wall loses a little more speed each tick, so
   while you slide (two updates in a row losing speed that way), a wall hit needs 300 u/s or more lost. Riding a ramp onto the flat top of a spine at 300 u/s or more falling

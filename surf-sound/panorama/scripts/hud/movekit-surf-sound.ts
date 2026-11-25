@@ -28,9 +28,13 @@
 // Hits (owner, 2026-11-24): one-shot sounds on top of the constant one.
 // - A wall: the horizontal speed drops by WALL_MIN or more in one sample while the z change stays exact
 //   free fall (a vertical wall's normal has no z; a ramp or ceiling contact changes z, so it isn't a wall).
-//   An axis-aligned wall zeroes a velocity component exactly, so a drop to 0 counts too. A wrong-way air
-//   strafe loses at most sv_airaccelerate * 30 * tick per tick (67.5 at surf's 150), under WALL_MIN. In
-//   21 recorded runs on surf_phantasia (2026-11-24) this found 6 hits, each flying into a wall. The
+//   An axis-aligned wall zeroes a velocity component exactly, so a drop to 0 counts too. A key against
+//   your motion in the air (S while going forward, A after D) is no wall although it loses far more than
+//   WALL_MIN: the owner on surf_fiellu, 2026-11-25, lost 98 and 131 in a tick, a change of 433 and 470
+//   along the key's direction, which also sits at a right angle to the new velocity. The tell: air
+//   acceleration stops at AIR_CAP along the key, so exactly 30.00 of the new velocity is left along the
+//   change, where a wall leaves exactly 0. Pressing S to stop on bhop_ambience lost up to 729 that way.
+//   In 21 recorded runs on surf_phantasia (2026-11-24) this found 6 hits, each flying into a wall. The
 //   strength is the speed lost (WALL_LEVELS).
 // - A glancing wall loses less than WALL_MIN, so it is told from a strafe by shape: a wall removes the
 //   velocity's part along its normal, so the change is at a right angle to the new velocity (|cos| at
@@ -124,6 +128,8 @@ const WALL_MIN = 100; // u/s of horizontal speed lost in one sample
 const WALL_LEVELS = [300, 800]; // lost at least this much: strength 2, 3
 const GLANCE_MIN = 40; // u/s of horizontal speed lost by a glancing wall hit
 
+const AIR_CAP = 30; // u/s: an air strafe leaves the new velocity exactly this much along the key's direction
+const STRAFE_EPS = 0.1; // u/s off AIR_CAP that still counts as a strafe
 const GLANCE_COS = 0.15; // at most this |cos| between that change and the new velocity
 const SLIDE_MIN = 2; // u/s lost at a right angle in one sample: already sliding along a wall
 const TOUCH_MIN = 0.5; // u/s lost at a right angle in one sample: touching a wall (a slide needs two)
@@ -211,6 +217,15 @@ function square(t: Tracker, s: Sample): boolean {
 	return Math.abs(dx * s.vx + dy * s.vy) <= GLANCE_COS * Math.hypot(dx, dy) * Math.hypot(s.vx, s.vy);
 }
 
+/** The horizontal change is an air strafe's, not a wall's (see the top): AIR_CAP of the new velocity
+ * left along it. */
+function strafed(t: Tracker, s: Sample): boolean {
+	const dx = s.vx - t.lastVx;
+	const dy = s.vy - t.lastVy;
+	const d = Math.hypot(dx, dy);
+	return d > 0 && Math.abs((s.vx * dx + s.vy * dy) / d - AIR_CAP) <= STRAFE_EPS;
+}
+
 /** A glancing wall: GLANCE_MIN lost, the change at a right angle to the new velocity. */
 function glancing(t: Tracker, s: Sample, lost: number): boolean {
 	return lost >= GLANCE_MIN && square(t, s);
@@ -233,7 +248,8 @@ function hitOf(t: Tracker, s: Sample, step: number, tick: number): Hit {
 	const lost = Math.hypot(t.lastVx, t.lastVy) - Math.hypot(s.vx, s.vy);
 	if (s.vz === 0 && t.sounding === 'ramp' && -t.lastVz >= SLAM_MIN && lost <= Math.hypot(t.lastVx, t.lastVy) / 2)
 		return slam(-t.lastVz);
-	if ((lost >= WALL_MIN || glancing(t, s, lost)) && (lost >= SLIDE_HIT || !t.sliding) && s.vz !== 0 && fallSteps(dz, step) === ticks)
+	if ((lost >= WALL_MIN || glancing(t, s, lost)) && (lost >= SLIDE_HIT || !t.sliding) && s.vz !== 0 && fallSteps(dz, step) === ticks
+		&& !strafed(t, s))
 		return wallHit(lost);
 	if (s.vz !== 0 && ticks === 1 && !s.spectate && slopeHit(t, s, step)) return 'wall3';
 	return null;

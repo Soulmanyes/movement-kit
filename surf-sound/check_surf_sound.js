@@ -190,6 +190,29 @@ hits = [];
 t = api.newTracker();
 run(t, [[true, -100, 1, 1500], [true, -112, 1, 1500], [true, -124, 1, 1396.6, 194.3]], hits);
 expect(hits, [null, null, null], 'losing 90 with a change of 220 partly against the speed (cos -0.34) is no wall');
+// a key against the motion in the air: the change along the key, exactly AIR_CAP (30) left along it
+const strafe = (vx, vy, dx, dy) => { // the velocity after accelerating along (dx, dy) until 30 is left along it
+	const along = vx * dx + vy * dy;
+	return [vx + (30 - along) * dx, vy + (30 - along) * dy];
+};
+hits = [];
+t = api.newTracker();
+{
+	const [vx, vy] = strafe(700, 400, -0.6, -0.8); // 803 across, then 673 (recorded: 131 lost, a change of 470)
+	run(t, [[true, -429, 1, 700, 400], [true, -441, 1, 700, 400], [true, -453, 1, 700, 400], [true, -465, 1, vx, vy]], hits);
+}
+expect(hits, [null, null, null, null], 'A after D in the air (131 lost, 30.00 left along the change) is no wall');
+hits = [];
+t = api.newTracker();
+{
+	const [vx, vy] = strafe(1200, 0, -1, 0); // S while going forward: 1200 -> 30, straight back
+	run(t, [[true, -300, 1, 1200], [true, -312, 1, 1200], [true, -324, 1, vx, vy]], hits);
+}
+expect(hits, [null, null, null], 'S while going forward in the air (bhop_ambience: up to 729 lost) is no wall');
+hits = [];
+t = api.newTracker();
+run(t, [[true, -300, 1, 1200], [true, -312, 1, 1200], [true, -324, 1, 0]], hits);
+expect(hits, [null, null, 'wall3'], 'flying into a wall head-on (0 left along the change) is still a wall');
 const ride = (vz, n = 4) => Array.from({ length: n }, (_, i) => [true, vz - 6 * i, 1, 1100]);
 hits = [];
 t = api.newTracker();
