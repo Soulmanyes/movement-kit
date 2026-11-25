@@ -143,6 +143,12 @@ def discover(root=KIT, platform=sys.platform, folders=None):
         file = folder / "hub_section.py"
         if not file.is_file():
             continue
+        # the section's helpers (local_import) load again with it: a module updated under a running hub
+        # otherwise kept its old helpers beside its new page (surf-sound 1.8.0, 2026-11-25: the old
+        # settings.py dropped the new random_start on Apply)
+        prefix = _module_name(folder, "")
+        for name in [n for n in sys.modules if n.startswith(prefix)]:
+            del sys.modules[name]
         try:
             spec = getattr(_load(file, _module_name(folder)), "SECTION", None)
         except Exception as e:  # noqa: BLE001 - a broken section must not stop the others

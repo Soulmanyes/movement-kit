@@ -146,6 +146,12 @@ def main():
               and bridge.call("yaw", "hello") == {"ok": True, "result": {"from": "yaw"}},
               "same-named helpers stay apart (local_import)")
         check("helper" not in sys.modules, "no bare 'helper' module leaked")
+        (root / "gain" / "helper.py").write_text('NAME = "gain 2"\n')
+        again, _ = hub.discover(root, platform="linux")
+        check(hub.Bridge(again, []).call("gain", "hello") == {"ok": True, "result": {"from": "gain 2"}},
+              "a section loaded again loads its helpers again (a module updated under a running hub)")
+        (root / "gain" / "helper.py").write_text('NAME = "gain"\n')
+        hub.discover(root, platform="linux")
         check(bridge.call("gain", "add", {"a": 2, "b": 3}) == {"ok": True, "result": 5}, "call with args")
         for args, what in (([1, 2], "args that aren't an object"), ({"a": 1}, "missing argument"),
                            ({"a": 1, "b": 2, "c": 3}, "extra argument")):
