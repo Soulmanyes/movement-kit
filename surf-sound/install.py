@@ -30,7 +30,7 @@ if not getattr(sys, "frozen", False) and (ROOT.parent / "movekit").is_dir() and 
     sys.path.insert(0, str(ROOT.parent))  # the kit root (repo or core copy); the core exe bundles movekit
 from movekit import cfgblock, games, panorama, steam  # after the path above
 
-VERSION = "1.7.0"  # Surf Sound's (module.json reads it); bump in the same commit as the release tag
+VERSION = "1.7.1"  # Surf Sound's (module.json reads it); bump in the same commit as the release tag
 TOOL = "surf-sound"
 FOLDER = "movekit-surf-sound"  # its own files; a new name, so the mount order doesn't matter
 HOOK_ORDER = 90  # after the HUD modules (JHUD 40 ... Z Penalty 80); all only sync the kit

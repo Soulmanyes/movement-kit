@@ -82,6 +82,9 @@ a ceiling pressing down makes it fall faster.
   free fall, so a ride doesn't stutter. On the ground your z speed is exactly 0, which counts as ground.
 - It stops at once on the ground, in water, below 150 u/s, on a teleport, while paused or stuck, in
   noclip, in a paused replay and while the HUD customizer is open.
+- At the speed cap (`sv_maxvelocity`, 3500 u/s per axis) a fall no longer speeds up, so a fall at
+  -3500 counts as free fall, not as a ramp. A ramp ridden at the cap can read the same speed every
+  tick; that keeps the sound on as long as the game (or replay) clock runs.
 - Replays and spectating play too, for the player you watch (switch: "Also when watching"). A replay
   counts its own ticks, so it works at any playback speed. A spectated player's speed arrives every
   3 or 5 of their ticks, so there the sound and hits come in steps of about 50 ms.

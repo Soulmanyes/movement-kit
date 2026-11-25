@@ -8,7 +8,7 @@
 // rising about 8 per tick, a slide down a ramp, a headsurf falling faster than gravity, a flat ceiling
 // bonk, a slow frame with two ticks per sample, a teleport, landing); the Panorama side: OFF at load,
 // RAMP/CEIL on a change and again every half second, OFF on the ground, below the speed floor, when the
-// velocity stalls, in replays, spectating, noclip and with the HUD customizer open, panorama_reload; hits:
+// velocity stalls (but not when it only reads the same at the speed cap, nor on a fall at the cap), in replays, spectating, noclip and with the HUD customizer open, panorama_reload; hits:
 // wall strengths, the hit gap, ramp landings and wrong-way strafes, head hits (hard, light, a headsurf
 // starting at a jump's top, flat, sloped, reading 0, slow rising onto ground), the ceiling sound held one contact after a head hit, WALL/BONK markers;
 // JUMP on OnJumpStarted (W when watching, none in a paused replay or the customizer, once after a reload).
@@ -42,7 +42,7 @@ const stubs = {
 		Schedule: (s, fn) => { schedules.push({ s, fn }); },
 		Msg: (m) => (/^MK_SURFSND_((RAMP|CEIL|WALL[123]|GRAZE|BONK|JUMP)W?|OFF)$/.test(m) ? markers.push(m.slice(11)) : fail('Msg: ' + m))
 	},
-	GameInterfaceAPI: { GetSettingFloat: (k) => (k === 'sv_gravity' ? 800 : 0) },
+	GameInterfaceAPI: { GetSettingFloat: (k) => ({ sv_gravity: 800, sv_maxvelocity: 3500 })[k] || 0 },
 	MomentumReplayAPI: { GetReplayState: () => G.replay, GetReplayProgress: () => ({ curtick: G.curtick }) },
 	MomentumMovementAPI: {
 		GetMoveType: () => G.moveType, GetTickInterval: () => TICK, GetCurrentTime: () => G.time,
@@ -428,6 +428,36 @@ for (let i = 0; i < 5; i++) tick(8);
 frame(100);
 frame(200);
 expect(markers, ['RAMP', 'OFF'], 'a stalled velocity (paused, stuck) writes OFF');
+markers = [];
+
+// the speed cap (a leaderboard replay on surf_mesa_revo, 2026-11-25): a tick whose velocity reads the
+// same as the last one, the clock running
+function same(ms = 15) {
+	G.time += TICK;
+	G.curtick++;
+	now += ms;
+	tickLoop();
+}
+// a fall reaching the cap (-3500 z) stops gaining the gravity step: still free fall, no ramp
+G.velocity = { x: 900, y: 0, z: -3480 };
+tick(STEP);
+tick(-8);
+for (let i = 0; i < 90; i++) same();
+expect(markers.filter((m) => m !== 'OFF'), [], 'a fall at the speed cap is free fall, not a ramp');
+// a ramp ridden at the cap: the same velocity every tick for over a second keeps the sound on
+G.velocity = { x: 3500, y: 0, z: 3.44 };
+tick(0);
+for (let i = 0; i < 90; i++) same();
+expect(markers.filter((m) => m === 'RAMP').length >= 3 && !markers.slice(1).includes('OFF'), true,
+	'a ramp ridden at the cap (the same velocity every tick) keeps RAMP on');
+// the same velocity with the clock stopped (paused) is still a stall
+markers = [];
+frame(100);
+frame(200);
+expect(markers, ['OFF'], 'the same velocity with a stopped clock writes OFF');
+markers = [];
+G.velocity = { x: 900, y: 0, z: 0 };
+for (let i = 0; i < 5; i++) tick(STEP);
 markers = [];
 
 for (let i = 0; i < 5; i++) tick(8);

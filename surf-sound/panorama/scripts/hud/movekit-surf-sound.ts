@@ -11,7 +11,13 @@
 //
 // A new tick is told by the velocity changing, not by the game time (see Z Penalty's script): the time
 // moves per frame, the velocity per tick. A frame slower than a tick shows several steps at once, so
-// free fall is any whole number of steps.
+// free fall is any whole number of steps. The velocity can stay the same, though: at the speed cap
+// (sv_maxvelocity, 3500 per axis) a ramp ride can read exactly the same every tick (a leaderboard replay
+// on surf_mesa_revo, 2026-11-25: 3500 across and 3.44 up for over a second). So once the game time (a
+// replay's tick) has moved SAME_TICKS ticks on with the same velocity, that is a sample too; only a
+// clock that stops too (paused) is a stall. Spectating keeps the old rule: its time is the wall clock.
+// A fall at the cap (z speed -sv_maxvelocity) no longer gains the gravity step, which read as a ramp in
+// mid-air (the same replay, 1.3 s of free fall at -3500): a capped fall is free fall.
 //
 // The sound turns on after ON_SAMPLES contact samples in a row (1: a brief headsurf is heard; a head hit
 // plays its own sound instead, see Hits) and off after OFF_SAMPLES free fall samples, so a ride with a free fall tick in it
@@ -127,6 +133,8 @@ const MIN_SPEED = 150; // u/s; slower is a crawl or being stuck on a ramp, not s
 const ON_SAMPLES = 1; // owner, 2026-11-24: 2 missed brief headsurfs
 const OFF_SAMPLES = 3;
 const STALL_MS = 250;
+const SAME_TICKS = 2; // ticks of game time with the same velocity that make a sample (see the top)
+const CAP_EPS = 0.01; // u/s from -sv_maxvelocity that is a capped fall
 const BEAT_MS = 500;
 const WALL_MIN = 100; // u/s of horizontal speed lost in one sample
 const WALL_LEVELS = [300, 800]; // lost at least this much: strength 2, 3
@@ -161,7 +169,8 @@ type Kind = 'ramp' | 'ceiling' | null;
 type Hit = 'wall1' | 'wall2' | 'wall3' | 'graze' | 'bonk' | null;
 // spectate: the velocity comes from a spectated player, in updates of several of their ticks (see Watching)
 // ground: own play on the ground under normal movement (moveStatus), which play leaves out
-type Sample = { play: boolean; fast: boolean; vx: number; vy: number; vz: number; time: number; spectate?: boolean; ground?: boolean };
+// capped: falling at the speed cap (see the top)
+type Sample = { play: boolean; fast: boolean; vx: number; vy: number; vz: number; time: number; spectate?: boolean; ground?: boolean; capped?: boolean };
 type Tracker = {
 	has: boolean; // lastVx, lastVy, lastVz and lastTime are a sample
 	lastVx: number;
@@ -193,10 +202,10 @@ function fallSteps(dz: number, step: number): number {
 
 // What one sample says: 'ramp', 'ceiling', 'fall' (free fall) or null (tells nothing). dz: the z change
 // since the last sample, dt: the game time since then, step: the free fall change per tick (negative),
-// tick: the tick interval in seconds.
-function classify(dz: number, dt: number, step: number, tick: number): Kind | 'fall' {
+// tick: the tick interval in seconds, capped: the z speed sits at the speed cap's fall (free fall).
+function classify(dz: number, dt: number, step: number, tick: number, capped = false): Kind | 'fall' {
 	if (Math.abs(dz) > MAX_DZ) return null;
-	if (fallSteps(dz, step) > 0) return 'fall';
+	if (capped || fallSteps(dz, step) > 0) return 'fall';
 	const ticks = Math.max(1, Math.round(dt / tick));
 	return dz - ticks * step > 0 ? 'ramp' : 'ceiling';
 }
@@ -344,7 +353,7 @@ function track(t: Tracker, s: Sample, step: number, tick: number): Kind {
 		t.sounding = null;
 		return null;
 	}
-	const kind = classify(dz, dt, step, tick);
+	const kind = classify(dz, dt, step, tick, !!s.capped);
 	if (kind === null) {
 		t.run = 0;
 		t.runKind = null;
@@ -388,6 +397,7 @@ let spectating = false; // MomentumSpectateStart/Stop; GetMoveType() covers a pa
 let tracker = newTracker();
 let lastKey = '';
 let lastChange = 0; // Date.now() of the last new velocity
+let lastSampleTime = -Infinity; // the sample time (game or replay) of the last sample
 let sent = 'none'; // so the first send('off'), at load, writes MK_SURFSND_OFF
 let sentAt = 0;
 
@@ -400,6 +410,17 @@ function fallStep(): number {
 		// keep NaN
 	}
 	return -(g > 0 ? g : 800) * MomentumMovementAPI.GetTickInterval();
+}
+
+// The speed cap per axis (sv_maxvelocity)
+function maxVelocity(): number {
+	let v = NaN;
+	try {
+		v = GameInterfaceAPI.GetSettingFloat('sv_maxvelocity');
+	} catch {
+		// keep NaN
+	}
+	return v > 0 ? v : 3500;
 }
 
 // The runner's marker: on a change, and the sounding one again every BEAT_MS
@@ -443,9 +464,12 @@ function sample() {
 		send('off');
 	}
 	if (time < tracker.lastTime) tracker = newTracker(); // time went back (map change, reload, replay seek)
+	if (time < lastSampleTime) lastSampleTime = -Infinity;
 	const key = `${vel.x},${vel.y},${vel.z}`; // a new tick changes the velocity (see the top)
 	const now = Date.now();
-	if (key === lastKey) {
+	// the same velocity for SAME_TICKS ticks of a running clock is a sample too (the speed cap, see the top)
+	const held = mode !== 'spectate' && time - lastSampleTime >= (SAME_TICKS - 0.001) * tick;
+	if (key === lastKey && !held) {
 		if (now - lastChange > STALL_MS) {
 			tracker = newTracker();
 			send('off');
@@ -456,10 +480,12 @@ function sample() {
 	}
 	lastKey = key;
 	lastChange = now;
+	lastSampleTime = time;
 	const fast = Math.hypot(vel.x, vel.y, vel.z) >= MIN_SPEED;
+	const capped = vel.z <= -maxVelocity() + CAP_EPS;
 	const status = mode === 'own' && !editing ? moveStatus() : null;
 	const play = !editing && (mode === 'own' ? status === 'air' : replay !== REPLAY_PAUSED);
-	const s = { play, ground: status === 'ground', fast, vx: vel.x, vy: vel.y, vz: vel.z, time, spectate: mode === 'spectate' };
+	const s = { play, ground: status === 'ground', fast, vx: vel.x, vy: vel.y, vz: vel.z, time, spectate: mode === 'spectate', capped };
 	const kind = track(tracker, s, fallStep(), tick);
 	const w = mode === 'own' ? '' : 'W';
 	if (tracker.hit) $.Msg(HIT_MARKERS[tracker.hit] + w); // a one-shot, outside send()'s state
