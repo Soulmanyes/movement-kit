@@ -8,7 +8,7 @@
 - settings.py: bad values are refused, the volume clamped, its sound names = noise.SOUNDS; the hub
   section's apply saves them.
 - noise.NoiseSynth: whole chunks at the player's size, silence when off, a seamless loop (the join is no
-  louder a step than the rest), the ceiling variant brighter than the ramp one, fades with no jump.
+  louder a step than the rest), the ceiling variant the same as the ramp one, fades with no jump.
 - the sound runner (sound_run.py): RAMP/CEIL/OFF markers set the player's mode, the ramp/ceiling switches,
   map_left and QUIET silence it, the beat keeps it on, a settings change rebuilds or closes it, and run()
   reads the markers from a growing log.
@@ -240,13 +240,9 @@ def check_synth(noise):
         pass
     expect(noise.player_class().LEAD if sys.platform != "win32" else 0.005, 0.005, "the Linux player queues 5 ms")
 
-    def brightness(xs):  # mean step size over RMS: higher for higher frequencies
-        rms = (sum(x * x for x in xs) / len(xs)) ** 0.5
-        return sum(abs(b - a) for a, b in pairwise(xs)) / len(xs) / rms
-    for name in noise.SOUNDS:
-        r, c = brightness(noise.render(name, "ramp")), brightness(noise.render(name, "ceiling"))
-        if not c > r * 1.2:
-            fail(f"{name}: the ceiling variant isn't brighter ({c:.3f} vs {r:.3f})")
+    for name in noise.SOUNDS:  # a headsurf sounds like a ramp, not brighter (owner, 1.6.0)
+        if noise.render(name, "ramp") != noise.render(name, "ceiling"):
+            fail(f"{name}: the ceiling variant differs from the ramp one")
     # fade in, steady, cross-fade, fade out: no sample jumps more than the sound itself does
     out = []
     for mode, n in ((None, 5), ("ramp", 40), ("ceiling", 40), (None, 40)):
@@ -489,6 +485,26 @@ def check_custom(sett, hub, noise, tmp):
         head = array.array("h", w.readframes(200))
     expect(n, int(noise.RATE * custom.HIT_MAX_S), "a long hit is cut to HIT_MAX_S")
     expect(max(map(abs, head[:150])) > 1000, True, "the silence before a hit is trimmed (LEAD_S kept)")
+    # silence at both ends of a file, loop or hit (1.6.0): cut, LEAD_S kept before and TAIL_S after
+    lead, tail = int(noise.RATE * custom.LEAD_S), int(noise.RATE * custom.TAIL_S)
+    body = [(0.8 * math.sin(i / 5),) for i in range(int(noise.RATE * 1.2))]
+    for slot, name in (("ramp", "gappy loop.wav"), ("wall", "gappy hit.wav")):
+        write_wav(src / name, [(0.0,)] * 24000 + body + [(0.0,)] * 36000)
+        e = custom.make(src / name, slot)
+        with wave.open(str(sett.sounds_dir() / e["file"])) as w:
+            n = w.getnframes()
+            ys = array.array("h", w.readframes(n))
+        expect(len(body) <= n <= len(body) + lead + tail + 2, True,
+               f"{slot}: a file's silence before and after is cut ({n} frames, the sound {len(body)})")
+        if slot == "wall":
+            expect(max(map(abs, ys[-10:])) < 400, True, "a hit's kept tail fades out")
+    # a loop that is under LOOP_MIN_S once its silence is cut is refused
+    write_wav(src / "short in silence.wav", [(0.0,)] * 48000 + body[:24000] + [(0.0,)] * 48000)
+    try:
+        custom.make(src / "short in silence.wav", "ramp")
+        fail("custom.make took a loop that is too short once its silence is cut")
+    except ValueError:
+        pass
     for name, frames, why in (("short.wav", [(0.5,)] * 24000, "a loop under LOOP_MIN_S"),
                               ("silent.wav", [(0.0,)] * 96000, "a silent file")):
         write_wav(src / name, frames)
@@ -666,7 +682,7 @@ def check_recording(sett, hub, noise, custom, section):
            [{"ramp": "hiss", "ceiling": "hiss"}, {"ramp": "ramp", "ceiling": "ramp"},
             {"ramp": "hiss", "ceiling": "stone"}, {"ramp": "ramp", "ceiling": "ceiling"},
             {"ramp": "hiss", "ceiling": "hiss"}],
-           "a headsurf sounds just like a ramp until split; split, it has its own (brighter) sound")
+           "a headsurf sounds just like a ramp until split; split, it has its own sound")
     ramp_c = {"file": "ramp-0123456789ab.wav", "name": "r"}
     ceil_c = {"file": "ceiling-0123456789ab.wav", "name": "c"}
     files = sett.custom_files(sett.check({"custom": {"ramp": ramp_c, "ceiling": ceil_c}, "split_ceiling": False}))

@@ -51,7 +51,7 @@
 			</div>
 			<div class="muted mk-desc">A constant sound on your desktop for as long as you ride a surface in the air in
 				Momentum Mod: a surf ramp or a slide down a slope, and a sloped ceiling (a headsurf), which sounds the same
-				unless you separate it (then it can have its own sound, and a built-in one plays brighter). Each row picks a built-in sound, or uses a file or a recording of your own. It starts a couple of ticks after you touch the surface and stops
+				unless you separate it (then it can have its own sound). Each row picks a built-in sound, or uses a file or a recording of your own. It starts a couple of ticks after you touch the surface and stops
 				when you leave it, land or slow down. A change here applies at once, also while the game runs.</div>
 			<div id="ss-rows">
 
@@ -71,7 +71,7 @@
 				<label class="mk-label" for="ss-ceiling">On headsurfs<div class="muted">headsurfing a sloped ceiling</div></label>
 				<span id="ss-ceil-same" class="muted">Same as ramps</span>
 				<span id="ss-ceil-own" class="ss-inline">
-				<select id="ss-sound-ceiling" title="Built-in sound (a brighter version of it)" aria-label="Headsurf sound"></select>
+				<select id="ss-sound-ceiling" title="Built-in sound" aria-label="Headsurf sound"></select>
 				<span id="ss-file-ceiling" class="muted"></span>
 				<button id="ss-pick-ceiling" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
 				<button id="ss-rec-ceiling" class="ss-rec" title="Record it from your microphone">● Rec</button>
@@ -127,7 +127,7 @@
 					<input id="ss-level-jump" type="number" step="5" class="ss-level"></label>
 				<input id="ss-jump" type="checkbox" class="mk-switch">
 			</div>
-			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). ● Rec records one from your microphone instead: it opens a window that says what that sound needs. It applies with Apply. Each sound has its own Volume %.</div>
+			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). The silence before and after the sound is cut. Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s). ● Rec records one from your microphone instead: it opens a window that says what that sound needs. It applies with Apply. Each sound has its own Volume %.</div>
 
 			<div class="mk-row">
 				<label class="mk-label" for="ss-watch">Also when watching<div class="muted">replays and spectating play the sounds too (spectating in steps of about 50 ms)</div></label>

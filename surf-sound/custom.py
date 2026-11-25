@@ -10,11 +10,13 @@ no setting names.
 - Anything else (MP3, OGG, FLAC, a float WAV): through ffmpeg when it is installed, else an error asking
   for a WAV.
 - Only the first READ_MAX_S of a file is read (a 4-minute song read whole took 8 s and 1.3 GB).
-- Loops (ramp, ceiling): LOOP_MIN_S to LOOP_MAX_S (longer is cut). Its end cross-fades into its start
+- Silence (1.6.0): the quiet before and after the sound (GATE_DB under its peak) is cut at both ends of
+  every file, loop or hit, as a recording's is: LEAD_S kept before, TAIL_S after (faded out on a hit; a
+  loop's end cross-fades into its start anyway).
+- Loops (ramp, ceiling): LOOP_MIN_S to LOOP_MAX_S (longer is cut), counted after the trim. Its end cross-fades into its start
   (noise.render_file), so it repeats without a click. 15 s, not more: the runner renders the loops again
   on every settings change (two 30 s loops took about 1 s).
-- Hits (wall, graze, bonk, jump): the silence before the sound is trimmed so it plays at once (a gate GATE_DB
-  under its peak, LEAD_S kept), and anything past HIT_MAX_S is faded out and cut: a long hit would make
+- Hits (wall, graze, bonk, jump): trimmed so it plays at once, and anything past HIT_MAX_S is faded out and cut: a long hit would make
   the chunk it starts in slow to mix (crackle on Windows).
 
 Recordings (1.5.0, the hub's Rec: mic.py) take the same path from their samples (record()): each sound
@@ -54,6 +56,7 @@ FFMPEG_TIMEOUT = 30
 REC_S = {"ramp": 8.0, "ceiling": 8.0, "wall": 3.0, "graze": 3.0, "bonk": 3.0, "jump": 3.0}
 REC_GATE_DB = 30  # a microphone's room noise sits higher than a file's silence
 REC_TAIL_S = 0.03  # kept after the sound's end, faded out
+TAIL_S = REC_TAIL_S  # the same for a file
 JUMP_MAX_S = 1.0
 
 
@@ -152,20 +155,30 @@ def shape(xs, slot):
     peak = max(map(abs, xs), default=0)
     if peak < 1e-4:
         raise ValueError("the file is silent")
+    xs = _ends(xs, peak * 10 ** (-GATE_DB / 20), rate, fade=slot not in LOOPS)
     if slot in LOOPS:
         if len(xs) < rate * noise.LOOP_MIN_S:
-            raise ValueError(f"a ramp or ceiling sound needs at least {noise.LOOP_MIN_S:g} s (it repeats)")
+            raise ValueError(f"a ramp or ceiling sound needs at least {noise.LOOP_MIN_S:g} s of sound, "
+                             "silence cut (it repeats)")
         xs = xs[:int(rate * LOOP_MAX_S)]
     else:
-        gate = peak * 10 ** (-GATE_DB / 20)
-        first = next(i for i, x in enumerate(xs) if abs(x) >= gate)
-        xs = xs[max(0, first - int(rate * LEAD_S)):]
         end = int(rate * HIT_MAX_S)
         if len(xs) > end:
             fade = int(rate * HIT_FADE_S)
             xs = xs[:end - fade] + [x * (1 - i / fade) for i, x in enumerate(xs[end - fade:end])]
     k = 0.99 / peak
     return [x * k for x in xs]
+
+
+def _ends(xs, gate, rate, fade=True):
+    """xs from LEAD_S before its first sample at `gate` or louder to TAIL_S after its last, the kept
+    tail faded out to 0 when `fade`."""
+    first = next(i for i, x in enumerate(xs) if abs(x) >= gate)
+    last = len(xs) - next(i for i, x in enumerate(reversed(xs)) if abs(x) >= gate)
+    tail = int(rate * TAIL_S)
+    xs = xs[max(0, first - int(rate * LEAD_S)):min(len(xs), last + tail)]
+    n = min(tail, len(xs)) if fade else 0
+    return xs[:len(xs) - n] + [x * (1 - i / n) for i, x in enumerate(xs[len(xs) - n:])]
 
 
 def trim(xs, slot):
@@ -175,12 +188,8 @@ def trim(xs, slot):
     peak = max(map(abs, xs), default=0)
     if peak < 1e-4:
         raise ValueError(f"the recording is silent: {_input_hint()}")
-    gate = peak * 10 ** (-REC_GATE_DB / 20)
-    first = next(i for i, x in enumerate(xs) if abs(x) >= gate)
-    last = len(xs) - next(i for i, x in enumerate(reversed(xs)) if abs(x) >= gate)
+    xs = _ends(xs, peak * 10 ** (-REC_GATE_DB / 20), rate, fade=False)
     tail = int(rate * REC_TAIL_S)
-    end = min(len(xs), last + tail)
-    xs = xs[max(0, first - int(rate * LEAD_S)):end]
     if slot not in LOOPS:
         cap = int(rate * (JUMP_MAX_S if slot == "jump" else HIT_MAX_S))
         xs = xs[:cap]

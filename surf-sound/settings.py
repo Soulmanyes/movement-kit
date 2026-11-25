@@ -19,7 +19,7 @@ import re
 
 from movekit import paths
 
-SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone")  # noise.SOUNDS' keys (check_surf_sound.py compares)
+SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone", "squeak")  # noise.SOUNDS' keys (check_surf_sound.py compares)
 # jump: off by default (1.4.0), so an update doesn't add a sound to every bhop
 DEFAULTS = {"on": True, "sound": "wind", "ramp": True, "ceiling": True, "wall": True, "graze": True,
             "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}, "mic": "",
@@ -44,7 +44,7 @@ def loop_sounds(cfg):
 
 def loop_variants(cfg):
     """{"ramp", "ceiling"}: the variant each loop's built-in sound renders as (noise.BRIGHT). A headsurf
-    sounds just like a ramp unless split: then it is the brighter ceiling variant."""
+    sounds just like a ramp unless split: then it is the ceiling variant, the same sound since 1.6.0."""
     return {"ramp": "ramp", "ceiling": "ceiling" if cfg["split_ceiling"] else "ramp"}
 
 

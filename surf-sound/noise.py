@@ -4,11 +4,12 @@ RATE and CHUNK, so it stands in for ToneSynth.
 
 Each sound is a loop of LOOP_S seconds of filtered random noise, rendered once, its seam cross-faded so
 it repeats without a click or a dip. A sound's swell or flutter repeats a whole number of times per loop. Every sound has two
-variants: "ramp" (a surface under you) and "ceiling" (a headsurf), the ceiling one brighter, so the two
-can be told apart by ear. Switching fades the gain over FADE_IN_S / FADE_OUT_S, so it never clicks.
+variants: "ramp" (a surface under you) and "ceiling" (a headsurf). Up to 1.5.0 the ceiling one was brighter, so the two
+could be told apart by ear; since 1.6.0 (owner, 2026-11-25) both are the same, BRIGHT 1.0. Switching fades the gain over FADE_IN_S / FADE_OUT_S, so it never clicks.
 
 A recorded sound (Stone, sounds/stone-dragging.wav: 16-bit mono at RATE, LOOP_S + SEAM_S long) takes
-the noise's place and gets the same seam; its ceiling variant is high-passed.
+the noise's place and gets the same seam. Long squeak (sounds/long-squeak.wav, 2.5 s, made by the owner,
+1.6.0) loops at its own length, as a custom loop does (render_file).
 
 Hits are one-shots on top (owner, 2026-11-24), recordings in sounds/: bonk-wall.wav for a wall (three
 strengths, by the speed lost) and a light ceiling hit, bonk-goofy.wav for a hard head hit. A jump's
@@ -141,8 +142,10 @@ SOUNDS.update({
     "hiss": ("Hiss", _hiss, None),
     "grind": ("Grind", _grind, _grind_gain),
     "stone": ("Stone", _stone, None),
+    "squeak": ("Long squeak", None, None),  # a whole recording, LOOP_FILES
 })
-BRIGHT = {"ramp": 1.0, "ceiling": 2.2}  # filter scale per surface
+LOOP_FILES = {"squeak": "long-squeak.wav"}  # built-in sounds that loop at their recording's own length
+BRIGHT = {"ramp": 1.0, "ceiling": 1.0}  # filter scale per surface; a headsurf no longer plays brighter (1.6.0)
 
 HIT_PEAK = 0.8  # a hit's peak at volume 1 and gain 1
 # the mix's limiter: a hit on a loud loop (volume over about 57%, or two hits at once) would sum past full
@@ -209,6 +212,8 @@ def render(sound, kind, seed=1):
     The noise past the loop's end cross-fades into its start at equal power (noise segments don't
     correlate, so a linear fade would dip about 3 dB at the join). The sound's gain shape is applied
     after that, over the closed loop, so it repeats exactly."""
+    if sound in LOOP_FILES:
+        return render_file(SOUND_DIR / LOOP_FILES[sound])
     n, seam = int(RATE * LOOP_S), int(RATE * SEAM_S)
     n -= n % CHUNK
     _, make, gain = SOUNDS[sound]

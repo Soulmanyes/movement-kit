@@ -6,10 +6,10 @@ A constant sound on your desktop for as long as you ride a surface in the air:
 
 - **Ramps:** surfing a ramp, or sliding down a slope.
 - **Ceilings:** headsurfing a sloped ceiling. By default it sounds just like a ramp. Separate on its row gives
-  it a sound of its own (a built-in one plays brighter, so you can hear which one you are on); Same as
-  ramps joins them again.
+  it a sound of its own; Same as ramps joins them again. (Up to 1.5.0 a separated headsurf played a
+  brighter version of a built-in sound; since 1.6.0 it plays it as it is.)
 
-The sound is shaped noise or a recorded loop, not a tone. Pick one of five on the Surf Sound page in the hub:
+The sound is shaped noise or a recorded loop, not a tone. Pick one of six on the Surf Sound page in the hub:
 
 | Sound | What it is like |
 | --- | --- |
@@ -18,6 +18,7 @@ The sound is shaped noise or a recorded loop, not a tone. Pick one of five on th
 | Hiss | Sand or spray |
 | Grind | A board on a rail: mid noise with a fast flutter |
 | Stone | Stone dragged over stone, a recording (`sounds/stone-dragging.wav`) |
+| Long squeak | A long squeak, a 2.5 s recording looped at its own length (`sounds/long-squeak.wav`) |
 
 ▶ plays each one there. The page also has a switch and a Volume % for each sound (ramps, ceilings,
 wall hits, light and hard head hits, jumps), and "Also when watching" for replays and spectating. A change
@@ -51,9 +52,10 @@ doesn't repeat a gap and a hit plays at once; a jump keeps at most 1 s. Linux re
 (`pw-cat`), Windows through the system's recording device.
 
 - A WAV of any rate and channels, 8 to 32-bit. MP3, OGG, FLAC and others work when ffmpeg is installed.
-- Ramps and ceilings repeat it: 1 to 15 s (a longer file is cut), its end blended into its start so it loops without a click.
+- The silence before and after the sound is cut, for every sound (since 1.6.0; before, only a hit's leading silence).
+- Ramps and ceilings repeat it: 1 to 15 s of sound (a longer file is cut), its end blended into its start so it loops without a click and without a silent gap.
   A ceiling with no file of its own plays the built-in sound's ceiling version.
-- A hit plays it once, the silence before it trimmed so it plays at once, cut at 2 s. A light head hit
+- A hit plays it once, at once, cut at 2 s. A light head hit
   with no file of its own plays the wall hit's sound, a bit quieter; with its own file it plays that at
   full strength. Wall hits play your file louder the more speed you lose, as the built-in one.
 - The hub keeps a converted copy in `surf-sound-sounds/` in the kit's config folder (`~/.config/movekit`,
