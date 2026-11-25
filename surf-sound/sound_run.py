@@ -64,8 +64,10 @@ class Runner:
         self.sound = self.voice = None
         kinds = [k for k in ("ramp", "ceiling") if cfg[k]]
         if cfg["on"] and (kinds or any(cfg[k] for k in ("wall", "graze", "bonk", "jump"))):
-            voice = self.synth(1.0, {k: cfg["sound"] for k in kinds}, self.settings.custom_files(cfg),
-                               self.settings.levels(cfg))  # each sound's own volume
+            loops = self.settings.loop_sounds(cfg)
+            voice = self.synth(1.0, {k: loops[k] for k in kinds}, self.settings.custom_files(cfg),
+                               self.settings.levels(cfg),  # each sound's own volume
+                               self.settings.loop_variants(cfg))
             if old:
                 old.close()
                 old = None

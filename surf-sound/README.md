@@ -5,8 +5,9 @@ Part of [Movement Kit](../README.md). For Momentum Mod, on Windows and Linux.
 A constant sound on your desktop for as long as you ride a surface in the air:
 
 - **Ramps:** surfing a ramp, or sliding down a slope.
-- **Ceilings:** headsurfing a sloped ceiling. This plays a brighter version of the same sound, so you can
-  hear which one you are on.
+- **Ceilings:** headsurfing a sloped ceiling. By default it sounds just like a ramp. Separate on its row gives
+  it a sound of its own (a built-in one plays brighter, so you can hear which one you are on); Same as
+  ramps joins them again.
 
 The sound is shaped noise or a recorded loop, not a tone. Pick one of five on the Surf Sound page in the hub:
 
@@ -39,7 +40,15 @@ Hits play once, on top of the constant sound, each with its own switch and ▶:
 ### Your own sounds
 
 Each of the six (ramps, ceilings, wall hits, light and hard head hits, jumps) can play a sound file of your
-own: File… on its row, × goes back to the built-in one, and Apply saves it.
+own: File… on its row, × goes back to the built-in one, and Apply saves it. Or record one: ● Rec on its
+row opens a recording window that says what that sound needs (a steady sound for ramps and ceilings, at
+least 1 s; one short sound for hits). Pick the microphone there (the system's default input unless you
+pick another; ↻ lists them again), click ● Record, make the sound and click ■ Stop, or it stops by itself
+after 8 s for ramps and ceilings and 3 s for hits. ▶ Play lets you hear it; Use it puts it on the row. Save (with a name) keeps a recording for later,
+and Use it saves it too: the window lists that sound's saved recordings to play, use again, rename (✎ or click the name) or delete, so
+one you replaced isn't lost. Save next to "On the row now" keeps the sound the row already has. The quiet before and after the sound is cut, so a loop
+doesn't repeat a gap and a hit plays at once; a jump keeps at most 1 s. Linux records through PipeWire
+(`pw-cat`), Windows through the system's recording device.
 
 - A WAV of any rate and channels, 8 to 32-bit. MP3, OGG, FLAC and others work when ffmpeg is installed.
 - Ramps and ceilings repeat it: 1 to 15 s (a longer file is cut), its end blended into its start so it loops without a click.

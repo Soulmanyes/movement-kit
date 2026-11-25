@@ -96,7 +96,7 @@ def check_settings(sett, hub, noise):
     expect(sett.check({"custom": {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}})["custom"],
            {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}, "a custom jump sound")
     want = {"on": True, "sound": "grind", "ramp": True, "ceiling": False, "wall": False, "graze": True,
-            "bonk": True, "jump": True, "watch": False, "custom": {},
+            "bonk": True, "jump": True, "watch": False, "custom": {}, "mic": "", "ceiling_sound": "", "split_ceiling": False,
             "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40, "jump": 60}}
     data = section.apply(want)
     expect(data["sound"], want, "apply returns the saved settings")
@@ -274,8 +274,9 @@ class FakePlayer:
 
 
 class FakeSynth:
-    def __init__(self, volume, sounds, custom=None, levels=None):
+    def __init__(self, volume, sounds, custom=None, levels=None, variants=None):
         self.volume, self.sounds, self.custom, self.levels, self.hits = volume, sounds, custom, levels, []
+        self.variants = variants
 
     def hit(self, name):
         self.hits.append(name)
@@ -571,6 +572,215 @@ def check_custom(sett, hub, noise, tmp):
            "apply deletes the custom sound files no setting names")
     section.apply({})
     expect(list(sett.sounds_dir().iterdir()), [], "back to built-in sounds: no files left")
+    check_recording(sett, hub, noise, custom, section)
+
+
+class FakeRecorder:
+    """mic.Recorder's face with set samples: `take` as floats, recording until stop()."""
+    take = ()
+
+    def __init__(self, seconds, device=None):
+        self.seconds_max, self.device, self.recording, self.stops = seconds, device, False, 0
+
+    def start(self):
+        self.recording = True
+
+    def stop(self):
+        self.recording = False
+        self.stops += 1
+        return list(FakeRecorder.take)
+
+
+def check_recording(sett, hub, noise, custom, section):
+    """Rec in the hub: mic.py's recorder, custom.trim/record, hub_section.record_start/stop."""
+    mic = hub.local_import(HERE / "mic.py", "mic")
+    rate = noise.RATE
+    expect(mic.RATE, rate, "the recorder records at the synth's rate")
+    expect(sorted(custom.REC_S), sorted(sett.SLOTS), "every sound has a recording window")
+    quiet = [0.001 * ((i % 7) - 3) for i in range(rate)]  # room noise, 1 s
+    tone = [0.5 * math.sin(i / 10) for i in range(int(rate * 0.3))]
+    xs = custom.trim(quiet + tone + quiet, "wall")
+    lead, tail = int(rate * custom.LEAD_S), int(rate * custom.REC_TAIL_S)
+    if not len(tone) <= len(xs) <= len(tone) + lead + tail + 2:
+        fail(f"a recorded hit keeps {len(xs)} samples of a {len(tone)} sound plus room noise")
+    expect(abs(xs[-1]) < 1e-3, True, "a recording's end fades out")
+    long_hit = [0.5 * math.sin(i / 10) for i in range(int(rate * 2.5))]
+    expect([len(custom.trim(long_hit, "bonk")), len(custom.trim(long_hit, "jump"))],
+           [int(rate * custom.HIT_MAX_S), int(rate * custom.JUMP_MAX_S)], "hits cut at 2 s, a jump at 1 s")
+    loop = [0.3 * math.sin(i / 20) for i in range(int(rate * 3))]
+    expect(len(custom.trim(quiet + loop + quiet, "ramp")) - len(loop) <= lead + tail + 2, True,
+           "a recorded loop loses the quiet at both ends (no silent gap as it repeats)")
+    for what, samples_, slot in (("silence", [0.0] * rate, "wall"), ("nothing", [], "wall"),
+                                 ("a too short loop", quiet + tone + quiet, "ramp")):
+        try:
+            custom.record(samples_, slot, "x")
+            fail(f"custom.record took {what}")
+        except ValueError:
+            pass
+    try:
+        custom.record(tone, "door", "x")
+        fail("custom.record took a slot that doesn't exist")
+    except ValueError:
+        pass
+    # the hub's two calls
+    FakeRecorder.take = quiet + tone + quiet
+    got = section.record_start("jump", recorder=FakeRecorder)
+    expect(got, {"slot": "jump", "seconds": custom.REC_S["jump"]}, "record_start: the slot and its window")
+    r = section._rec["recorder"]
+    expect([r.recording, r.seconds_max], [True, custom.REC_S["jump"]], "the recorder runs with the window")
+    for bad in (lambda: section.record_start("wall", recorder=FakeRecorder),
+                lambda: section.record_start("door", recorder=FakeRecorder)):
+        try:
+            bad()
+            fail("record_start took a second recording or a slot that doesn't exist")
+        except ValueError:
+            pass
+    done = section.record_stop()
+    expect([done["slot"], done["custom"]["name"].startswith("Recording "), custom_ok(sett, done),
+            0.3 <= done["seconds"] <= 0.4],
+           ["jump", True, True, True], "record_stop: the slot's custom sound, named Recording HH:MM, its length")
+    try:
+        section.record_stop()
+        fail("record_stop with no recording")
+    except ValueError:
+        pass
+    # the picked microphone: passed on when connected, refused when not (pw-cat would quietly record
+    # the default input instead)
+    mics = [["alsa_input.usb-headset", "Headset Microphone"]]
+    try:
+        section.record_start("wall", "alsa_input.gone", recorder=FakeRecorder, inputs=mics)
+        fail("record_start took a microphone that isn't connected")
+    except ValueError:
+        pass
+    section.record_start("wall", "alsa_input.usb-headset", recorder=FakeRecorder, inputs=mics)
+    expect(section._rec["recorder"].device, "alsa_input.usb-headset", "record_start records the picked mic")
+    section.record_stop()
+    section.record_start("wall", "", recorder=FakeRecorder, inputs=[])
+    expect(section._rec["recorder"].device, None, "\"\" records the default input, listed or not")
+    section.record_stop()
+    split = {"sound": "hiss", "ceiling_sound": "stone", "split_ceiling": True}
+    expect([sett.loop_sounds(sett.check({"sound": "hiss", "ceiling_sound": "stone"})),
+            sett.loop_variants(sett.check({})),
+            sett.loop_sounds(sett.check(split)), sett.loop_variants(sett.check(split)),
+            sett.loop_sounds(sett.check({"sound": "hiss", "split_ceiling": True}))],
+           [{"ramp": "hiss", "ceiling": "hiss"}, {"ramp": "ramp", "ceiling": "ramp"},
+            {"ramp": "hiss", "ceiling": "stone"}, {"ramp": "ramp", "ceiling": "ceiling"},
+            {"ramp": "hiss", "ceiling": "hiss"}],
+           "a headsurf sounds just like a ramp until split; split, it has its own (brighter) sound")
+    ramp_c = {"file": "ramp-0123456789ab.wav", "name": "r"}
+    ceil_c = {"file": "ceiling-0123456789ab.wav", "name": "c"}
+    files = sett.custom_files(sett.check({"custom": {"ramp": ramp_c, "ceiling": ceil_c}, "split_ceiling": False}))
+    expect([files["ceiling"].name, sett.custom_files(sett.check({"custom": {"ceiling": ceil_c},
+                                                                 "split_ceiling": False}))],
+           ["ramp-0123456789ab.wav", {}], "not split, a headsurf plays the ramp's file, never its own")
+    expect([sett.check({"custom": {"ceiling": ceil_c}})["split_ceiling"],
+            sett.check({"custom": {"ramp": ramp_c}})["split_ceiling"]], [True, False],
+           "settings saved with a headsurf file of its own start split")
+    same = noise.NoiseSynth(0.5, {"ramp": "grind", "ceiling": "grind"}, variants={"ceiling": "ramp"})
+    expect(same.loop_bytes["ceiling"] == same.loop_bytes["ramp"], True,
+           "not split, the headsurf loop is the ramp's, sample for sample")
+    try:
+        sett.check({"ceiling_sound": "kazoo"})
+        fail("ceiling_sound took a sound that doesn't exist")
+    except ValueError:
+        pass
+    expect([sett.check({})["mic"], sett.check({"mic": "alsa_input.usb-headset"})["mic"]],
+           ["", "alsa_input.usb-headset"], "the mic setting: default \"\", a device's id kept")
+    for bad in (5, "x" * 201):
+        try:
+            sett.check({"mic": bad})
+            fail(f"the mic setting took {bad!r:.20}")
+        except ValueError:
+            pass
+    r.recording = False  # stopped by itself at the window's end: a new one may start, the old one's taken
+    section.record_start("ramp", recorder=FakeRecorder)
+    section._rec["recorder"].recording = False
+    FakeRecorder.take = quiet + loop + quiet
+    expect(section.record_stop()["slot"], "ramp", "a recording that stopped by itself is still taken")
+    data = section.apply({"custom": {"jump": done["custom"]}, "jump": True})
+    expect(data["sound"]["custom"], {"jump": done["custom"]}, "apply keeps the recording, prunes the rest")
+    expect([data["rec"]["ramp"], data["rec"]["jump"]],
+           [{"seconds": 8.0, "min": noise.LOOP_MIN_S, "keep": 8.0}, {"seconds": 3.0, "min": 0, "keep": 1.0}],
+           "load gives the recording dialog each sound's window, shortest and longest")
+    expect(sorted(data["mics"]), ["default", "list"], "load lists the microphones for the picker")
+    real_inputs = mic.inputs
+    mic.inputs = lambda: 1 / 0
+    try:
+        expect(section.load()["mics"], {"list": [], "default": None}, "a failing mic list doesn't break load")
+    finally:
+        mic.inputs = real_inputs
+    # saved recordings: kept past Apply's prune, back with use_saved, gone with delete_saved
+    take = done["custom"]
+    got = section.save_recording("jump", take, "  my hop ")
+    expect([[s["file"], s["name"], 0.3 <= s["seconds"] <= 0.4] for s in got], [[take["file"], "my hop", True]],
+           "save_recording lists the take under its name")
+    expect(section.save_recording("jump", take, "hop 2")[0]["name"], "hop 2", "saving it again renames it")
+    expect([len(section.saved("jump")), section.saved("wall")], [1, []], "saved lists one sound's recordings")
+    section.apply({})  # prune: the take's own file goes
+    expect((sett.sounds_dir() / take["file"]).exists(), False, "Apply's prune deletes the unused take")
+    back = section.use_saved("jump", take["file"])
+    expect([back["custom"], (sett.sounds_dir() / take["file"]).exists()], [{"file": take["file"], "name": "hop 2"}, True],
+           "use_saved puts the saved recording back")
+    for bad in (lambda: section.use_saved("wall", take["file"]), lambda: section.use_saved("jump", "../x.wav"),
+                lambda: section.save_recording("jump", {"file": "jump-000000000000.wav", "name": "x"}, "x"),
+                lambda: section.use_saved("jump", "jump-000000000000.wav")):
+        try:
+            bad()
+            fail("a saved recording call took a wrong slot, a bad name or a missing file")
+        except ValueError:
+            pass
+    expect(section.rename_saved("jump", take["file"], " big hop ")[0]["name"], "big hop", "rename_saved renames it")
+    try:
+        section.rename_saved("jump", take["file"], "  ")
+        fail("rename_saved took an empty name")
+    except ValueError:
+        pass
+    (sett.sounds_dir() / "saved" / "saved.json").write_text("{broken", encoding="utf-8")
+    expect(section.saved("jump"), [], "a broken saved.json lists nothing")
+    section.save_recording("jump", take, "hop")
+    expect(section.delete_saved("jump", take["file"]), [], "delete_saved forgets it")
+    expect((sett.sounds_dir() / "saved" / take["file"]).exists(), False, "and deletes its copy")
+    section.apply({})
+    # the real recorder's parts that run without a microphone
+    r = mic.Recorder(0.01)
+    expect([r.limit, r._add(b"\x00\x40" * 300), r._add(b"\x00\x40" * 300), len(r.data)],
+           [960, False, True, 960], "the recorder keeps at most its window")
+    expect([len(r.stop()), round(r.stop()[0], 3), r.recording], [480, 0.5, False],
+           "stop() gives the samples and can be called again")
+    path = os.environ["PATH"]
+    os.environ["PATH"] = ""
+    try:
+        mic.LinuxRecorder(1).start()
+        fail("LinuxRecorder started without pw-cat")
+    except ValueError as e:
+        expect("pw-cat" in str(e), True, "no pw-cat: a clear error")
+    finally:
+        os.environ["PATH"] = path
+    if sys.platform != "win32":
+        # a pw-cat that hangs with no sound (linked to nothing): stop() still ends it at once
+        fake = Path(os.environ["HOME"]) / "fakebin"
+        fake.mkdir(parents=True, exist_ok=True)
+        (fake / "pw-cat").write_text("#!/bin/sh\nexec sleep 30\n")
+        (fake / "pw-cat").chmod(0o755)
+        os.environ["PATH"] = f"{fake}{os.pathsep}{path}"
+        try:
+            r = mic.LinuxRecorder(5)
+            r.start()
+            t0 = time.monotonic()
+            expect([r.stop(), r.recording, r.proc.poll() is not None, time.monotonic() - t0 < 1.5],
+                   [[], False, True, True], "a hung pw-cat: stop() ends it at once, no samples")
+            r = mic.LinuxRecorder(0.2)
+            r.start()
+            r.thread.join(3)
+            expect([r.recording, r.proc.poll() is not None], [False, True], "a hung pw-cat ends by the clock")
+        finally:
+            os.environ["PATH"] = path
+
+
+def custom_ok(sett, done):
+    """The recording's file is in the sounds folder and a 16-bit mono WAV at the synth's rate."""
+    with wave.open(str(sett.sounds_dir() / done["custom"]["file"])) as w:
+        return (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (1, 2, 48000)
 
 
 def main():

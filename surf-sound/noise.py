@@ -257,12 +257,17 @@ class NoiseSynth:
     RATE = RATE
     CHUNK = CHUNK
 
-    def __init__(self, volume, sounds, custom=None, levels=None):
+    def __init__(self, volume, sounds, custom=None, levels=None, variants=None):
+        """variants: {mode: the variant ("ramp" or "ceiling") its built-in sound renders as}; each mode's
+        own by default. A headsurf that sounds like a ramp (settings "split_ceiling" off) is
+        {"ceiling": "ramp"}."""
         custom = custom or {}
         levels = levels or {}
+        variants = variants or {}
         vol = max(0.0, min(1.0, volume)) * 32767
         scales = {slot: min(vol * max(0.0, level), 32767.0) for slot, level in levels.items()}
-        self.loops = {mode: [x * scales.get(mode, vol) for x in self._loop(mode, name, custom.get(mode))]
+        self.loops = {mode: [x * scales.get(mode, vol)
+                             for x in self._loop(mode, name, custom.get(mode), variants.get(mode, mode))]
                       for mode, name in sounds.items()}
         # the steady sound ready to write; only fades are computed on the fly
         self.loop_bytes = {mode: array.array("h", (max(-32768, min(32767, int(x))) for x in loop)).tobytes()
@@ -282,13 +287,13 @@ class NoiseSynth:
         self.release = CHUNK / (RATE * LIMIT_RELEASE_S)
 
     @staticmethod
-    def _loop(mode, name, path):
+    def _loop(mode, name, path, variant):
         if path:
             try:
                 return render_file(path)
             except (OSError, EOFError, ValueError, wave.Error) as e:
                 print(f"surf-sound: the {mode} plays {name}, {Path(path).name} didn't load: {e}", flush=True)
-        return render(name, mode)
+        return render(name, variant)
 
     def hit(self, name):
         """Play a hit (HITS) on top of the sound, from the next chunk on."""
@@ -368,10 +373,10 @@ def player_class():
     return tone.WindowsTone if sys.platform == "win32" else LinuxNoise
 
 
-def play(volume, sound, kind="ramp", seconds=1.2, custom=None, levels=None):
-    """A burst of `sound` (its `kind` variant, or custom's file for kind) for `seconds`, volume 0-1;
-    returns at once."""
-    player = player_class()(NoiseSynth(volume, {kind: sound}, custom, levels))
+def play(volume, sound, kind="ramp", seconds=1.2, custom=None, levels=None, variant=None):
+    """A burst of `sound` (its `variant` variant, kind's by default, or custom's file for kind) for
+    `seconds`, volume 0-1; returns at once."""
+    player = player_class()(NoiseSynth(volume, {kind: sound}, custom, levels, {kind: variant or kind}))
     player.start()
     player.mode = kind
     for delay, step in ((seconds, lambda: setattr(player, "mode", None)), (seconds + 0.4, player.close)):

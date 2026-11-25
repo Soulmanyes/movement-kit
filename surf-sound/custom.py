@@ -17,14 +17,26 @@ no setting names.
   under its peak, LEAD_S kept), and anything past HIT_MAX_S is faded out and cut: a long hit would make
   the chunk it starts in slow to mix (crackle on Windows).
 
+Recordings (1.5.0, the hub's Rec: mic.py) take the same path from their samples (record()): each sound
+records for at most REC_S[slot] seconds, then the quiet before and after the sound (REC_GATE_DB under
+its peak) is trimmed at both ends, so a loop doesn't repeat a silent gap and a hit doesn't carry room
+noise. A hit keeps at most HIT_MAX_S, a jump JUMP_MAX_S (bhops jump every 0.6 s or so); a loop needs
+LOOP_MIN_S left. A file pick keeps its own behaviour.
+
+Saved recordings (1.5.0): save_recording() copies a take into sounds_dir()/saved/ (same file name) and
+lists it in saved/saved.json, so a recording you replaced can come back later (use_saved copies it
+back). prune() only looks at the folder's own files, so saved ones stay until deleted (delete_saved).
+
 Runs in the hub only, never in the runner beside the game.
 """
 import array
 import hashlib
+import json
 import os
 import shutil
 import subprocess
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -38,6 +50,11 @@ HIT_FADE_S = 0.05  # the fade before a long hit's cut
 GATE_DB = 40
 LEAD_S = 0.002
 FFMPEG_TIMEOUT = 30
+# a recording's window per sound, seconds: room to click Rec and then make the sound
+REC_S = {"ramp": 8.0, "ceiling": 8.0, "wall": 3.0, "graze": 3.0, "bonk": 3.0, "jump": 3.0}
+REC_GATE_DB = 30  # a microphone's room noise sits higher than a file's silence
+REC_TAIL_S = 0.03  # kept after the sound's end, faded out
+JUMP_MAX_S = 1.0
 
 
 def _noise():
@@ -151,19 +168,74 @@ def shape(xs, slot):
     return [x * k for x in xs]
 
 
+def trim(xs, slot):
+    """A recording's samples with the quiet at both ends cut (REC_GATE_DB under the peak; LEAD_S kept
+    before, REC_TAIL_S faded after) and a hit cut to its length (HIT_MAX_S, a jump JUMP_MAX_S)."""
+    rate = _noise().RATE
+    peak = max(map(abs, xs), default=0)
+    if peak < 1e-4:
+        raise ValueError(f"the recording is silent: {_input_hint()}")
+    gate = peak * 10 ** (-REC_GATE_DB / 20)
+    first = next(i for i, x in enumerate(xs) if abs(x) >= gate)
+    last = len(xs) - next(i for i, x in enumerate(reversed(xs)) if abs(x) >= gate)
+    tail = int(rate * REC_TAIL_S)
+    end = min(len(xs), last + tail)
+    xs = xs[max(0, first - int(rate * LEAD_S)):end]
+    if slot not in LOOPS:
+        cap = int(rate * (JUMP_MAX_S if slot == "jump" else HIT_MAX_S))
+        xs = xs[:cap]
+    fade = min(tail, len(xs))
+    return xs[:len(xs) - fade] + [x * (1 - i / fade) for i, x in enumerate(xs[len(xs) - fade:])]
+
+
+def _input_hint():
+    """Where to look when a recording is silent."""
+    if sys.platform == "win32":
+        return ("check your microphone, Windows' default recording device, and Settings → Privacy → "
+                "Microphone (desktop apps allowed)")
+    dev = local_import(__file__, "mic").input_name()
+    return (f"your default input, {dev}, gave no sound; pick your microphone as the default input in your "
+            "sound settings" if dev else "check your microphone (the system's default input)")
+
+
+def record(xs, slot, name):
+    """A recording's samples (mic.Recorder.stop) as the slot's custom sound named `name`; returns
+    (the settings entry {"file", "name"}, the seconds kept)."""
+    _slot(slot)
+    ys = shape(trim(xs, slot), slot)
+    return _save(ys, slot, name), len(ys) / _noise().RATE
+
+
+def rec_rules():
+    """What the page's recording dialog tells: {slot: {"seconds": the window, "min": the shortest
+    kept (0: any), "keep": the longest kept}}."""
+    return {slot: {"seconds": s, "min": _noise().LOOP_MIN_S if slot in LOOPS else 0,
+                   "keep": min(s, LOOP_MAX_S) if slot in LOOPS
+                   else JUMP_MAX_S if slot == "jump" else HIT_MAX_S}
+            for slot, s in REC_S.items()}
+
+
 def make(src, slot):
     """Turn the file `src` into the slot's custom sound; returns the settings entry {"file", "name"}."""
+    _slot(slot)
+    return _save(shape(decode(src), slot), slot, Path(src).name)
+
+
+def _slot(slot):
     if slot not in _settings().SLOTS:
         raise ValueError(f"no sound {slot!r}")
-    xs = shape(decode(src), slot)
+
+
+def _save(xs, slot, name):
+    """Write shaped samples as the slot's custom sound; returns the settings entry {"file", "name"}."""
     data = array.array("h", (max(-32768, min(32767, round(x * 32767))) for x in xs))
     if sys.byteorder == "big":
         data.byteswap()
     raw = data.tobytes()
-    name = f"{slot}-{hashlib.sha256(raw).hexdigest()[:12]}.wav"
+    fname = f"{slot}-{hashlib.sha256(raw).hexdigest()[:12]}.wav"
     folder = _settings().sounds_dir()
     folder.mkdir(parents=True, exist_ok=True)
-    dest = folder / name
+    dest = folder / fname
     if not dest.exists():
         tmp = dest.with_suffix(".tmp")
         with wave.open(str(tmp), "wb") as w:
@@ -172,7 +244,7 @@ def make(src, slot):
             w.setframerate(_noise().RATE)
             w.writeframes(raw)
         os.replace(tmp, dest)
-    return {"file": name, "name": Path(src).name}
+    return {"file": fname, "name": name}
 
 
 def prune(cfg):
@@ -185,3 +257,107 @@ def prune(cfg):
         if f.name not in keep and (_settings().FILE_RE.fullmatch(f.name) or f.suffix == ".tmp"):
             f.unlink(missing_ok=True)
 
+
+
+SAVED_MAX = 200  # saved recordings kept in all
+
+
+def _saved_dir():
+    return _settings().sounds_dir() / "saved"
+
+
+def _saved_index():
+    """saved.json's entries [{"file", "name", "slot", "seconds", "date"}]; [] when missing or broken."""
+    try:
+        items = json.loads((_saved_dir() / "saved.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    s = _settings()
+    return [i for i in items if isinstance(items, list) and isinstance(i, dict)
+            and isinstance(i.get("file"), str) and s.FILE_RE.fullmatch(i["file"])
+            and isinstance(i.get("name"), str) and i.get("slot") in s.SLOTS
+            and (_saved_dir() / i["file"]).is_file()] if isinstance(items, list) else []
+
+
+def _write_index(items):
+    folder = _saved_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    tmp = folder / "saved.json.tmp"
+    tmp.write_text(json.dumps(items, indent=1), encoding="utf-8")
+    os.replace(tmp, folder / "saved.json")
+
+
+def _check_file(slot, file):
+    _slot(slot)
+    if not (isinstance(file, str) and _settings().FILE_RE.fullmatch(file) and file.startswith(slot + "-")):
+        raise ValueError(f"not a {slot} sound")
+
+
+def saved(slot):
+    """The slot's saved recordings, newest first: [{"file", "name", "seconds", "date"}]."""
+    _slot(slot)
+    return [{k: i.get(k) for k in ("file", "name", "seconds", "date")}
+            for i in reversed(_saved_index()) if i["slot"] == slot]
+
+
+def save_recording(slot, entry, name, today=None):
+    """Keep the slot's custom sound `entry` ({"file", "name"}, in sounds_dir()) under `name` among the
+    saved recordings. Saving the same sound again renames it. Returns saved(slot)."""
+    file = (entry or {}).get("file") if isinstance(entry, dict) else None
+    _check_file(slot, file)
+    name = (name or "").strip()[:_settings().NAME_MAX] if isinstance(name, str) else ""
+    src = _settings().sounds_dir() / file
+    if not src.is_file():
+        raise ValueError("that recording is gone; record it again")
+    items = [i for i in _saved_index() if i["file"] != file]
+    if len(items) >= SAVED_MAX:
+        raise ValueError(f"{SAVED_MAX} recordings are saved already; delete some first")
+    dest = _saved_dir() / file
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not dest.exists():
+        tmp = dest.with_suffix(".tmp")
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dest)
+    with wave.open(str(dest), "rb") as w:
+        seconds = round(w.getnframes() / w.getframerate(), 2)
+    items.append({"file": file, "name": name or entry.get("name") or "Recording", "slot": slot,
+                  "seconds": seconds, "date": today or time.strftime("%Y-%m-%d")})
+    _write_index(items)
+    return saved(slot)
+
+
+def use_saved(slot, file):
+    """A saved recording back as the slot's custom sound: returns the settings entry {"file", "name"}."""
+    _check_file(slot, file)
+    item = next((i for i in _saved_index() if i["file"] == file), None)
+    if item is None:
+        raise ValueError("that saved recording is gone")
+    dest = _settings().sounds_dir() / file
+    if not dest.exists():
+        tmp = dest.with_suffix(".tmp")
+        shutil.copyfile(_saved_dir() / file, tmp)
+        os.replace(tmp, dest)
+    return {"file": file, "name": item["name"]}
+
+
+def rename_saved(slot, file, name):
+    """Give a saved recording a new name (trimmed, not empty). Returns saved(slot)."""
+    _check_file(slot, file)
+    name = name.strip()[:_settings().NAME_MAX] if isinstance(name, str) else ""
+    if not name:
+        raise ValueError("give it a name")
+    items = _saved_index()
+    item = next((i for i in items if i["file"] == file), None)
+    if item is None:
+        raise ValueError("that saved recording is gone")
+    item["name"] = name
+    _write_index(items)
+    return saved(slot)
+
+
+def delete_saved(slot, file):
+    """Forget a saved recording and delete its copy (a setting using it keeps its own). Returns saved(slot)."""
+    _check_file(slot, file)
+    _write_index([i for i in _saved_index() if i["file"] != file])
+    (_saved_dir() / file).unlink(missing_ok=True)
+    return saved(slot)

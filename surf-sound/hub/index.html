@@ -5,7 +5,26 @@
 <title>Surf Sound</title>
 <link rel="stylesheet" href="/web/hub.css">
 <link rel="stylesheet" href="/web/form.css">
-<style>.ss-level { width: 5em; }</style>
+<style>.ss-level { width: 5em; } .ss-rec.on { color: #e0443e; } .ss-rec-go { min-width: 7em; } .ss-rec-go.on { color: #e0443e; }
+.ss-rec-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--card); border: 1px solid var(--border); overflow: hidden; }
+#ss-rec-fill { height: 100%; width: 0; background: #e0443e; }
+#ss-rec-dlg .mk-dialog { display: flex; flex-direction: column; gap: 10px; }
+#ss-rec-dlg h2 { margin: 0; }
+#ss-rec-dlg .ss-rec-line { display: flex; align-items: center; gap: 8px; }
+#ss-mic { flex: 1; min-width: 0; }
+.ss-inline { display: inline-flex; align-items: center; gap: 8px; }
+.ss-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ss-card-head h2 { margin: 0; }
+.ss-on-label { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+#ss-rows.off { opacity: 0.45; }
+#ss-rec-status { min-height: 1.3em; font-variant-numeric: tabular-nums; }
+#ss-rec-take[hidden], #ss-rec-cur[hidden], .mk-row select[hidden], .mk-row span[hidden] { display: none; }
+#ss-rec-cur .ss-saved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ss-rec-name { flex: 1; min-width: 0; }
+.ss-rec-saved-head { font-weight: 600; margin-top: 4px; }
+#ss-rec-saved { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+#ss-rec-saved .ss-saved-row { display: flex; align-items: center; gap: 6px; }
+#ss-rec-saved .ss-saved-name { cursor: text; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }</style>
 <script src="/web/hub.js"></script>
 <script src="/web/section.js"></script>
 </head>
@@ -24,37 +43,42 @@
 
 	<div id="ss-form" hidden>
 		<section class="card">
-			<h2>Sound</h2>
-			<div class="muted mk-desc">A constant sound on your desktop for as long as you ride a surface in the air in
-				Momentum Mod: a surf ramp or a slide down a slope, and a sloped ceiling (a headsurf), which plays a
-				brighter version of the same sound. It starts a couple of ticks after you touch the surface and stops
-				when you leave it, land or slow down. A change here applies at once, also while the game runs.</div>
-			<div class="mk-row">
-				<label class="mk-label" for="ss-on">Play the sound</label>
-				<input id="ss-on" type="checkbox" class="mk-switch">
+			<div class="ss-card-head">
+				<h2>Sound</h2>
+				<label class="ss-on-label" for="ss-on" title="Turns every Surf Sound sound on or off">
+					<span id="ss-on-text">On</span>
+					<input id="ss-on" type="checkbox" class="mk-switch"></label>
 			</div>
+			<div class="muted mk-desc">A constant sound on your desktop for as long as you ride a surface in the air in
+				Momentum Mod: a surf ramp or a slide down a slope, and a sloped ceiling (a headsurf), which sounds the same
+				unless you separate it (then it can have its own sound, and a built-in one plays brighter). Each row picks a built-in sound, or uses a file or a recording of your own. It starts a couple of ticks after you touch the surface and stops
+				when you leave it, land or slow down. A change here applies at once, also while the game runs.</div>
+			<div id="ss-rows">
 
 			<div class="mk-row">
-				<label class="mk-label">Sound<div class="muted">▶ plays the ramp and the ceiling version here</div></label>
-				<label class="mk-field">Sound
-					<select id="ss-sound"></select></label>
-				<button id="ss-play" title="Ramp">▶</button>
-				<button id="ss-play-ceil" title="Ceiling">▶ ceiling</button>
-			</div>
-			<div class="mk-row">
 				<label class="mk-label" for="ss-ramp">On ramps<div class="muted">surfing, sliding down a slope</div></label>
+				<select id="ss-sound-ramp" title="Built-in sound" aria-label="Ramp sound"></select>
 				<span id="ss-file-ramp" class="muted"></span>
 				<button id="ss-pick-ramp" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-ramp" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-ramp" title="Back to the built-in sound">×</button>
+				<button id="ss-play-ramp" title="Ramp">▶</button>
 				<label class="mk-field">Volume %
 					<input id="ss-level-ramp" type="number" step="5" class="ss-level"></label>
 				<input id="ss-ramp" type="checkbox" class="mk-switch">
 			</div>
 			<div class="mk-row">
-				<label class="mk-label" for="ss-ceiling">On ceilings<div class="muted">headsurfing a sloped ceiling</div></label>
+				<label class="mk-label" for="ss-ceiling">On headsurfs<div class="muted">headsurfing a sloped ceiling</div></label>
+				<span id="ss-ceil-same" class="muted">Same as ramps</span>
+				<span id="ss-ceil-own" class="ss-inline">
+				<select id="ss-sound-ceiling" title="Built-in sound (a brighter version of it)" aria-label="Headsurf sound"></select>
 				<span id="ss-file-ceiling" class="muted"></span>
 				<button id="ss-pick-ceiling" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-ceiling" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-ceiling" title="Back to the built-in sound">×</button>
+				</span>
+				<button id="ss-split" title="Give headsurfs a sound of their own">Separate</button>
+				<button id="ss-play-ceiling" title="Headsurf">▶</button>
 				<label class="mk-field">Volume %
 					<input id="ss-level-ceiling" type="number" step="5" class="ss-level"></label>
 				<input id="ss-ceiling" type="checkbox" class="mk-switch">
@@ -63,6 +87,7 @@
 				<label class="mk-label" for="ss-wall">On wall hits<div class="muted">a bonk when a wall takes your speed, louder the more you lose</div></label>
 				<span id="ss-file-wall" class="muted"></span>
 				<button id="ss-pick-wall" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-wall" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-wall" title="Back to the built-in sound">×</button>
 				<button id="ss-play-wall" title="Wall hit">▶</button>
 				<label class="mk-field">Volume %
@@ -73,6 +98,7 @@
 				<label class="mk-label" for="ss-graze">On light head hits<div class="muted">clipping a ceiling at the top of a jump, or hitting one that costs you speed: the wall's bonk unless you pick a sound</div></label>
 				<span id="ss-file-graze" class="muted"></span>
 				<button id="ss-pick-graze" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-graze" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-graze" title="Back to the built-in sound">×</button>
 				<button id="ss-play-graze" title="Light head hit">▶</button>
 				<label class="mk-field">Volume %
@@ -83,6 +109,7 @@
 				<label class="mk-label" for="ss-bonk">On hard head hits<div class="muted">rising fast into a ceiling, or a sloped one throwing you down: a goofy bonk</div></label>
 				<span id="ss-file-bonk" class="muted"></span>
 				<button id="ss-pick-bonk" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-bonk" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-bonk" title="Back to the built-in sound">×</button>
 				<button id="ss-play-bonk" title="Hard head hit">▶</button>
 				<label class="mk-field">Volume %
@@ -93,16 +120,19 @@
 				<label class="mk-label" for="ss-jump">On jumps<div class="muted">a short hop sound at every takeoff, bhops too (off by default)</div></label>
 				<span id="ss-file-jump" class="muted"></span>
 				<button id="ss-pick-jump" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-rec-jump" class="ss-rec" title="Record it from your microphone">● Rec</button>
 				<button id="ss-clear-jump" title="Back to the built-in sound">×</button>
 				<button id="ss-play-jump" title="Jump">▶</button>
 				<label class="mk-field">Volume %
 					<input id="ss-level-jump" type="number" step="5" class="ss-level"></label>
 				<input id="ss-jump" type="checkbox" class="mk-switch">
 			</div>
-			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). It applies with Apply. Each sound has its own Volume %.</div>
+			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). ● Rec records one from your microphone instead: it opens a window that says what that sound needs. It applies with Apply. Each sound has its own Volume %.</div>
+
 			<div class="mk-row">
 				<label class="mk-label" for="ss-watch">Also when watching<div class="muted">replays and spectating play the sounds too (spectating in steps of about 50 ms)</div></label>
 				<input id="ss-watch" type="checkbox" class="mk-switch">
+			</div>
 			</div>
 			<div class="mk-row">
 				<div class="mk-label">Steam launch options<div id="ss-steam-note" class="muted"></div></div>
@@ -116,6 +146,36 @@
 		</section>
 	</div>
 </main>
+<div id="ss-rec-dlg" class="mk-modal" hidden>
+	<div class="mk-dialog" role="dialog" aria-modal="true" aria-labelledby="ss-rec-title">
+		<h2 id="ss-rec-title">Record a sound</h2>
+		<div id="ss-rec-info" class="muted"></div>
+		<label class="ss-rec-line">Microphone
+			<select id="ss-mic"></select>
+			<button id="ss-mic-refresh" title="List the microphones again">↻</button></label>
+		<div class="ss-rec-line">
+			<button id="ss-rec-go" class="ss-rec-go">● Record</button>
+			<div class="ss-rec-bar"><div id="ss-rec-fill"></div></div>
+		</div>
+		<div id="ss-rec-status" class="muted"></div>
+		<div id="ss-rec-take" class="ss-rec-line" hidden>
+			<input id="ss-rec-name" type="text" maxlength="200" placeholder="Name" aria-label="Name for this recording">
+			<button id="ss-rec-save" title="Keep this recording in Saved recordings, to use later">Save</button>
+		</div>
+		<div id="ss-rec-cur" class="ss-rec-line" hidden>
+			<span class="muted">On the row now:</span>
+			<span id="ss-rec-cur-name" class="ss-saved-name"></span>
+			<button id="ss-rec-cur-save" title="Keep the sound on this row in Saved recordings">Save</button>
+		</div>
+		<div class="ss-rec-saved-head">Saved recordings<span class="muted"> · Use it saves too</span></div>
+		<div id="ss-rec-saved"></div>
+		<div class="mk-dialog-buttons">
+			<button id="ss-rec-play" title="Play the recording" disabled>▶ Play</button>
+			<button id="ss-rec-cancel">Cancel</button>
+			<button id="ss-rec-use" class="mk-primary" disabled>Use it</button>
+		</div>
+	</div>
+</div>
 <script src="ss-page.js"></script>
 </body>
 </html>

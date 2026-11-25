@@ -6,6 +6,9 @@ game) reads the file again every half second, so a change applies to a running g
 Custom sounds (custom.py makes them) live in <config>/movekit/surf-sound-sounds/, one WAV per pick,
 named <slot>-<hash>.wav; "custom" maps a slot to {"file": that name, "name": the picked file's name}.
 
+"mic" is the microphone the hub's Rec records from (mic.inputs()'s id; "" for the system's default
+input). Only the hub reads it.
+
 "levels" gives each sound (SLOTS) its own volume in %, VOLUME[0] to VOLUME[1]. There is no main volume:
 settings saved before 1.2.0 had one ("volume"), which is dropped, so every sound starts at the default.
 """
@@ -19,7 +22,8 @@ from movekit import paths
 SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone")  # noise.SOUNDS' keys (check_surf_sound.py compares)
 # jump: off by default (1.4.0), so an update doesn't add a sound to every bhop
 DEFAULTS = {"on": True, "sound": "wind", "ramp": True, "ceiling": True, "wall": True, "graze": True,
-            "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}}
+            "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}, "mic": "",
+            "ceiling_sound": "", "split_ceiling": False}
 VOLUME = (0, 100)  # %, per sound
 SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk", "jump")  # the sounds a custom file or a volume can change
 DEFAULTS["levels"] = dict.fromkeys(SLOTS, 80)
@@ -31,9 +35,28 @@ def sounds_dir():
     return paths.config_dir("movekit") / "surf-sound-sounds"
 
 
+def loop_sounds(cfg):
+    """{"ramp", "ceiling"}: each loop's built-in sound. "sound" is the ramp's. A headsurf plays the
+    ramp's too unless "split_ceiling" (1.5.0) gives it its own: "ceiling_sound", "" meaning the ramp's."""
+    split = cfg["split_ceiling"]
+    return {"ramp": cfg["sound"], "ceiling": (split and cfg["ceiling_sound"]) or cfg["sound"]}
+
+
+def loop_variants(cfg):
+    """{"ramp", "ceiling"}: the variant each loop's built-in sound renders as (noise.BRIGHT). A headsurf
+    sounds just like a ramp unless split: then it is the brighter ceiling variant."""
+    return {"ramp": "ramp", "ceiling": "ceiling" if cfg["split_ceiling"] else "ramp"}
+
+
 def custom_files(cfg):
-    """{slot: path} of cfg's custom sounds."""
-    return {slot: sounds_dir() / c["file"] for slot, c in cfg["custom"].items()}
+    """{slot: path} of cfg's custom sounds. Unless split_ceiling, a headsurf plays the ramp's file (or
+    none): its own stays saved for when it is split again."""
+    files = {slot: sounds_dir() / c["file"] for slot, c in cfg["custom"].items()}
+    if not cfg["split_ceiling"]:
+        files.pop("ceiling", None)
+        if "ramp" in files:
+            files["ceiling"] = files["ramp"]
+    return files
 
 
 def levels(cfg):
@@ -56,7 +79,7 @@ def check(cfg):
     out = dict(DEFAULTS, custom={}, levels=dict(DEFAULTS["levels"]))
     if not isinstance(cfg, dict):
         raise ValueError("settings must be an object")  # noqa: TRY004 (the hub reports ValueError)
-    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "jump", "watch"):
+    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "jump", "watch", "split_ceiling"):
         if key in cfg:
             if not isinstance(cfg[key], bool):
                 raise ValueError(f"{key} must be true or false")
@@ -80,10 +103,20 @@ def check(cfg):
         if slot not in SLOTS:
             raise ValueError(f"volume for {slot!r}: there is no such sound")
         out["levels"][slot] = _number(v, f"the {slot} volume", *VOLUME)
+    if "mic" in cfg:
+        if not isinstance(cfg["mic"], str) or len(cfg["mic"]) > NAME_MAX:
+            raise ValueError("mic must be a device name")
+        out["mic"] = cfg["mic"]
     if "sound" in cfg:
         if cfg["sound"] not in SOUND_NAMES:
             raise ValueError(f"sound must be one of {', '.join(SOUND_NAMES)}")
         out["sound"] = cfg["sound"]
+    if "ceiling_sound" in cfg:
+        if cfg["ceiling_sound"] not in ("", *SOUND_NAMES):
+            raise ValueError(f"ceiling_sound must be one of {', '.join(SOUND_NAMES)}")
+        out["ceiling_sound"] = cfg["ceiling_sound"]
+    if "split_ceiling" not in cfg and "ceiling" in out["custom"]:
+        out["split_ceiling"] = True  # saved before 1.5.0 with a headsurf sound of its own: keep it
 
     return out
 
