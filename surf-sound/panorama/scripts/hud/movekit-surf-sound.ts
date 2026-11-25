@@ -94,12 +94,16 @@
 //   contact after it does (a sloped ceiling you keep riding).
 // Walls and ceilings each wait HIT_GAP_MS after their last hit (scraping a wall clips the speed for a few
 // ticks).
+// - A jump (owner, 2026-11-25, off by default in the runner's settings): the game's own OnJumpStarted, not
+//   the velocity. In the Strafe Review store it fires on surf and bhop maps, in own play (3468 surf,
+//   12525 bhop), replays (215, 863) and spectating (189, 609). Not in a paused replay (Strafe Review's
+//   rescan seeks one tick by tick) nor while the HUD customizer is open.
 //
 // Markers (written with $.Msg; the autoexec block logs the console to yaw.log and hides MK_ lines from the
 // console): MK_SURFSND_RAMP, MK_SURFSND_CEIL, MK_SURFSND_OFF. Each is written on a change, and the one
 // sounding again every BEAT_MS, so the runner can stop a sound whose script died (it waits a few beats).
-// Hits: MK_SURFSND_WALL1, _WALL2, _WALL3 (by strength), MK_SURFSND_GRAZE and MK_SURFSND_BONK, once each,
-// never beaten. While watching, every marker but OFF ends in W (MK_SURFSND_RAMPW, MK_SURFSND_BONKW...),
+// Hits: MK_SURFSND_WALL1, _WALL2, _WALL3 (by strength), MK_SURFSND_GRAZE, MK_SURFSND_BONK and
+// MK_SURFSND_JUMP, once each, never beaten. While watching, every marker but OFF ends in W (MK_SURFSND_RAMPW, MK_SURFSND_BONKW...),
 // so the runner can mute them with its "also when watching" switch, which this script can't read.
 //
 // Watching (owner, 2026-11-24): replays and spectating play too. GetVelocity() reads the watched
@@ -366,7 +370,7 @@ const MARKERS: Record<string, string> = {
 };
 const HIT_MARKERS: Record<string, string> = {
 	wall1: 'MK_SURFSND_WALL1', wall2: 'MK_SURFSND_WALL2', wall3: 'MK_SURFSND_WALL3', graze: 'MK_SURFSND_GRAZE',
-	bonk: 'MK_SURFSND_BONK'
+	bonk: 'MK_SURFSND_BONK', jump: 'MK_SURFSND_JUMP'
 };
 
 // ---- Panorama ----
@@ -479,6 +483,16 @@ $.RegisterForUnhandledEvent('HudCustomizer_Opened', () => {
 });
 $.RegisterForUnhandledEvent('HudCustomizer_Closed', () => {
 	if (live()) editing = false;
+});
+$.RegisterForUnhandledEvent('OnJumpStarted', () => {
+	if (!live() || editing) return;
+	try {
+		const replay = MomentumReplayAPI.GetReplayState();
+		if (replay === REPLAY_PAUSED) return;
+		$.Msg(HIT_MARKERS.jump + (watching(replay) === 'own' ? '' : 'W'));
+	} catch (e) {
+		$.Msg(`MovekitSurfSound: ${e}`);
+	}
 });
 $.RegisterForUnhandledEvent('MomentumSpectateStart', () => {
 	if (live()) spectating = true;

@@ -5,7 +5,8 @@ The HUD script (panorama/scripts/hud/movekit-surf-sound.ts) writes MK_SURFSND_RA
 MK_SURFSND_OFF into the game's console, which the autoexec block (install.py) logs to yaw.log. This
 reads that log with a private movekit.session.Session (its own markers, polled every POLL seconds) and
 plays the matching sound (noise.NoiseSynth through noise.player_class()). MK_SURFSND_WALL1-3 and
-MK_SURFSND_GRAZE and MK_SURFSND_BONK are one-shot hits, mixed in on top (NoiseSynth.hit). Custom sounds
+MK_SURFSND_GRAZE, MK_SURFSND_BONK and MK_SURFSND_JUMP (a jump's takeoff) are one-shot hits, mixed in on
+top (NoiseSynth.hit). Custom sounds
 (settings "custom") go to the synth, which falls back to a built-in sound for a file it can't read. While you
 watch a replay or spectate, every marker but OFF ends in W; the "watch" setting mutes those.
 
@@ -31,11 +32,11 @@ from movekit import games, logfile, paths, session  # after the path above
 from movekit.hub import local_import
 
 TOKENS = (r"MK_SURFSND_RAMPW?", r"MK_SURFSND_CEILW?", r"MK_SURFSND_OFF", r"MK_SURFSND_WALL[123]W?",
-          r"MK_SURFSND_GRAZEW?", r"MK_SURFSND_BONKW?")
+          r"MK_SURFSND_GRAZEW?", r"MK_SURFSND_BONKW?", r"MK_SURFSND_JUMPW?")
 MODES = {"SURFSND_RAMP": "ramp", "SURFSND_CEIL": "ceiling"}
 # a hit's marker: (its noise.HITS name, the settings switch)
 HITS = {"SURFSND_WALL1": ("wall1", "wall"), "SURFSND_WALL2": ("wall2", "wall"), "SURFSND_WALL3": ("wall3", "wall"),
-        "SURFSND_GRAZE": ("graze", "graze"), "SURFSND_BONK": ("bonk", "bonk")}
+        "SURFSND_GRAZE": ("graze", "graze"), "SURFSND_BONK": ("bonk", "bonk"), "SURFSND_JUMP": ("jump", "jump")}
 POLL = 0.005  # seconds between log reads
 QUIET = 1.5  # seconds without a marker after which a sound stops (the script beats every 0.5 s)
 SETTINGS_EVERY = 0.5  # seconds between looks at the settings file
@@ -62,7 +63,7 @@ class Runner:
         old = self.sound
         self.sound = self.voice = None
         kinds = [k for k in ("ramp", "ceiling") if cfg[k]]
-        if cfg["on"] and (kinds or cfg["wall"] or cfg["graze"] or cfg["bonk"]):
+        if cfg["on"] and (kinds or any(cfg[k] for k in ("wall", "graze", "bonk", "jump"))):
             voice = self.synth(1.0, {k: cfg["sound"] for k in kinds}, self.settings.custom_files(cfg),
                                self.settings.levels(cfg))  # each sound's own volume
             if old:

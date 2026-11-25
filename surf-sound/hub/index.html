@@ -89,6 +89,16 @@
 					<input id="ss-level-bonk" type="number" step="5" class="ss-level"></label>
 				<input id="ss-bonk" type="checkbox" class="mk-switch">
 			</div>
+			<div class="mk-row">
+				<label class="mk-label" for="ss-jump">On jumps<div class="muted">a short hop sound at every takeoff, bhops too (off by default)</div></label>
+				<span id="ss-file-jump" class="muted"></span>
+				<button id="ss-pick-jump" title="Use a sound file of your own (WAV; MP3 and others with ffmpeg)">File…</button>
+				<button id="ss-clear-jump" title="Back to the built-in sound">×</button>
+				<button id="ss-play-jump" title="Jump">▶</button>
+				<label class="mk-field">Volume %
+					<input id="ss-level-jump" type="number" step="5" class="ss-level"></label>
+				<input id="ss-jump" type="checkbox" class="mk-switch">
+			</div>
 			<div class="muted mk-desc">File… uses a sound of your own: a WAV (MP3, OGG and others too when ffmpeg is installed). Ramps and ceilings repeat it (1 to 15 s, a longer file is cut; its end blends into its start); a hit plays it once (up to 2 s, the silence before it trimmed). It applies with Apply. Each sound has its own Volume %.</div>
 			<div class="mk-row">
 				<label class="mk-label" for="ss-watch">Also when watching<div class="muted">replays and spectating play the sounds too (spectating in steps of about 50 ms)</div></label>

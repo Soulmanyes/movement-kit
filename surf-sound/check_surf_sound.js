@@ -10,7 +10,8 @@
 // RAMP/CEIL on a change and again every half second, OFF on the ground, below the speed floor, when the
 // velocity stalls, in replays, spectating, noclip and with the HUD customizer open, panorama_reload; hits:
 // wall strengths, the hit gap, ramp landings and wrong-way strafes, head hits (hard, light, a headsurf
-// starting at a jump's top, flat, sloped, reading 0, slow rising onto ground), the ceiling sound held one contact after a head hit, WALL/BONK markers.
+// starting at a jump's top, flat, sloped, reading 0, slow rising onto ground), the ceiling sound held one contact after a head hit, WALL/BONK markers;
+// JUMP on OnJumpStarted (W when watching, none in a paused replay or the customizer, once after a reload).
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -39,7 +40,7 @@ const stubs = {
 	$: {
 		RegisterForUnhandledEvent: (ev, fn) => { (handlers[ev] = handlers[ev] || []).push(fn); },
 		Schedule: (s, fn) => { schedules.push({ s, fn }); },
-		Msg: (m) => (/^MK_SURFSND_((RAMP|CEIL|WALL[123]|GRAZE|BONK)W?|OFF)$/.test(m) ? markers.push(m.slice(11)) : fail('Msg: ' + m))
+		Msg: (m) => (/^MK_SURFSND_((RAMP|CEIL|WALL[123]|GRAZE|BONK|JUMP)W?|OFF)$/.test(m) ? markers.push(m.slice(11)) : fail('Msg: ' + m))
 	},
 	GameInterfaceAPI: { GetSettingFloat: (k) => (k === 'sv_gravity' ? 800 : 0) },
 	MomentumReplayAPI: { GetReplayState: () => G.replay, GetReplayProgress: () => ({ curtick: G.curtick }) },
@@ -543,6 +544,25 @@ tick(-300);
 expect(markers, ['BONK'], 'a head hit writes BONK');
 for (let i = 0; i < 5; i++) tick(STEP);
 
+// jumps: the game's OnJumpStarted, a one-shot marker of its own
+markers = [];
+fire('OnJumpStarted');
+expect(markers, ['JUMP'], 'a jump writes JUMP');
+for (const [what, set, unset, want] of [
+	['the customizer', () => fire('HudCustomizer_Opened'), () => fire('HudCustomizer_Closed'), []],
+	['a paused replay', () => { G.replay = 2; G.moveType = 10; }, () => { G.replay = 0; G.moveType = 2; }, []],
+	['a replay', () => { G.replay = 1; G.moveType = 10; }, () => { G.replay = 0; G.moveType = 2; }, ['JUMPW']],
+	['spectating', () => { fire('MomentumSpectateStart'); G.moveType = 10; }, () => { fire('MomentumSpectateStop'); G.moveType = 2; }, ['JUMPW']]
+]) {
+	set();
+	markers = [];
+	fire('OnJumpStarted');
+	expect(markers, want, `a jump in ${what}`);
+	unset();
+}
+tickLoop(); // back to own play
+markers = [];
+
 // panorama_reload: the new copy writes OFF, the old copy's loop stops
 markers = [];
 for (let i = 0; i < 5; i++) tick(8);
@@ -551,5 +571,8 @@ expect(markers, ['RAMP', 'OFF'], 'a reload writes OFF');
 const before = schedules.length;
 tickLoop();
 expect(schedules.length, 1, `only the new copy keeps looping (had ${before})`);
+markers = [];
+fire('OnJumpStarted');
+expect(markers, ['JUMP'], 'after a reload a jump writes JUMP once');
 
 console.log('surf-sound: all JS checks passed');

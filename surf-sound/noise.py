@@ -11,7 +11,9 @@ A recorded sound (Stone, sounds/stone-dragging.wav: 16-bit mono at RATE, LOOP_S 
 the noise's place and gets the same seam; its ceiling variant is high-passed.
 
 Hits are one-shots on top (owner, 2026-11-24), recordings in sounds/: bonk-wall.wav for a wall (three
-strengths, by the speed lost) and a light ceiling hit, bonk-goofy.wav for a hard head hit. hit(name)
+strengths, by the speed lost) and a light ceiling hit, bonk-goofy.wav for a hard head hit. A jump's
+takeoff plays jump.wav (1.4.0), a cartoon boing (0.55 s, the owner's pick, 2026-11-25), quieter than the
+hits as bhops jump every half second or so. hit(name)
 queues one from any thread; next() mixes it in, through a limiter (LIMIT) so a hit on a loud loop is
 never cut flat (crackle).
 
@@ -153,7 +155,7 @@ LIMIT_RELEASE_S = 0.1
 # hitting it hard to drop faster is the goofy bonk)
 HIT_SOUNDS = {
     "wall1": ("bonk-wall.wav", 0.45), "wall2": ("bonk-wall.wav", 0.7), "wall3": ("bonk-wall.wav", 1.0),
-    "graze": ("bonk-wall.wav", 0.7), "bonk": ("bonk-goofy.wav", 1.0),
+    "graze": ("bonk-wall.wav", 0.7), "bonk": ("bonk-goofy.wav", 1.0), "jump": ("jump.wav", 0.5),
 }
 
 
@@ -248,7 +250,7 @@ def render_file(path):
 class NoiseSynth:
     """The sound's samples: next(mode) gives the next CHUNK of 16-bit mono samples at RATE, for mode
     "ramp", "ceiling" or None (silence). sounds: {mode: sound name}; custom: {slot: path of a custom
-    sound (custom.py)}, slots "ramp", "ceiling", "wall", "graze" and "bonk", each replacing that built-in
+    sound (custom.py)}, slots "ramp", "ceiling", "wall", "graze", "bonk" and "jump", each replacing that built-in
     sound. A custom file that doesn't load falls back to the built-in sound (a log line), so a bad file
     never stops the sound. levels: {slot: factor} on volume per sound (settings "levels"), the product
     capped at 1."""

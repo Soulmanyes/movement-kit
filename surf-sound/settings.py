@@ -17,12 +17,13 @@ import re
 from movekit import paths
 
 SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone")  # noise.SOUNDS' keys (check_surf_sound.py compares)
+# jump: off by default (1.4.0), so an update doesn't add a sound to every bhop
 DEFAULTS = {"on": True, "sound": "wind", "ramp": True, "ceiling": True, "wall": True, "graze": True,
-            "bonk": True, "watch": True, "custom": {}, "levels": {}}
+            "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}}
 VOLUME = (0, 100)  # %, per sound
-SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk")  # the sounds a custom file or a volume can change
+SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk", "jump")  # the sounds a custom file or a volume can change
 DEFAULTS["levels"] = dict.fromkeys(SLOTS, 80)
-FILE_RE = re.compile(r"(ramp|ceiling|wall|graze|bonk)-[0-9a-f]{12}\.wav")
+FILE_RE = re.compile(r"(ramp|ceiling|wall|graze|bonk|jump)-[0-9a-f]{12}\.wav")
 NAME_MAX = 200
 
 
@@ -55,7 +56,7 @@ def check(cfg):
     out = dict(DEFAULTS, custom={}, levels=dict(DEFAULTS["levels"]))
     if not isinstance(cfg, dict):
         raise ValueError("settings must be an object")  # noqa: TRY004 (the hub reports ValueError)
-    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "watch"):
+    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "jump", "watch"):
         if key in cfg:
             if not isinstance(cfg[key], bool):
                 raise ValueError(f"{key} must be true or false")

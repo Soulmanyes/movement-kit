@@ -5,7 +5,7 @@
 
 (() => {
 	const { $, toast, call, copy, numberBox } = mk;
-	const SLOTS = ["ramp", "ceiling", "wall", "graze", "bonk"];
+	const SLOTS = ["ramp", "ceiling", "wall", "graze", "bonk", "jump"];
 	let dirty = false;
 	let custom = {}; // the page's custom sounds, {slot: {file, name}}: saved by Apply
 
@@ -20,7 +20,7 @@
 			on: $("ss-on").checked, sound: $("ss-sound").value,
 			ramp: $("ss-ramp").checked, ceiling: $("ss-ceiling").checked,
 			wall: $("ss-wall").checked, graze: $("ss-graze").checked, bonk: $("ss-bonk").checked,
-			watch: $("ss-watch").checked, custom, levels: levels()
+			jump: $("ss-jump").checked, watch: $("ss-watch").checked, custom, levels: levels()
 		};
 	}
 
@@ -59,6 +59,7 @@
 		$("ss-wall").checked = data.sound.wall;
 		$("ss-graze").checked = data.sound.graze;
 		$("ss-bonk").checked = data.sound.bonk;
+		$("ss-jump").checked = data.sound.jump;
 		custom = { ...data.sound.custom };
 		showCustom();
 		$("ss-watch").checked = data.sound.watch;
@@ -68,7 +69,7 @@
 		setDirty(false);
 	}
 
-	for (const id of ["ss-on", "ss-sound", "ss-ramp", "ss-ceiling", "ss-wall", "ss-graze", "ss-bonk", "ss-watch"]) $(id).onchange = () => setDirty(true);
+	for (const id of ["ss-on", "ss-sound", "ss-ramp", "ss-ceiling", "ss-wall", "ss-graze", "ss-bonk", "ss-jump", "ss-watch"]) $(id).onchange = () => setDirty(true);
 	for (const slot of SLOTS) {
 		$("ss-pick-" + slot).onclick = async () => {
 			$("ss-pick-" + slot).disabled = true;
@@ -102,6 +103,7 @@
 	$("ss-play-wall").onclick = () => play("wall3");
 	$("ss-play-bonk").onclick = () => play("bonk");
 	$("ss-play-graze").onclick = () => play("graze");
+	$("ss-play-jump").onclick = () => play("jump");
 	$("ss-apply").onclick = async () => {
 		$("ss-apply").disabled = true;
 		try {

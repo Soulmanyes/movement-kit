@@ -13,7 +13,7 @@ no setting names.
 - Loops (ramp, ceiling): LOOP_MIN_S to LOOP_MAX_S (longer is cut). Its end cross-fades into its start
   (noise.render_file), so it repeats without a click. 15 s, not more: the runner renders the loops again
   on every settings change (two 30 s loops took about 1 s).
-- Hits (wall, graze, bonk): the silence before the sound is trimmed so it plays at once (a gate GATE_DB
+- Hits (wall, graze, bonk, jump): the silence before the sound is trimmed so it plays at once (a gate GATE_DB
   under its peak, LEAD_S kept), and anything past HIT_MAX_S is faded out and cut: a long hit would make
   the chunk it starts in slow to mix (crackle on Windows).
 

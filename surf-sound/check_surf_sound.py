@@ -20,6 +20,7 @@ Usage: python surf-sound/check_surf_sound.py   (exits 1 on a failure)
 import array
 import math
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -87,12 +88,16 @@ def check_settings(sett, hub, noise):
             sett.check({})["graze"]], [False, True, True],
            "light head hits: saved before their own switch, they follow head hits; their own switch wins")
     expect(sett.check({"levels": {"wall": 250, "bonk": -5, "ramp": 42.4}})["levels"],
-           {"ramp": 42, "ceiling": 80, "wall": 100, "graze": 80, "bonk": 0},
+           {"ramp": 42, "ceiling": 80, "wall": 100, "graze": 80, "bonk": 0, "jump": 80},
            "levels: each sound's own volume, clamped, the rest 80")
     expect(sett.levels(sett.check({"levels": {"graze": 50}}))["graze"], 0.5, "levels() as 0-1")
+    expect([sett.DEFAULTS["jump"], sett.check({"bonk": True})["jump"]], [False, False],
+           "jumps off by default and in settings saved before 1.4.0")
+    expect(sett.check({"custom": {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}})["custom"],
+           {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}, "a custom jump sound")
     want = {"on": True, "sound": "grind", "ramp": True, "ceiling": False, "wall": False, "graze": True,
-            "bonk": True, "watch": False, "custom": {},
-            "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40}}
+            "bonk": True, "jump": True, "watch": False, "custom": {},
+            "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40, "jump": 60}}
     data = section.apply(want)
     expect(data["sound"], want, "apply returns the saved settings")
     expect([k for k, _ in data["sounds"]], list(sett.SOUND_NAMES), "load lists the sounds")
@@ -329,6 +334,11 @@ def check_runner(sett, hub, tmp):
         r.handle(token(name))
     expect([p2.synth.hits, p2.mode, r.heard], [["wall1", "wall3", "graze", "bonk"], "ramp", heard],
            "hits played on top, the sound and its QUIET clock as they were")
+    r.handle(token("MK_SURFSND_JUMP"))
+    expect(p2.synth.hits[-1], "bonk", "jumps off (the default): JUMP is silent")
+    unread = [m for name in sr.HITS for m in ("MK_" + name, "MK_" + name + "W")
+              if not any(re.fullmatch(t, m) for t in sr.TOKENS)]
+    expect(unread, [], "every hit marker, W too, is a token the session reads")
     r.handle(token("MK_SURFSND_OFF"))
     r.handle(token("MK_SURFSND_WALL2"))
     expect([p2.synth.hits[-1], p2.mode], ["wall2", None], "a hit plays with no constant sound")
@@ -352,6 +362,15 @@ def check_runner(sett, hub, tmp):
     expect([p3.synth.hits, p3.synth.custom], [["bonk"], {"bonk": sett.sounds_dir() / "bonk-0123456789ab.wav"}],
            "light head hits off: only hard ones; the custom sound reaches the synth")
     sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
+               "graze": False, "bonk": False, "jump": True})
+    clock[0] += sr.SETTINGS_EVERY
+    r.reload()
+    p3 = FakePlayer.made[-1]
+    r.handle(token("MK_SURFSND_BONK"))
+    r.handle(token("MK_SURFSND_JUMP"))
+    r.handle(token("MK_SURFSND_JUMPW"))
+    expect([r.sound is p3, p3.synth.hits], [True, ["jump", "jump"]], "only jumps on: a player, JUMP and JUMPW play")
+    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
@@ -371,7 +390,8 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_RAMP"))
     r.handle(token("MK_SURFSND_RAMPW"))
     r.handle(token("MK_SURFSND_WALL3W"))
-    expect([p5.mode, p5.synth.hits], [None, []], "watch off: RAMPW stops the sound, WALL3W is muted")
+    r.handle(token("MK_SURFSND_JUMPW"))
+    expect([p5.mode, p5.synth.hits], [None, []], "watch off: RAMPW stops the sound, WALL3W and JUMPW are muted")
     r.handle(token("MK_SURFSND_RAMP"))
     r.handle(token("MK_SURFSND_WALL3"))
     expect([p5.mode, p5.synth.hits], ["ramp", ["wall3"]], "watch off: own play still plays")

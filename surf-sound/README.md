@@ -19,7 +19,7 @@ The sound is shaped noise or a recorded loop, not a tone. Pick one of five on th
 | Stone | Stone dragged over stone, a recording (`sounds/stone-dragging.wav`) |
 
 ▶ plays each one there. The page also has a switch and a Volume % for each sound (ramps, ceilings,
-wall hits, light and hard head hits), and "Also when watching" for replays and spectating. A change
+wall hits, light and hard head hits, jumps), and "Also when watching" for replays and spectating. A change
 applies at once, also while the game runs. Each sound starts at 80 %; settings from before 1.2.0 had one
 volume for all, which is dropped, so they start there too.
 
@@ -32,10 +32,13 @@ Hits play once, on top of the constant sound, each with its own switch and ▶:
   costs you 100 u/s or more and throws you down at 300 u/s or faster. Just clipping a flat ceiling near the top of a jump (a jump that
   missed) plays the wall's bonk instead, and so does a head hit that costs you speed without that throw
   (a bhop that lands wrong and hits the curve above). These light head hits have their own switch.
+- **Jumps:** a cartoon boing (`sounds/jump.wav`) at every takeoff,
+  bhops and surf alike, as the game counts jumps. Off by default, since a bhop map jumps every half
+  second or so.
 
 ### Your own sounds
 
-Each of the five (ramps, ceilings, wall hits, light and hard head hits) can play a sound file of your
+Each of the six (ramps, ceilings, wall hits, light and hard head hits, jumps) can play a sound file of your
 own: File… on its row, × goes back to the built-in one, and Apply saves it.
 
 - A WAV of any rate and channels, 8 to 32-bit. MP3, OGG, FLAC and others work when ffmpeg is installed.
