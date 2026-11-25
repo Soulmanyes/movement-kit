@@ -23,7 +23,8 @@ recordings: Hiss became Whoosh, Rumble is a recording now, and Wind and Grind ar
 used them play Whoosh).
 
 ▶ plays each one there. The page also has a switch and a Volume % for each sound (ramps, ceilings,
-wall hits, light and hard head hits, jumps), and "Also when watching" for replays and spectating. A change
+wall hits, light and hard head hits, jumps), "Also when watching" for replays and spectating, and "Start loops at a random point" (off by default:
+each ramp or headsurf then picks up its loop somewhere in it, not always at its start). A change
 applies at once, also while the game runs. Each sound starts at 80 %; settings from before 1.2.0 had one
 volume for all, which is dropped, so they start there too.
 

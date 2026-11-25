@@ -101,6 +101,7 @@ def check_settings(sett, hub, noise):
            ["whoosh", "whoosh"], "hiss (retired 1.7.0) becomes whoosh")
     want = {"on": True, "sound": "rumble", "ramp": True, "ceiling": False, "wall": False, "graze": True,
             "bonk": True, "jump": True, "watch": False, "custom": {}, "mic": "", "ceiling_sound": "", "split_ceiling": False,
+            "random_start": True,
             "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40, "jump": 60}}
     data = section.apply(want)
     expect(data["sound"], want, "apply returns the saved settings")
@@ -152,6 +153,18 @@ def check_synth(noise):
         syn2.next(None)
     syn2.next("ramp")
     expect(syn2.pos["ramp"], noise.CHUNK, "from silence the loop plays from its start")
+    # random_start: from silence a random whole chunk of the loop, its chunks the loop's own
+    rnd = noise.NoiseSynth(0.5, {"ramp": "whoosh"}, random_start=True)
+    starts = set()
+    for _ in range(20):
+        for _ in range(60):
+            rnd.next(None)
+        rnd.next("ramp")
+        at = (rnd.pos["ramp"] - noise.CHUNK) % rnd.length["ramp"]
+        expect(at % noise.CHUNK, 0, "a random start is a whole chunk")
+        starts.add(at)
+    expect(len(starts) > 5, True, "random_start starts loops at different points")
+    expect(len(rnd.next("ramp")), 2 * noise.CHUNK, "a random start plays whole chunks")
     # hits: mixed on top of the loop, then gone; a synth with no loops plays them from silence
     syn3 = noise.NoiseSynth(0.5, {"ramp": "whoosh"})
     for _ in range(10):
@@ -248,9 +261,9 @@ class FakePlayer:
 
 
 class FakeSynth:
-    def __init__(self, volume, sounds, custom=None, levels=None, variants=None):
+    def __init__(self, volume, sounds, custom=None, levels=None, variants=None, random_start=False):
         self.volume, self.sounds, self.custom, self.levels, self.hits = volume, sounds, custom, levels, []
-        self.variants = variants
+        self.variants, self.random_start = variants, random_start
 
     def hit(self, name):
         self.hits.append(name)
@@ -267,6 +280,7 @@ def check_runner(sett, hub, tmp):
     expect([p.started, p.mode, p.synth.sounds, p.synth.volume], [True, None, {"ramp": "whoosh", "ceiling": "whoosh"}, 1.0],
            "player made from the settings, silent")
     expect(p.synth.levels, {**dict.fromkeys(sett.SLOTS, 0.8), "wall": 0.5}, "each sound's volume reaches the synth")
+    expect(p.synth.random_start, False, "random_start (off by default) reaches the synth")
 
     def token(name):
         return {"type": "token", "data": {"name": name}}

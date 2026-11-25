@@ -21,7 +21,7 @@
 			on: $("ss-on").checked, sound: loopBuiltin.ramp, ceiling_sound: loopBuiltin.ceiling, split_ceiling: split,
 			ramp: $("ss-ramp").checked, ceiling: $("ss-ceiling").checked,
 			wall: $("ss-wall").checked, graze: $("ss-graze").checked, bonk: $("ss-bonk").checked,
-			jump: $("ss-jump").checked, watch: $("ss-watch").checked, custom, levels: levels(), mic: $("ss-mic").value
+			jump: $("ss-jump").checked, watch: $("ss-watch").checked, random_start: $("ss-random").checked, custom, levels: levels(), mic: $("ss-mic").value
 		};
 	}
 
@@ -134,6 +134,7 @@
 		custom = { ...data.sound.custom };
 		showCustom();
 		$("ss-watch").checked = data.sound.watch;
+		$("ss-random").checked = data.sound.random_start;
 		showMics(data.mics, data.sound.mic);
 		for (const slot of SLOTS) numberBox($("ss-level-" + slot), data.sound.levels[slot], data.volume, () => setDirty(true));
 		$("ss-loading").hidden = true;
@@ -148,7 +149,7 @@
 		$("ss-rows").classList.toggle("off", !on);
 	}
 	$("ss-on").addEventListener("change", showOn);
-	for (const id of ["ss-on", "ss-ramp", "ss-ceiling", "ss-wall", "ss-graze", "ss-bonk", "ss-jump", "ss-watch", "ss-mic"]) $(id).onchange = () => setDirty(true);
+	for (const id of ["ss-on", "ss-ramp", "ss-ceiling", "ss-wall", "ss-graze", "ss-bonk", "ss-jump", "ss-watch", "ss-random", "ss-mic"]) $(id).onchange = () => setDirty(true);
 	for (const slot of SLOTS) {
 		$("ss-pick-" + slot).onclick = async () => {
 			$("ss-pick-" + slot).disabled = true;

@@ -25,7 +25,7 @@ RETIRED = {"grind": None, "wind": None, "hiss": "whoosh"}
 # jump: off by default (1.4.0), so an update doesn't add a sound to every bhop
 DEFAULTS = {"on": True, "sound": "whoosh", "ramp": True, "ceiling": True, "wall": True, "graze": True,
             "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}, "mic": "",
-            "ceiling_sound": "", "split_ceiling": False}
+            "ceiling_sound": "", "split_ceiling": False, "random_start": False}
 VOLUME = (0, 100)  # %, per sound
 SLOTS = ("ramp", "ceiling", "wall", "graze", "bonk", "jump")  # the sounds a custom file or a volume can change
 DEFAULTS["levels"] = dict.fromkeys(SLOTS, 80)
@@ -81,7 +81,7 @@ def check(cfg):
     out = dict(DEFAULTS, custom={}, levels=dict(DEFAULTS["levels"]))
     if not isinstance(cfg, dict):
         raise ValueError("settings must be an object")  # noqa: TRY004 (the hub reports ValueError)
-    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "jump", "watch", "split_ceiling"):
+    for key in ("on", "ramp", "ceiling", "wall", "graze", "bonk", "jump", "watch", "split_ceiling", "random_start"):
         if key in cfg:
             if not isinstance(cfg[key], bool):
                 raise ValueError(f"{key} must be true or false")

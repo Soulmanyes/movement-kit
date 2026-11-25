@@ -223,10 +223,12 @@ class NoiseSynth:
     RATE = RATE
     CHUNK = CHUNK
 
-    def __init__(self, volume, sounds, custom=None, levels=None, variants=None):
+    def __init__(self, volume, sounds, custom=None, levels=None, variants=None, random_start=False):
         """variants: {mode: the variant ("ramp" or "ceiling") its built-in sound renders as}; each mode's
         own by default. A headsurf that sounds like a ramp (settings "split_ceiling" off) is
-        {"ceiling": "ramp"}."""
+        {"ceiling": "ramp"}. random_start (settings "random_start", 1.8.0): a loop starting from silence
+        starts at a random point of it instead of its start, so rides don't all open the same way."""
+        self.random_start = random_start
         custom = custom or {}
         levels = levels or {}
         variants = variants or {}
@@ -303,7 +305,9 @@ class NoiseSynth:
 
     def _loops(self, mode):
         if mode in self.loops and not any(self.gain.values()):
-            self.pos[mode] = 0  # from silence: the loop's loud start (render)
+            # from silence: the loop's loud start (render), or a random chunk of it (random_start);
+            # a loop's length is whole chunks, so a chunk never runs past its end
+            self.pos[mode] = random.randrange(self.length[mode] // CHUNK) * CHUNK if self.random_start else 0
         starts = dict(self.pos)
         for m, at in starts.items():
             self.pos[m] = (at + CHUNK) % self.length[m]

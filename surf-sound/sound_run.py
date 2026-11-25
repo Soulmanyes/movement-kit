@@ -67,7 +67,7 @@ class Runner:
             loops = self.settings.loop_sounds(cfg)
             voice = self.synth(1.0, {k: loops[k] for k in kinds}, self.settings.custom_files(cfg),
                                self.settings.levels(cfg),  # each sound's own volume
-                               self.settings.loop_variants(cfg))
+                               self.settings.loop_variants(cfg), random_start=cfg["random_start"])
             if old:
                 old.close()
                 old = None
