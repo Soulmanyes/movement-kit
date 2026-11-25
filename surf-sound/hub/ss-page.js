@@ -32,7 +32,7 @@
 	// ramps and ceilings pick in one list: the built-in sounds, then the row's own sound (a file or a
 	// recording) as "Your sound". Picking a built-in keeps the own sound in the list until the page reloads.
 	let builtins = []; // [[key, label]]
-	const loopBuiltin = { ramp: "wind", ceiling: "wind" };
+	const loopBuiltin = { ramp: "whoosh", ceiling: "whoosh" };
 	let kept = {}; // {slot: custom entry} an own sound swapped for a built-in, to pick again
 	let split = false; // headsurfs have their own sound (split_ceiling); else they play the ramp's
 	function showSplit() {

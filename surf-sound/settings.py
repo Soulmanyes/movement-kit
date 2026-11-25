@@ -19,9 +19,11 @@ import re
 
 from movekit import paths
 
-SOUND_NAMES = ("wind", "rumble", "hiss", "grind", "stone", "squeak")  # noise.SOUNDS' keys (check_surf_sound.py compares)
+SOUND_NAMES = ("whoosh", "rumble", "stone", "squeak")  # noise.SOUNDS' keys (check_surf_sound.py compares)
+# built-in sounds taken out (1.7.0): saved settings naming one get its stand-in, None for the default
+RETIRED = {"grind": None, "wind": None, "hiss": "whoosh"}
 # jump: off by default (1.4.0), so an update doesn't add a sound to every bhop
-DEFAULTS = {"on": True, "sound": "wind", "ramp": True, "ceiling": True, "wall": True, "graze": True,
+DEFAULTS = {"on": True, "sound": "whoosh", "ramp": True, "ceiling": True, "wall": True, "graze": True,
             "bonk": True, "jump": False, "watch": True, "custom": {}, "levels": {}, "mic": "",
             "ceiling_sound": "", "split_ceiling": False}
 VOLUME = (0, 100)  # %, per sound
@@ -107,6 +109,8 @@ def check(cfg):
         if not isinstance(cfg["mic"], str) or len(cfg["mic"]) > NAME_MAX:
             raise ValueError("mic must be a device name")
         out["mic"] = cfg["mic"]
+    cfg = {**cfg, **{k: RETIRED[cfg[k]] or ("" if k == "ceiling_sound" else DEFAULTS["sound"])
+                     for k in ("sound", "ceiling_sound") if cfg.get(k) in RETIRED}}
     if "sound" in cfg:
         if cfg["sound"] not in SOUND_NAMES:
             raise ValueError(f"sound must be one of {', '.join(SOUND_NAMES)}")

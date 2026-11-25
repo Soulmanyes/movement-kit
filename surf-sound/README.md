@@ -9,16 +9,18 @@ A constant sound on your desktop for as long as you ride a surface in the air:
   it a sound of its own; Same as ramps joins them again. (Up to 1.5.0 a separated headsurf played a
   brighter version of a built-in sound; since 1.6.0 it plays it as it is.)
 
-The sound is shaped noise or a recorded loop, not a tone. Pick one of six on the Surf Sound page in the hub:
+The sound is a recorded loop, not a tone. Pick one of four on the Surf Sound page in the hub:
 
 | Sound | What it is like |
 | --- | --- |
-| Wind | Rushing air with a slow swell (the default) |
-| Rumble | A deep, low rumble |
-| Hiss | Sand or spray |
-| Grind | A board on a rail: mid noise with a fast flutter |
+| Whoosh | A whoosh, a 1.3 s recording (`sounds/whoosh.wav`, the default) |
+| Rumble | A low rumble, a 2.35 s recording (`sounds/rumble.wav`) |
 | Stone | Stone dragged over stone, a recording (`sounds/stone-dragging.wav`) |
-| Long squeak | A long squeak, a 2.5 s recording looped at its own length (`sounds/long-squeak.wav`) |
+| Long squeak | A long squeak, a 2.5 s recording (`sounds/long-squeak.wav`) |
+
+Whoosh, Rumble and Long squeak repeat at their own length. 1.7.0 replaced the generated sounds with
+recordings: Hiss became Whoosh, Rumble is a recording now, and Wind and Grind are gone (settings that
+used them play Whoosh).
 
 ▶ plays each one there. The page also has a switch and a Volume % for each sound (ramps, ceilings,
 wall hits, light and hard head hits, jumps), and "Also when watching" for replays and spectating. A change

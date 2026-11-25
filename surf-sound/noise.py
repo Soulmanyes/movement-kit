@@ -2,14 +2,17 @@
 players (LinuxTone through pw-cat, WindowsTone through waveOut), which only call next(mode) and read
 RATE and CHUNK, so it stands in for ToneSynth.
 
-Each sound is a loop of LOOP_S seconds of filtered random noise, rendered once, its seam cross-faded so
-it repeats without a click or a dip. A sound's swell or flutter repeats a whole number of times per loop. Every sound has two
+Up to 1.6.0 most sounds were a loop of LOOP_S seconds of filtered random noise (Wind, Rumble, Hiss, Grind);
+since 1.7.0 every built-in sound is a recording (owner, 2026-11-25), its seam cross-faded so it repeats
+without a click or a dip. render() still takes a noise function with an optional gain shape, for a
+sound made that way again. Every sound has two
 variants: "ramp" (a surface under you) and "ceiling" (a headsurf). Up to 1.5.0 the ceiling one was brighter, so the two
 could be told apart by ear; since 1.6.0 (owner, 2026-11-25) both are the same, BRIGHT 1.0. Switching fades the gain over FADE_IN_S / FADE_OUT_S, so it never clicks.
 
-A recorded sound (Stone, sounds/stone-dragging.wav: 16-bit mono at RATE, LOOP_S + SEAM_S long) takes
-the noise's place and gets the same seam. Long squeak (sounds/long-squeak.wav, 2.5 s, made by the owner,
-1.6.0) loops at its own length, as a custom loop does (render_file).
+Stone (sounds/stone-dragging.wav: 16-bit mono at RATE, LOOP_S + SEAM_S long) goes through render's
+seam as noise did. Whoosh (sounds/whoosh.wav, 1.3 s), Rumble (sounds/rumble.wav, 2.35 s; both the
+owner's hub recordings, 1.7.0) and Long squeak (sounds/long-squeak.wav, 2.5 s, made by the owner, 1.6.0)
+loop at their own length, as a custom loop does (render_file): LOOP_FILES.
 
 Hits are one-shots on top (owner, 2026-11-24), recordings in sounds/: bonk-wall.wav for a wall (three
 strengths, by the speed lost) and a light ceiling hit, bonk-goofy.wav for a hard head hit. A jump's
@@ -70,46 +73,6 @@ def _highpass(xs, hz):
     return [x - y for x, y in zip(xs, lo)]
 
 
-def _white(n, rng):
-    return [rng.uniform(-1, 1) for _ in range(n)]
-
-
-def _wind(n, rng, bright):
-    """Rushing air: band-passed noise."""
-    lo = 350 * bright
-    return _lowpass(_lowpass(_highpass(_white(n, rng), lo / 4), lo), lo * 2)
-
-
-def _wind_gain(phase, bright):
-    """Wind's slow swell: 2 periods per loop."""
-    return 0.65 + 0.35 * (0.5 + 0.5 * math.sin(2 * math.pi * 2 * phase))
-
-
-def _rumble(n, rng, bright):
-    """Deep rumble: brown noise (leaky integral of white) under a low cut-off."""
-    y, xs = 0.0, []
-    for x in _white(n, rng):
-        y = 0.995 * y + 0.05 * x
-        xs.append(y)
-    return _lowpass(_highpass(xs, 25), 160 * bright)
-
-
-def _hiss(n, rng, bright):
-    """Sand or spray: high-passed noise."""
-    return _lowpass(_highpass(_white(n, rng), 1800 * bright), 6000 * bright)
-
-
-def _grind(n, rng, bright):
-    """A board on a rail: mid noise (its flutter is _grind_gain)."""
-    return _lowpass(_highpass(_white(n, rng), 300 * bright), 1400 * bright)
-
-
-def _grind_gain(phase, bright):
-    """Grind's flutter: about 22 Hz (more on a ceiling), a whole number of periods per loop."""
-    periods = round(22 * bright * LOOP_S)
-    return 0.55 + 0.45 * abs(math.sin(math.pi * periods * phase))
-
-
 @functools.cache
 def _recording(name):
     """A recorded sound in SOUND_DIR as floats -1..1 (16-bit mono at RATE), cached."""
@@ -137,14 +100,12 @@ def _stone(n, rng, bright):
 
 # name: (label, noise(n, rng, bright), gain(phase 0-1 over the loop, bright) or None); the first is the default
 SOUNDS.update({
-    "wind": ("Wind", _wind, _wind_gain),
-    "rumble": ("Rumble", _rumble, None),
-    "hiss": ("Hiss", _hiss, None),
-    "grind": ("Grind", _grind, _grind_gain),
+    "whoosh": ("Whoosh", None, None),  # whole recordings, LOOP_FILES
+    "rumble": ("Rumble", None, None),
     "stone": ("Stone", _stone, None),
     "squeak": ("Long squeak", None, None),  # a whole recording, LOOP_FILES
 })
-LOOP_FILES = {"squeak": "long-squeak.wav"}  # built-in sounds that loop at their recording's own length
+LOOP_FILES = {"whoosh": "whoosh.wav", "rumble": "rumble.wav", "squeak": "long-squeak.wav"}  # built-in sounds that loop at their recording's own length
 BRIGHT = {"ramp": 1.0, "ceiling": 1.0}  # filter scale per surface; a headsurf no longer plays brighter (1.6.0)
 
 HIT_PEAK = 0.8  # a hit's peak at volume 1 and gain 1

@@ -95,7 +95,11 @@ def check_settings(sett, hub, noise):
            "jumps off by default and in settings saved before 1.4.0")
     expect(sett.check({"custom": {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}})["custom"],
            {"jump": {"file": "jump-0123456789ab.wav", "name": "hop.wav"}}, "a custom jump sound")
-    want = {"on": True, "sound": "grind", "ramp": True, "ceiling": False, "wall": False, "graze": True,
+    expect([sett.check({"sound": "grind", "ceiling_sound": "wind"})[k] for k in ("sound", "ceiling_sound")],
+           [sett.DEFAULTS["sound"], ""], "a retired sound (grind, wind: 1.7.0) gets the default")
+    expect([sett.check({"sound": "hiss", "ceiling_sound": "hiss"})[k] for k in ("sound", "ceiling_sound")],
+           ["whoosh", "whoosh"], "hiss (retired 1.7.0) becomes whoosh")
+    want = {"on": True, "sound": "rumble", "ramp": True, "ceiling": False, "wall": False, "graze": True,
             "bonk": True, "jump": True, "watch": False, "custom": {}, "mic": "", "ceiling_sound": "", "split_ceiling": False,
             "levels": {"ramp": 35, "ceiling": 60, "wall": 100, "graze": 80, "bonk": 40, "jump": 60}}
     data = section.apply(want)
@@ -109,7 +113,7 @@ def check_settings(sett, hub, noise):
         pass
     expect(sett.load(), want, "a refused apply keeps the saved settings")
     try:
-        section.preview("wind", "floor")
+        section.preview("whoosh", "floor")
         fail("preview took a bad kind")
     except ValueError:
         pass
@@ -120,7 +124,7 @@ def samples(b):
 
 
 def check_synth(noise):
-    syn = noise.NoiseSynth(0.5, {"ramp": "wind", "ceiling": "wind"})
+    syn = noise.NoiseSynth(0.5, {"ramp": "whoosh", "ceiling": "whoosh"})
     expect(len(syn.next(None)), 2 * syn.CHUNK, "a chunk is CHUNK samples")
     expect(syn.next(None), syn.silence, "silence when off")
     for name in noise.SOUNDS:
@@ -132,32 +136,6 @@ def check_synth(noise):
             if join > 4 * max(steps):
                 fail(f"{name}/{kind}: the loop's join jumps {join:.3f}, the largest step inside is {max(steps):.3f}")
 
-    # constant loudness across the join: 50 ms windows around it within 1.5 dB of the loop's median
-    # (the sounds without a designed swell or flutter)
-    win = noise.RATE // 20
-    for name in ("hiss", "rumble"):
-        loop = noise.render(name, "ramp")
-        twice = loop + loop
-
-        def rms_db(xs):
-            return 10 * math.log10(sum(x * x for x in xs) / len(xs))
-        levels = sorted(rms_db(loop[i:i + win]) for i in range(0, len(loop) - win, win))
-        median = levels[len(levels) // 2]
-        seam = int(noise.RATE * noise.SEAM_S)
-        for start in range(len(loop) - seam, len(loop) + seam, win // 2):
-            db = rms_db(twice[start:start + win])
-            if abs(db - median) > 1.5 + (3 if name == "rumble" else 0):
-                fail(f"{name}: {db - median:+.1f} dB at the loop's join")
-
-    # a sound from silence starts at the loop's loud start: wind's first 200 ms is louder than 3/4 of the loop
-    # (grind's flutter is too fast to matter)
-    for name in ("wind",):
-        loop = noise.render(name, "ramp")
-        w = 4 * win  # 200 ms: long enough that the noise itself evens out
-        start = sum(x * x for x in loop[:w]) / w
-        windows = sorted(sum(x * x for x in loop[i:i + w]) / w for i in range(0, len(loop) - w, w))
-        if start < windows[len(windows) * 3 // 4]:
-            fail(f"{name}: the loop starts in a quiet part")
     for name in noise.SOUNDS:
         peak = max(abs(x) for kind in ("ramp", "ceiling") for x in noise.render(name, kind))
         if peak > noise.PEAK + 1e-9:
@@ -165,7 +143,7 @@ def check_synth(noise):
     # the recording fills the loop and its seam without repeating
     expect(len(noise._recording("stone-dragging.wav")) >= int(noise.RATE * (noise.LOOP_S + noise.SEAM_S)), True,
            "stone-dragging.wav covers LOOP_S + SEAM_S")
-    syn2 = noise.NoiseSynth(0.5, {"ramp": "wind"})
+    syn2 = noise.NoiseSynth(0.5, {"ramp": "whoosh"})
     for _ in range(123):
         syn2.next(None)
     for _ in range(40):
@@ -175,7 +153,7 @@ def check_synth(noise):
     syn2.next("ramp")
     expect(syn2.pos["ramp"], noise.CHUNK, "from silence the loop plays from its start")
     # hits: mixed on top of the loop, then gone; a synth with no loops plays them from silence
-    syn3 = noise.NoiseSynth(0.5, {"ramp": "wind"})
+    syn3 = noise.NoiseSynth(0.5, {"ramp": "whoosh"})
     for _ in range(10):
         syn3.next("ramp")
     plain = samples(syn3.loop_bytes["ramp"])
@@ -204,8 +182,8 @@ def check_synth(noise):
         walls.append(max(abs(x) for _ in range(20) for x in samples(s.next(None))))
     expect(walls == sorted(walls) and walls[0] < walls[2] * 0.6, True, f"wall strengths get louder: {walls}")
     # levels: each sound scaled on its own, the product capped at full volume
-    base = noise.NoiseSynth(0.4, {"ramp": "wind", "ceiling": "wind"})
-    lv = noise.NoiseSynth(0.4, {"ramp": "wind", "ceiling": "wind"},
+    base = noise.NoiseSynth(0.4, {"ramp": "whoosh", "ceiling": "whoosh"})
+    lv = noise.NoiseSynth(0.4, {"ramp": "whoosh", "ceiling": "whoosh"},
                           levels={"ramp": 0.5, "ceiling": 1.0, "wall": 2.0, "graze": 1.0, "bonk": 0.0})
     peak = lambda xs: max(map(abs, xs))
     expect([round(peak(lv.loops["ramp"]) / peak(base.loops["ramp"]), 3),
@@ -214,8 +192,8 @@ def check_synth(noise):
             round(peak(lv.hit_sounds["wall1"]) / peak(base.hit_sounds["wall1"]), 3),
             peak(lv.hit_sounds["bonk"]), lv.hit_sounds["graze"] == base.hit_sounds["graze"]],
            [0.5, 1.0, 2.0, 2.0, 0.0, True], "levels scale each loop and hit on their own")
-    capped = noise.NoiseSynth(0.8, {"ramp": "wind"}, levels={"ramp": 2.0, "wall": 2.0})
-    full = noise.NoiseSynth(1.0, {"ramp": "wind"})
+    capped = noise.NoiseSynth(0.8, {"ramp": "whoosh"}, levels={"ramp": 2.0, "wall": 2.0})
+    full = noise.NoiseSynth(1.0, {"ramp": "whoosh"})
     expect([capped.loops["ramp"] == full.loops["ramp"], capped.hit_sounds["wall3"] == full.hit_sounds["wall3"]],
            [True, True], "a level past full volume plays at full volume")
     # at full volume a hit on a loud loop (and two hits at once) stays under LIMIT: no samples cut flat
@@ -281,12 +259,12 @@ class FakeSynth:
 def check_runner(sett, hub, tmp):
     sr = hub.local_import(HERE / "sound_run.py", "sound_run")
     clock = [100.0]
-    sett.save({"on": True, "sound": "wind", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
+    sett.save({"on": True, "sound": "whoosh", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
     FakePlayer.made = []
     r = sr.Runner(sett, FakePlayer, FakeSynth, clock=lambda: clock[0])
     r.reload()
     p = FakePlayer.made[-1]
-    expect([p.started, p.mode, p.synth.sounds, p.synth.volume], [True, None, {"ramp": "wind", "ceiling": "wind"}, 1.0],
+    expect([p.started, p.mode, p.synth.sounds, p.synth.volume], [True, None, {"ramp": "whoosh", "ceiling": "whoosh"}, 1.0],
            "player made from the settings, silent")
     expect(p.synth.levels, {**dict.fromkeys(sett.SLOTS, 0.8), "wall": 0.5}, "each sound's volume reaches the synth")
 
@@ -315,11 +293,11 @@ def check_runner(sett, hub, tmp):
     r.tick()
     expect(p.mode, None, "silent after QUIET without a marker")
     # ceilings off: the player only has the ramp, CEIL is silent
-    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": False})
+    sett.save({"on": True, "sound": "rumble", "ramp": True, "ceiling": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p2 = FakePlayer.made[-1]
-    expect([p.closed, p2.synth.sounds], [True, {"ramp": "hiss"}], "a settings change: old player closed, new one built")
+    expect([p.closed, p2.synth.sounds], [True, {"ramp": "rumble"}], "a settings change: old player closed, new one built")
     r.handle(token("MK_SURFSND_CEIL"))
     expect(p2.mode, None, "ceilings off: CEIL is silent")
     r.handle(token("MK_SURFSND_RAMP"))
@@ -339,7 +317,7 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_OFF"))
     r.handle(token("MK_SURFSND_WALL2"))
     expect([p2.synth.hits[-1], p2.mode], ["wall2", None], "a hit plays with no constant sound")
-    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False, "bonk": True})
+    sett.save({"on": True, "sound": "rumble", "ramp": False, "ceiling": False, "wall": False, "bonk": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p3 = FakePlayer.made[-1]
@@ -348,7 +326,7 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_GRAZE"))
     r.handle(token("MK_SURFSND_BONK"))
     expect(p3.synth.hits, ["graze", "bonk"], "wall hits off: only head hits play (a light one too)")
-    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
+    sett.save({"on": True, "sound": "rumble", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": True,
                "custom": {"bonk": {"file": "bonk-0123456789ab.wav", "name": "mine.wav"}}})
     clock[0] += sr.SETTINGS_EVERY
@@ -358,7 +336,7 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_BONK"))
     expect([p3.synth.hits, p3.synth.custom], [["bonk"], {"bonk": sett.sounds_dir() / "bonk-0123456789ab.wav"}],
            "light head hits off: only hard ones; the custom sound reaches the synth")
-    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
+    sett.save({"on": True, "sound": "rumble", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": False, "jump": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
@@ -367,20 +345,20 @@ def check_runner(sett, hub, tmp):
     r.handle(token("MK_SURFSND_JUMP"))
     r.handle(token("MK_SURFSND_JUMPW"))
     expect([r.sound is p3, p3.synth.hits], [True, ["jump", "jump"]], "only jumps on: a player, JUMP and JUMPW play")
-    sett.save({"on": True, "sound": "hiss", "ramp": False, "ceiling": False, "wall": False,
+    sett.save({"on": True, "sound": "rumble", "ramp": False, "ceiling": False, "wall": False,
                "graze": False, "bonk": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     expect(r.sound, None, "every sound off: no player")
     # watching: the W markers play like the plain ones with "watch" on, and are muted with it off
-    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": True})
+    sett.save({"on": True, "sound": "rumble", "ramp": True, "ceiling": True})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p4 = FakePlayer.made[-1]
     r.handle(token("MK_SURFSND_CEILW"))
     r.handle(token("MK_SURFSND_BONKW"))
     expect([p4.mode, p4.synth.hits], ["ceiling", ["bonk"]], "watching, watch on: CEILW and BONKW play")
-    sett.save({"on": True, "sound": "hiss", "ramp": True, "ceiling": True, "watch": False})
+    sett.save({"on": True, "sound": "rumble", "ramp": True, "ceiling": True, "watch": False})
     clock[0] += sr.SETTINGS_EVERY
     r.reload()
     p5 = FakePlayer.made[-1]
@@ -407,7 +385,7 @@ def check_runner(sett, hub, tmp):
     r.close()
 
     # run() on a log: markers as the game writes them, in a thread
-    sett.save({"on": True, "sound": "wind", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
+    sett.save({"on": True, "sound": "whoosh", "ramp": True, "ceiling": True, "levels": {"wall": 50}})
     log = tmp / "yaw.log"
     log.write_text("old line MK_SURFSND_RAMP\n")  # an earlier game run: skipped
     FakePlayer.made = []
@@ -530,7 +508,7 @@ def check_custom(sett, hub, noise, tmp):
         pass
     # the synth: custom loops of their own lengths, a custom hit, and a bad file falls back
     files = {"ramp": sett.sounds_dir() / entry["file"], "bonk": sett.sounds_dir() / h["file"]}
-    syn = noise.NoiseSynth(0.5, {"ramp": "wind", "ceiling": "wind"}, files)
+    syn = noise.NoiseSynth(0.5, {"ramp": "rumble", "ceiling": "rumble"}, files)  # smooth: its own steps are small
     expect(syn.length["ramp"] != syn.length["ceiling"], True, "a custom loop keeps its own length")
     expect(len(syn.hit_sounds["bonk"]), int(noise.RATE * custom.HIT_MAX_S), "the custom hit replaces the goofy bonk")
     expect(syn.hit_sounds["graze"] == noise.NoiseSynth(0.5, {}).hit_sounds["graze"], True,
@@ -547,12 +525,12 @@ def check_custom(sett, hub, noise, tmp):
     walled = noise.NoiseSynth(0.5, {}, {"wall": files["bonk"]})
     expect(len(walled.hit_sounds["graze"]), len(walled.hit_sounds["wall1"]), "a light head hit follows a custom wall")
     broken = {"ramp": sett.sounds_dir() / "ramp-000000000000.wav", "wall": src / "song.mp3"}
-    fallback = noise.NoiseSynth(0.5, {"ramp": "wind"}, broken)
-    plain = noise.NoiseSynth(0.5, {"ramp": "wind"})
+    fallback = noise.NoiseSynth(0.5, {"ramp": "whoosh"}, broken)
+    plain = noise.NoiseSynth(0.5, {"ramp": "whoosh"})
     expect([fallback.loop_bytes == plain.loop_bytes, fallback.hit_sounds == plain.hit_sounds], [True, True],
            "a missing or unreadable custom file plays the built-in sound")
     # a 2 s custom hit starts as fast as a built-in one: the synth scaled it once, the audio thread only adds
-    syn = noise.NoiseSynth(1.0, {"ramp": "wind"}, files)
+    syn = noise.NoiseSynth(1.0, {"ramp": "whoosh"}, files)
     syn.hit("bonk")
     syn.next("ramp")
     expect(syn.playing[0][0] is syn.hit_sounds["bonk"], True, "a hit starting copies no samples")
@@ -674,14 +652,14 @@ def check_recording(sett, hub, noise, custom, section):
     section.record_start("wall", "", recorder=FakeRecorder, inputs=[])
     expect(section._rec["recorder"].device, None, "\"\" records the default input, listed or not")
     section.record_stop()
-    split = {"sound": "hiss", "ceiling_sound": "stone", "split_ceiling": True}
-    expect([sett.loop_sounds(sett.check({"sound": "hiss", "ceiling_sound": "stone"})),
+    split = {"sound": "rumble", "ceiling_sound": "stone", "split_ceiling": True}
+    expect([sett.loop_sounds(sett.check({"sound": "rumble", "ceiling_sound": "stone"})),
             sett.loop_variants(sett.check({})),
             sett.loop_sounds(sett.check(split)), sett.loop_variants(sett.check(split)),
-            sett.loop_sounds(sett.check({"sound": "hiss", "split_ceiling": True}))],
-           [{"ramp": "hiss", "ceiling": "hiss"}, {"ramp": "ramp", "ceiling": "ramp"},
-            {"ramp": "hiss", "ceiling": "stone"}, {"ramp": "ramp", "ceiling": "ceiling"},
-            {"ramp": "hiss", "ceiling": "hiss"}],
+            sett.loop_sounds(sett.check({"sound": "rumble", "split_ceiling": True}))],
+           [{"ramp": "rumble", "ceiling": "rumble"}, {"ramp": "ramp", "ceiling": "ramp"},
+            {"ramp": "rumble", "ceiling": "stone"}, {"ramp": "ramp", "ceiling": "ceiling"},
+            {"ramp": "rumble", "ceiling": "rumble"}],
            "a headsurf sounds just like a ramp until split; split, it has its own sound")
     ramp_c = {"file": "ramp-0123456789ab.wav", "name": "r"}
     ceil_c = {"file": "ceiling-0123456789ab.wav", "name": "c"}
@@ -692,7 +670,7 @@ def check_recording(sett, hub, noise, custom, section):
     expect([sett.check({"custom": {"ceiling": ceil_c}})["split_ceiling"],
             sett.check({"custom": {"ramp": ramp_c}})["split_ceiling"]], [True, False],
            "settings saved with a headsurf file of its own start split")
-    same = noise.NoiseSynth(0.5, {"ramp": "grind", "ceiling": "grind"}, variants={"ceiling": "ramp"})
+    same = noise.NoiseSynth(0.5, {"ramp": "rumble", "ceiling": "rumble"}, variants={"ceiling": "ramp"})
     expect(same.loop_bytes["ceiling"] == same.loop_bytes["ramp"], True,
            "not split, the headsurf loop is the ramp's, sample for sample")
     try:
