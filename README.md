@@ -8,6 +8,7 @@ Standalone surf, bhop and movement tools for Counter-Strike: Source and [Momentu
 | [Strafe Trainer](strafe-trainer/) | Sounds when you turn without the matching strafe key or hold both (while jump is held or Momentum's run timer runs), and each strafe's key timing in ticks on screen (Linux) | Windows, Linux |
 | [Strafe Review](strafe-review/) | Records every attempt per tick and reviews it in the browser | Windows, Linux |
 | [Gain Converter](gain-converter/) | Converts CS:S SSJ gain % to Momentum gain % and back | Windows, Linux |
+| [Sens Converter](sens-converter/) | Works out the sensitivity that keeps your horizontal mouse speed (cm/360) at another DPI and m_yaw, and sets it and m_yaw in Momentum, live if the game was started through the kit with Source Yaw installed | Windows, Linux |
 | [Strafe Trainer Height](trainer-height/) | Lets Momentum's strafe trainer be dragged taller in the HUD editor | Windows, Linux |
 | [JHUD](jhud/) | Shows each bhop or surf jump's speed, gain % and sync in the middle of the screen in Momentum, in one colour or coloured by gain or speed pace, set up in its HUD editor | Windows, Linux |
 | [Strafe Speed Histogram](strafe-histogram/) | Shows a bar per air tick for how fast you turn against the optimal, scrolling up, while you bhop or surf in Momentum, set up in its HUD editor | Windows, Linux |
@@ -56,6 +57,7 @@ sourceyaw/        Source Yaw
 strafe-trainer/   Strafe Trainer
 strafe-review/    Strafe Review
 gain-converter/   Gain Converter
+sens-converter/   Sens Converter
 trainer-height/   Strafe Trainer Height
 jhud/             JHUD
 strafe-histogram/ Strafe Speed Histogram

@@ -1,0 +1,11 @@
+.sc-fields { justify-content: flex-start; gap: 24px; flex-wrap: wrap; }
+.sc-fields input[type="text"] { width: 96px; }
+.sc-result { text-align: center; margin: 16px 0 8px; }
+#sc-result { font-size: 26px; font-weight: 700; }
+.sc-messages { text-align: center; margin-bottom: 8px; }
+.sc-messages div { margin: 4px 0; }
+.sc-messages code { user-select: all; cursor: pointer; }
+.sc-note { text-align: center; font-size: 12px; }
+.sc-field { display: flex; flex-direction: column; gap: 6px; }
+.sc-field .mk-field { justify-content: space-between; }
+.sc-slider { width: 220px; }

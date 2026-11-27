@@ -1,0 +1,12 @@
+{
+  "key": "sens-converter",
+  "title": "Sens Converter",
+  "summary": "Keeps your horizontal mouse speed when you change DPI or m_yaw: works out the new sensitivity and sets it and m_yaw in Momentum Mod.",
+  "games": ["momentum"],
+  "os": ["linux", "win32"],
+  "tag_prefix": "sens-converter-v",
+  "version_from": "hub_section.py",
+  "needs_core": "1.17.3",
+  "needs": [],
+  "data": ["config:sens-converter"]
+}
