@@ -1,0 +1,13 @@
+{
+  "key": "paint-saver",
+  "title": "Paint Saver",
+  "summary": "In Momentum Mod: saves the paint you put on a map (mk_savepaint in the console) and paints it again on mk_loadpaint after a game restart, without touching your own savestates.",
+  "games": ["momentum"],
+  "os": ["linux", "win32"],
+  "tag_prefix": "paint-saver-v",
+  "version_from": "install.py",
+  "needs_core": "1.17.3",
+  "needs": [],
+  "data": ["data:paint-saver", "config:paint-saver"],
+  "group": "tool"
+}

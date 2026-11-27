@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Paint Saver</title>
+<link rel="stylesheet" href="/web/hub.css">
+<link rel="stylesheet" href="/web/form.css">
+<link rel="stylesheet" href="paint.css">
+<script src="/web/hub.js"></script>
+<script src="/web/section.js"></script>
+</head>
+<body>
+<nav id="hub-side"></nav>
+<main id="hub-main">
+	<div class="mk-head">
+		<div>
+			<h1>Paint Saver</h1>
+			<div id="ps-sub" class="muted"></div>
+		</div>
+	</div>
+	<div id="ps-problem" class="mk-banner" hidden></div>
+
+	<section class="card">
+		<div class="mk-desc ps-about">
+			<p>Paint Saver saves your paint per map and paints it again after a map reload or a game restart.</p>
+			<ol class="ps-steps">
+				<li><b>Recording.</b> While you hold the paint key, a HUD script notes where you stand and where you look,
+					every 15 ms, with the paint's colour and size. <code>mk_savepaint</code> keeps the strokes of the
+					map you are on.</li>
+				<li><b>Making savestates.</b> At the next game start through the kit, before the game opens, Paint Saver
+					writes each spot of the saved paint into the game's savestate file (<code>savedlocs.txt</code>) as a
+					savestate, in a list of its own named <code>zzpaint_</code> and the map's name. The game reads that file
+					only when it starts, which is why saved paint comes back only after a restart.</li>
+				<li><b>Painting.</b> <code>mk_loadpaint</code> adds that list to the end of your savestates and goes to
+					each of them in turn with paint held, so each one paints where you looked from that spot, in its
+					stroke's colour and size.</li>
+				<li><b>Cleaning up.</b> It then deletes those savestates again from the end of the list and restarts the
+					track. Your own savestates stay as they are: if one changes during a load, it stops there and says so,
+					and the leftovers go at the next game start. Your paint colour, size and paint sound settings are put
+					back after a load (the paint sound is off during it).</li>
+			</ol>
+		</div>
+		<div class="mk-row">
+			<label class="mk-label" for="ps-save">Save paint</label>
+			<input id="ps-save" type="checkbox" class="mk-switch">
+		</div>
+		<div class="muted mk-desc">On: your paint key is bound to Paint Saver's alias, which paints as before and also notes each stroke, and <code>mk_savepaint</code> saves them. Off:
+			your paint key goes back to plain paint and nothing is noted or saved. Paint already saved stays. A change
+			takes effect at the next game start.</div>
+		<div class="mk-row">
+			<label class="mk-label" for="ps-load-off">Load paint while saving is off</label>
+			<input id="ps-load-off" type="checkbox" class="mk-switch">
+		</div>
+		<div class="muted mk-desc">With saving on, <code>mk_loadpaint</code> always works. With saving off, it works only
+			while this is on, for paint you saved before. Also from the next game start.</div>
+	</section>
+
+	<section class="card">
+		<h2>How to use it</h2>
+		<ol class="ps-steps">
+			<li>Turn on <b>Save paint</b> above, and start the game with the kit's Steam launch option (at the bottom).
+				A key you bind to paint later is picked up at the next game start.</li>
+			<li><code>mk_savepaint</code> saves all paint you made on this map since the game started, map reloads included.
+				Save before you quit the game: paint not saved is gone after it.</li>
+			<li>After the next game start, on that map: <code>mk_loadpaint</code>. Keep the mouse still until the console says
+				<i>paint restored</i>: moving it moves the marks.</li>
+			<li><code>mk_clearpaint</code> drops this map's saved paint. What is on screen stays until the map reloads.</li>
+		</ol>
+	</section>
+
+	<section class="card">
+		<h2>For paint that comes back right</h2>
+		<ul class="ps-steps">
+			<li><b>Don't paint from inside walls, floors or clip brushes</b> (in noclip). Loading paint can't use noclip, so
+				it can't stand where you stood, and that paint comes back in the wrong place.</li>
+			<li>If some paint still comes back off, load it once, restart the game and load it again. Each load notes
+				where each spot ended up, and the next game start corrects the ones that were off. Spots it can't place
+				after a few tries are counted in the console message.</li>
+			<li>Don't paint from inside teleports, boosters or other triggers that move you, or from moving platforms
+				and doors.</li>
+		</ul>
+	</section>
+
+	<section class="card">
+		<h2>On the map you are on</h2>
+		<div class="muted mk-desc">The same as <code>mk_savepaint</code>, <code>mk_loadpaint</code> and
+			<code>mk_clearpaint</code> in the console. They reach the game only when it was started through the kit with
+			Source Yaw installed.</div>
+		<div class="mk-row ps-buttons">
+			<button id="ps-run-save">Save paint</button>
+			<button id="ps-run-load">Load paint</button>
+			<button id="ps-run-clear">Delete saved paint</button>
+		</div>
+		<div id="ps-run-out" class="muted ps-out"></div>
+	</section>
+
+	<section class="card">
+		<h2>Saved paint</h2>
+		<div id="ps-saved" class="muted">Loading…</div>
+	</section>
+
+	<section class="card">
+		<div class="mk-row">
+			<div class="mk-label">Steam launch options<div class="muted">Momentum Mod's, in Steam: Properties, General</div></div>
+			<button id="ps-launch-refresh" title="Read the launch options from Steam again">Refresh</button>
+		</div>
+		<div class="mk-row">
+			<code id="ps-launch" class="mk-launch"></code>
+			<button id="ps-launch-copy">Copy</button>
+		</div>
+		<div id="ps-launch-note" class="muted" style="margin-top: 2px"></div>
+	</section>
+</main>
+<script src="paint-page.js"></script>
+</body>
+</html>

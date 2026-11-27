@@ -1,0 +1,9 @@
+.ps-steps { margin: 6px 0 0; padding-left: 22px; line-height: 1.5; }
+.ps-steps li { margin: 4px 0; }
+.ps-steps code, .ps-map code { background: var(--card); border-radius: 4px; padding: 0 4px; }
+.ps-map { display: flex; gap: 12px; padding: 4px 0; }
+.ps-map b { min-width: 160px; }
+.ps-about p { margin: 0 0 4px; }
+.ps-buttons { justify-content: flex-start; gap: 8px; }
+.ps-out div { margin-top: 4px; }
+.ps-out code { cursor: pointer; }

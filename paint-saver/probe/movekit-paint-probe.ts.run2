@@ -1,0 +1,123 @@
+// Movement Kit Paint Saver probe (throwaway, never released). Loaded next to timer.ts through the kit's
+// timer.xml patch. Logs MK_PPROBE lines to the console and yaw.log, and answers:
+// 1. whether MomentumInputAPI.GetButtons() shows the PAINT bit (1 << 30) while the paint key is held;
+// 2. whether GameInterfaceAPI.ConsoleCommand('getpos') once per tick, while paint is held, lands its
+//    "setpos ...;setang ..." line in yaw.log (count them against the MK_PPROBE getpos lines);
+// 3. replay: 5 s after load, holds +paint and goes through every savestate with mom_savestate_goto, one
+//    every STEP_MS, logging OnSaveStateUpdate (count, current) so the goto index base shows; then -paint.
+//    The owner checks a paint mark appears at each savestate's aim. Nothing is deleted.
+// 4. import: then runs mom_saveloc_import zz_painttest. Only if the count rises by exactly 1 does it go to
+//    the last savestate and delete it (the imported one).
+// No imports, like the Strafe Review recorder.
+
+const TAG = 'MK_PPROBE';
+const PAINT = 1 << 30;
+const STEP_MS = 50;
+
+function log(what: string, data?: unknown) {
+	$.Msg(`${TAG} ${what}${data === undefined ? '' : ' ' + JSON.stringify(data)}`);
+}
+
+function cmd(c: string) {
+	try {
+		GameInterfaceAPI.ConsoleCommand(c);
+	} catch (e) {
+		log('cmd failed', { c, e: String(e) });
+	}
+}
+
+let count = -1;
+let current = -1;
+$.RegisterForUnhandledEvent('OnSaveStateUpdate', (c: number, cur: number, menu: boolean) => {
+	count = c;
+	current = cur;
+	log('ss', { count: c, current: cur, menu });
+});
+
+let lastButtons = -1;
+let lastSample = 0;
+let samples = 0;
+let busy = false;
+let wasHeld = false;
+
+function watch() {
+	try {
+		const b = MomentumInputAPI.GetButtons();
+		const key = `${b.physicalButtons},${b.toggledButtons},${b.forcedButtons}`;
+		if (key !== String(lastButtons)) {
+			lastButtons = key as unknown as number;
+			log('buttons', { phys: b.physicalButtons, paint: (b.physicalButtons & PAINT) !== 0 ? 1 : 0,
+				tog: b.toggledButtons, forced: b.forcedButtons });
+		}
+		// physicalButtons never shows PAINT (probe run 1), so the test bind sets hostname instead
+		const host = GameInterfaceAPI.GetSettingString('hostname');
+		const held = host === 'mkpaint1' || (b.physicalButtons & PAINT) !== 0;
+		if (held !== wasHeld) {
+			wasHeld = held;
+			log(held ? 'down' : 'up', { host });
+		}
+		const now = Date.now();
+		if (held && !busy && now - lastSample >= 15) {
+			lastSample = now;
+			samples++;
+			log('getpos', { n: samples, duck: MomentumPlayerAPI.IsDucking() ? 1 : 0 });
+			cmd('getpos');
+		}
+	} catch (e) {
+		log('watch failed', String(e));
+		return;
+	}
+	$.Schedule(0, watch);
+}
+
+function replay() {
+	if (count < 1) {
+		log('replay skipped', { count });
+		importTest();
+		return;
+	}
+	busy = true;
+	const n = count;
+	log('replay start', { count: n, current });
+	cmd('+paint');
+	let i = 0;
+	const step = () => {
+		// tries 0..n so both index bases show; an out-of-range one logs "Invalid saveloc number!"
+		log('goto', { i });
+		cmd(`mom_savestate_goto ${i}`);
+		i++;
+		if (i <= n) {
+			$.Schedule(STEP_MS / 1000, step);
+		} else {
+			$.Schedule(STEP_MS / 1000, () => {
+				cmd('-paint');
+				busy = false;
+				log('replay end', { count, current });
+				$.Schedule(1, importTest);
+			});
+		}
+	};
+	step();
+}
+
+function importTest() {
+	const before = count;
+	log('import start', { count: before });
+	cmd('mom_saveloc_import zz_painttest');
+	$.Schedule(0.5, () => {
+		log('import result', { before, after: count, current });
+		if (before >= 0 && count === before + 1) {
+			cmd('mom_savestate_last');
+			$.Schedule(0.3, () => {
+				log('deleting', { count, current });
+				cmd('mom_savestate_delete');
+				$.Schedule(0.3, () => log('import done', { count, current }));
+			});
+		}
+	});
+}
+
+log('loaded', { map: MapCacheAPI.GetMapName() });
+$.Schedule(0, watch);
+// Run 1 (replay and import) is done: goto is 1-based, replay paints. Run 2 only records.
+void replay;
